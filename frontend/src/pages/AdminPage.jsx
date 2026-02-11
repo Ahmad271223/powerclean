@@ -35,31 +35,38 @@ const AdminPage = () => {
     }
   }, []);
 
-  useEffect(() => {
-    if (isLoggedIn && token) {
-      fetchData();
-    }
-  }, [isLoggedIn, token]);
-
-  const fetchData = async () => {
+  const fetchData = async (authToken) => {
+    const tokenToUse = authToken || token;
+    if (!tokenToUse) return;
+    
     setIsLoading(true);
     try {
       const [inquiriesRes, statsRes] = await Promise.all([
-        axios.get(`${API}/admin/inquiries`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API}/admin/stats`, { headers: { Authorization: `Bearer ${token}` } })
+        axios.get(`${API}/admin/inquiries`, { headers: { Authorization: `Bearer ${tokenToUse}` } }),
+        axios.get(`${API}/admin/stats`, { headers: { Authorization: `Bearer ${tokenToUse}` } })
       ]);
       setInquiries(inquiriesRes.data.inquiries || []);
       setStats(statsRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       if (error.response?.status === 401) {
-        handleLogout();
+        setToken('');
+        setIsLoggedIn(false);
+        localStorage.removeItem('adminToken');
+        setInquiries([]);
+        setStats({ total: 0, neu: 0, in_bearbeitung: 0, erledigt: 0 });
         toast.error('Sitzung abgelaufen. Bitte erneut anmelden.');
       }
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isLoggedIn && token) {
+      fetchData(token);
+    }
+  }, [isLoggedIn, token]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
