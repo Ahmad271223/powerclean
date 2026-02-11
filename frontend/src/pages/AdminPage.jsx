@@ -81,8 +81,8 @@ const AdminPage = () => {
       setToken(newToken);
       setIsLoggedIn(true);
       toast.success('Erfolgreich angemeldet!');
-      // Immediately fetch data with the new token
-      fetchData(newToken);
+      // Fetch data with the new token
+      await fetchData(newToken);
     } catch (error) {
       console.error('Login error:', error);
       toast.error('Ungültige Anmeldedaten');
