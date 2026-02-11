@@ -105,7 +105,7 @@ const HomePage = () => {
             {clientLogos.map((logo) => (
               <div 
                 key={logo.name} 
-                className="grayscale hover:grayscale-0 transition-all opacity-60 hover:opacity-100"
+                className="transition-all hover:scale-105"
                 data-testid={`client-logo-${logo.name.toLowerCase().replace(/\s/g, '-')}`}
               >
                 <img 
