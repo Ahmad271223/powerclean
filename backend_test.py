@@ -11,13 +11,18 @@ class PowerCleanServiceAPITester:
         self.tests_passed = 0
         self.inquiry_id = None
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
+    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None, use_auth_param=False):
         """Run a single API test"""
         url = f"{self.base_url}/{endpoint}"
         test_headers = {'Content-Type': 'application/json'}
         if headers:
             test_headers.update(headers)
-        if self.token:
+        
+        # For admin endpoints, pass token as query parameter
+        params = {}
+        if self.token and use_auth_param:
+            params['authorization'] = f'Bearer {self.token}'
+        elif self.token:
             test_headers['Authorization'] = f'Bearer {self.token}'
 
         self.tests_run += 1
@@ -26,13 +31,13 @@ class PowerCleanServiceAPITester:
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=test_headers)
+                response = requests.get(url, headers=test_headers, params=params)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=test_headers)
+                response = requests.post(url, json=data, headers=test_headers, params=params)
             elif method == 'PATCH':
-                response = requests.patch(url, json=data, headers=test_headers)
+                response = requests.patch(url, json=data, headers=test_headers, params=params)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=test_headers)
+                response = requests.delete(url, headers=test_headers, params=params)
 
             success = response.status_code == expected_status
             if success:
