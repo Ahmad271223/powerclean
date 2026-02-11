@@ -182,7 +182,8 @@ class PowerCleanServiceAPITester:
             "PATCH",
             f"admin/inquiries/{self.inquiry_id}",
             200,
-            data={"status": "in_bearbeitung", "notes": "Test note from automated testing"}
+            data={"status": "in_bearbeitung", "notes": "Test note from automated testing"},
+            use_auth_param=True
         )
         
         if success and response.get('status') == 'in_bearbeitung':
