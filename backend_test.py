@@ -137,7 +137,8 @@ class PowerCleanServiceAPITester:
             "Get Admin Inquiries",
             "GET",
             "admin/inquiries",
-            200
+            200,
+            use_auth_param=True
         )
         
         if success and 'inquiries' in response:
