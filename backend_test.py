@@ -231,7 +231,8 @@ class PowerCleanServiceAPITester:
             "Unauthorized Access",
             "GET",
             "admin/inquiries",
-            401
+            401,
+            use_auth_param=True
         )
         
         # Restore token
