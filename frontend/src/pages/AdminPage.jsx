@@ -73,10 +73,13 @@ const AdminPage = () => {
     setIsLoggingIn(true);
     try {
       const response = await axios.post(`${API}/admin/login`, loginData);
-      setToken(response.data.token);
-      localStorage.setItem('adminToken', response.data.token);
+      const newToken = response.data.token;
+      localStorage.setItem('adminToken', newToken);
+      setToken(newToken);
       setIsLoggedIn(true);
       toast.success('Erfolgreich angemeldet!');
+      // Immediately fetch data with the new token
+      fetchData(newToken);
     } catch (error) {
       console.error('Login error:', error);
       toast.error('Ungültige Anmeldedaten');
