@@ -57,7 +57,7 @@ const AdminPage = () => {
   // Check for saved token on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('adminToken');
-    if (savedToken) {
+    if (savedToken && savedToken.length > 10) {
       // Validate token by trying to fetch data
       fetchData(savedToken, true).then((success) => {
         if (success) {
