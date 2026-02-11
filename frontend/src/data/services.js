@@ -310,10 +310,11 @@ export const services = [
 ];
 
 export const clientLogos = [
-  { name: "KiK", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/KiK_Textilien_Logo.svg/320px-KiK_Textilien_Logo.svg.png" },
-  { name: "Goldbeck", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Goldbeck_logo.svg/320px-Goldbeck_logo.svg.png" },
-  { name: "Leonhard Moll", url: "https://www.leonhardmoll.de/fileadmin/_processed_/f/0/csm_LM_Logo_4c_1f7a9b7f6c.png" },
-  { name: "CleanGarant", url: "https://www.cleangarant.de/wp-content/uploads/2019/03/cleangarant-logo.png" }
+  { name: "CleanGarant", url: "https://customer-assets.emergentagent.com/job_pro-site-revamp-2/artifacts/s0he6rb0_image.png" },
+  { name: "Leonhard Moll Betonwerke", url: "https://customer-assets.emergentagent.com/job_pro-site-revamp-2/artifacts/014tshu9_Screenshot%202026-02-11%20160101.png" },
+  { name: "KiK", url: "https://customer-assets.emergentagent.com/job_pro-site-revamp-2/artifacts/owpchtxx_Screenshot%202026-02-11%20160046.png" },
+  { name: "Volle Pulle Sahlkamp", url: "https://customer-assets.emergentagent.com/job_pro-site-revamp-2/artifacts/eijkwwh3_Screenshot%202026-02-11%20160023.png" },
+  { name: "Goldbeck", url: "https://customer-assets.emergentagent.com/job_pro-site-revamp-2/artifacts/vcoqmvl5_Screenshot%202026-02-11%20160009.png" }
 ];
 
 export const companyInfo = {
