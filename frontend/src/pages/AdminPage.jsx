@@ -27,46 +27,49 @@ const AdminPage = () => {
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  useEffect(() => {
-    const savedToken = localStorage.getItem('adminToken');
-    if (savedToken) {
-      setToken(savedToken);
-      setIsLoggedIn(true);
-    }
-  }, []);
-
-  const fetchData = async (authToken) => {
-    const tokenToUse = authToken || token;
-    if (!tokenToUse) return;
+  const fetchData = async (authToken, skipLogoutOnError = false) => {
+    if (!authToken) return false;
     
     setIsLoading(true);
     try {
       const [inquiriesRes, statsRes] = await Promise.all([
-        axios.get(`${API}/admin/inquiries`, { headers: { Authorization: `Bearer ${tokenToUse}` } }),
-        axios.get(`${API}/admin/stats`, { headers: { Authorization: `Bearer ${tokenToUse}` } })
+        axios.get(`${API}/admin/inquiries`, { headers: { Authorization: `Bearer ${authToken}` } }),
+        axios.get(`${API}/admin/stats`, { headers: { Authorization: `Bearer ${authToken}` } })
       ]);
       setInquiries(inquiriesRes.data.inquiries || []);
       setStats(statsRes.data);
+      return true;
     } catch (error) {
       console.error('Error fetching data:', error);
-      if (error.response?.status === 401) {
+      if (error.response?.status === 401 && !skipLogoutOnError) {
         setToken('');
         setIsLoggedIn(false);
         localStorage.removeItem('adminToken');
         setInquiries([]);
         setStats({ total: 0, neu: 0, in_bearbeitung: 0, erledigt: 0 });
-        toast.error('Sitzung abgelaufen. Bitte erneut anmelden.');
       }
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Check for saved token on mount
   useEffect(() => {
-    if (isLoggedIn && token) {
-      fetchData(token);
+    const savedToken = localStorage.getItem('adminToken');
+    if (savedToken) {
+      // Validate token by trying to fetch data
+      fetchData(savedToken, true).then((success) => {
+        if (success) {
+          setToken(savedToken);
+          setIsLoggedIn(true);
+        } else {
+          // Token is invalid, remove it
+          localStorage.removeItem('adminToken');
+        }
+      });
     }
-  }, [isLoggedIn, token]);
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
