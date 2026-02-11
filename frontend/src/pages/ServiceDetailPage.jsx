@@ -228,17 +228,20 @@ const ServiceDetailPage = () => {
               <Link
                 key={s.id}
                 to={`/leistungen/${s.id}`}
-                className="service-card group bg-white border border-gray-200 overflow-hidden"
+                className="service-card group bg-white border border-gray-200 overflow-hidden block cursor-pointer relative z-10"
                 data-testid={`related-service-${s.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
               >
-                <div className="aspect-[16/10] overflow-hidden">
+                <div className="aspect-[16/10] overflow-hidden pointer-events-none">
                   <img
                     src={s.image}
                     alt={s.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
                 </div>
-                <div className="p-6">
+                <div className="p-6 pointer-events-none">
                   <h3 className="text-xl font-bold mb-2 group-hover:text-[#C41E3A] transition-colors" 
                       style={{ fontFamily: 'Barlow Condensed, sans-serif', textTransform: 'uppercase' }}>
                     {s.name}
