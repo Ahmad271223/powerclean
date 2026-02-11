@@ -159,7 +159,7 @@ async def admin_setup():
     return {"message": "Admin created", "created": True, "username": "admin", "password": "powerclean2024"}
 
 @api_router.get("/admin/inquiries")
-async def get_all_inquiries(authorization: str = None):
+async def get_all_inquiries(authorization: str = Header(None)):
     await get_admin_user(authorization)
     
     inquiries = await db.inquiries.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
@@ -169,7 +169,7 @@ async def get_all_inquiries(authorization: str = None):
     return {"inquiries": inquiries}
 
 @api_router.get("/admin/inquiries/{inquiry_id}")
-async def get_inquiry(inquiry_id: str, authorization: str = None):
+async def get_inquiry(inquiry_id: str, authorization: str = Header(None)):
     await get_admin_user(authorization)
     
     inquiry = await db.inquiries.find_one({"id": inquiry_id}, {"_id": 0})
@@ -178,7 +178,7 @@ async def get_inquiry(inquiry_id: str, authorization: str = None):
     return inquiry
 
 @api_router.patch("/admin/inquiries/{inquiry_id}")
-async def update_inquiry(inquiry_id: str, input: InquiryUpdate, authorization: str = None):
+async def update_inquiry(inquiry_id: str, input: InquiryUpdate, authorization: str = Header(None)):
     await get_admin_user(authorization)
     
     update_data = {k: v for k, v in input.model_dump().items() if v is not None}
