@@ -157,7 +157,8 @@ class PowerCleanServiceAPITester:
             "Get Admin Stats",
             "GET",
             "admin/stats",
-            200
+            200,
+            use_auth_param=True
         )
         
         if success:
