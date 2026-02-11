@@ -201,7 +201,8 @@ class PowerCleanServiceAPITester:
             "Delete Inquiry",
             "DELETE",
             f"admin/inquiries/{self.inquiry_id}",
-            200
+            200,
+            use_auth_param=True
         )
         
         if success:
