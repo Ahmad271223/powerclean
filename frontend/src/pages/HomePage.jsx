@@ -49,7 +49,7 @@ const HomePage = () => {
 
           {/* Service Tags */}
           <div className="mt-16 flex flex-wrap gap-3 animate-fade-in-up animation-delay-400">
-            {services.slice(0, 8).map((service) => (
+            {services.map((service) => (
               <Link
                 key={service.id}
                 to={`/leistungen/${service.id}`}
@@ -258,7 +258,7 @@ const HomePage = () => {
             <div className="bg-white/5 p-8 border-l-4 border-[#C41E3A]">
               <h3 className="text-2xl mb-4">Transparente Prozesse</h3>
               <p className="text-gray-400">
-                Klare Kommunikation, verbindliche Angebote und schneller Rückruf. 
+                Klare Kommunikation, unverbindliche Angebote und schneller Rückruf. 
                 Sie wissen immer, woran Sie sind.
               </p>
             </div>
