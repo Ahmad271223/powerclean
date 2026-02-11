@@ -193,7 +193,7 @@ async def update_inquiry(inquiry_id: str, input: InquiryUpdate, authorization: s
     return inquiry
 
 @api_router.delete("/admin/inquiries/{inquiry_id}")
-async def delete_inquiry(inquiry_id: str, authorization: str = None):
+async def delete_inquiry(inquiry_id: str, authorization: str = Header(None)):
     await get_admin_user(authorization)
     
     result = await db.inquiries.delete_one({"id": inquiry_id})
@@ -202,7 +202,7 @@ async def delete_inquiry(inquiry_id: str, authorization: str = None):
     return {"message": "Inquiry deleted"}
 
 @api_router.get("/admin/stats")
-async def get_stats(authorization: str = None):
+async def get_stats(authorization: str = Header(None)):
     await get_admin_user(authorization)
     
     total = await db.inquiries.count_documents({})
