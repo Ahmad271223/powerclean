@@ -23,33 +23,33 @@ const ServiceDetailPage = () => {
   return (
     <PageWrapper>
       {/* Hero */}
-      <section className="relative" data-testid="service-detail-hero">
+      <section className="relative min-h-[60vh] md:min-h-[50vh]" data-testid="service-detail-hero">
         <div 
-          className="absolute inset-0 bg-cover bg-center h-[50vh]"
+          className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${service.image})` }}
         >
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black"></div>
         </div>
         
-        <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 pt-32 pb-48">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 pt-28 md:pt-32 pb-32 md:pb-48">
           <Breadcrumb items={[
             { label: 'Leistungen', path: '/leistungen' },
             { label: service.name }
           ]} />
           
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 bg-[#C41E3A] flex items-center justify-center">
-              <IconComponent className="text-white" size={32} />
+          <div className="flex items-center gap-4 mb-4 md:mb-6">
+            <div className="w-12 h-12 md:w-16 md:h-16 bg-[#C41E3A] flex items-center justify-center">
+              <IconComponent className="text-white" size={24} />
             </div>
           </div>
           
-          <h1 className="text-5xl md:text-6xl lg:text-7xl text-white mb-6">{service.name}</h1>
-          <p className="text-xl text-gray-300 max-w-2xl">{service.shortDesc}</p>
+          <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl text-white mb-4 md:mb-6">{service.name}</h1>
+          <p className="text-base md:text-xl text-gray-300 max-w-2xl">{service.shortDesc}</p>
         </div>
       </section>
 
       {/* Content */}
-      <section className="py-24 bg-white -mt-24 relative z-20" data-testid="service-detail-content">
+      <section className="py-12 md:py-24 bg-white -mt-12 md:-mt-24 relative z-20" data-testid="service-detail-content">
         <div className="max-w-7xl mx-auto px-6 lg:px-12">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-24">
             {/* Main Content */}
