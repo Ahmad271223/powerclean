@@ -224,6 +224,7 @@ export const PageWrapper = ({ children, className = "" }) => {
       </main>
       <Footer />
       <FloatingButtons />
+      <CookieBanner />
     </div>
   );
 };
