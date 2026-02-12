@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Phone, MessageCircle, Menu, X, ChevronRight } from 'lucide-react';
 import { companyInfo } from '../data/services';
+import { CookieBanner } from './CookieBanner';
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
