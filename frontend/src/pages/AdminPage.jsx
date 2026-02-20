@@ -137,7 +137,7 @@ const AdminPage = () => {
       await axios.delete(`${API}/admin/inquiries/${id}`, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-      fetchData();
+      fetchData(token);
       if (selectedInquiry?.id === id) setSelectedInquiry(null);
       toast.success('Anfrage gelöscht');
     } catch (error) {
