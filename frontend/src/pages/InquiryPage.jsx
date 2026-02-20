@@ -9,9 +9,7 @@ import { Label } from '../components/ui/label';
 import { CheckCircle, Phone, Mail, Clock, Send, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { Toaster, toast } from 'sonner';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
+const API = `${import.meta.env.VITE_BACKEND_URL || 'https://powerclean-backend.onrender.com'}/api`;
 const InquiryPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -43,7 +41,7 @@ const InquiryPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.services.length === 0) {
       toast.error('Bitte wählen Sie mindestens eine Leistung aus.');
       return;
@@ -106,7 +104,7 @@ const InquiryPage = () => {
   return (
     <PageWrapper>
       <Toaster position="top-center" richColors />
-      
+
       {/* Hero */}
       <section className="bg-[#0A0A0A] text-white py-24" data-testid="inquiry-hero">
         <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -136,11 +134,10 @@ const InquiryPage = () => {
                         key={service.id}
                         type="button"
                         onClick={() => toggleService(service.id)}
-                        className={`px-4 py-2 text-sm font-medium transition-all border ${
-                          formData.services.includes(service.id)
+                        className={`px-4 py-2 text-sm font-medium transition-all border ${formData.services.includes(service.id)
                             ? 'bg-[#C41E3A] text-white border-[#C41E3A]'
                             : 'bg-white text-gray-700 border-gray-300 hover:border-[#C41E3A]'
-                        }`}
+                          }`}
                         data-testid={`service-toggle-${service.id}`}
                       >
                         {service.name}
@@ -252,7 +249,7 @@ const InquiryPage = () => {
                     data-testid="checkbox-consent"
                   />
                   <Label htmlFor="consent" className="text-sm text-gray-600 cursor-pointer">
-                    Ich stimme zu, dass meine Daten zur Kontaktaufnahme verwendet werden. 
+                    Ich stimme zu, dass meine Daten zur Kontaktaufnahme verwendet werden.
                     Weitere Informationen finden Sie in unserer{' '}
                     <a href="/datenschutz" className="text-[#C41E3A] hover:underline">Datenschutzerklärung</a>.
                   </Label>
@@ -310,14 +307,14 @@ const InquiryPage = () => {
                     Direktkontakt
                   </h3>
                   <div className="space-y-4">
-                    <a 
+                    <a
                       href={`tel:${companyInfo.phone}`}
                       className="flex items-center gap-3 text-gray-300 hover:text-white transition-colors"
                     >
                       <Phone size={20} className="text-[#C41E3A]" />
                       <span>{companyInfo.phone}</span>
                     </a>
-                    <a 
+                    <a
                       href={`mailto:${companyInfo.email}`}
                       className="flex items-center gap-3 text-gray-300 hover:text-white transition-colors"
                     >

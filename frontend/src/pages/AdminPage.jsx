@@ -3,22 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { services } from '../data/services';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
-import { 
-  LogOut, Search, Filter, Trash2, Eye, CheckCircle, 
-  Clock, AlertCircle, BarChart3, RefreshCw, Loader2 
+import {
+  LogOut, Search, Filter, Trash2, Eye, CheckCircle,
+  Clock, AlertCircle, BarChart3, RefreshCw, Loader2
 } from 'lucide-react';
 import axios from 'axios';
 import { Toaster, toast } from 'sonner';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
+const API = `${import.meta.env.VITE_BACKEND_URL || 'https://powerclean-backend.onrender.com'}/api`;
 const AdminPage = () => {
   const navigate = useNavigate();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [token, setToken] = useState('');
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  
+
   const [inquiries, setInquiries] = useState([]);
   const [stats, setStats] = useState({ total: 0, neu: 0, in_bearbeitung: 0, erledigt: 0 });
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +27,7 @@ const AdminPage = () => {
 
   const fetchData = async (authToken, skipLogoutOnError = false) => {
     if (!authToken) return false;
-    
+
     setIsLoading(true);
     try {
       const [inquiriesRes, statsRes] = await Promise.all([
@@ -102,8 +100,8 @@ const AdminPage = () => {
   const updateInquiryStatus = async (id, status) => {
     setIsUpdating(true);
     try {
-      await axios.patch(`${API}/admin/inquiries/${id}`, { status }, { 
-        headers: { Authorization: `Bearer ${token}` } 
+      await axios.patch(`${API}/admin/inquiries/${id}`, { status }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       fetchData(token);
       if (selectedInquiry?.id === id) {
@@ -120,8 +118,8 @@ const AdminPage = () => {
 
   const updateInquiryNotes = async (id, notes) => {
     try {
-      await axios.patch(`${API}/admin/inquiries/${id}`, { notes }, { 
-        headers: { Authorization: `Bearer ${token}` } 
+      await axios.patch(`${API}/admin/inquiries/${id}`, { notes }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       fetchData(token);
       toast.success('Notizen gespeichert');
@@ -134,8 +132,8 @@ const AdminPage = () => {
   const deleteInquiry = async (id) => {
     if (!window.confirm('Möchten Sie diese Anfrage wirklich löschen?')) return;
     try {
-      await axios.delete(`${API}/admin/inquiries/${id}`, { 
-        headers: { Authorization: `Bearer ${token}` } 
+      await axios.delete(`${API}/admin/inquiries/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       fetchData(token);
       if (selectedInquiry?.id === id) setSelectedInquiry(null);
@@ -148,7 +146,7 @@ const AdminPage = () => {
 
   const filteredInquiries = inquiries.filter(inq => {
     const matchesSearch = inq.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         inq.email.toLowerCase().includes(searchTerm.toLowerCase());
+      inq.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || inq.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -243,7 +241,7 @@ const AdminPage = () => {
   return (
     <div className="min-h-screen bg-gray-100" data-testid="admin-dashboard">
       <Toaster position="top-center" richColors />
-      
+
       {/* Header */}
       <header className="bg-[#0A0A0A] text-white py-4 px-6 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -332,11 +330,10 @@ const AdminPage = () => {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  statusFilter === status
+                className={`px-4 py-2 text-sm font-medium transition-colors ${statusFilter === status
                     ? 'bg-[#C41E3A] text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                  }`}
                 data-testid={`filter-${status}`}
               >
                 {status === 'all' ? 'Alle' : status === 'neu' ? 'Neu' : status === 'in_bearbeitung' ? 'In Bearbeitung' : 'Erledigt'}
@@ -369,9 +366,8 @@ const AdminPage = () => {
                   <div
                     key={inq.id}
                     onClick={() => setSelectedInquiry(inq)}
-                    className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-                      selectedInquiry?.id === inq.id ? 'bg-gray-50 border-l-4 border-l-[#C41E3A]' : ''
-                    }`}
+                    className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${selectedInquiry?.id === inq.id ? 'bg-gray-50 border-l-4 border-l-[#C41E3A]' : ''
+                      }`}
                     data-testid={`inquiry-item-${inq.id}`}
                   >
                     <div className="flex items-start justify-between mb-2">
@@ -497,11 +493,10 @@ const AdminPage = () => {
                           key={status}
                           onClick={() => updateInquiryStatus(selectedInquiry.id, status)}
                           disabled={isUpdating || selectedInquiry.status === status}
-                          className={`px-4 py-2 text-sm font-medium transition-colors ${
-                            selectedInquiry.status === status
+                          className={`px-4 py-2 text-sm font-medium transition-colors ${selectedInquiry.status === status
                               ? 'bg-[#C41E3A] text-white'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
+                            }`}
                           data-testid={`status-btn-${status}`}
                         >
                           {status === 'neu' ? 'Neu' : status === 'in_bearbeitung' ? 'In Bearbeitung' : 'Erledigt'}
