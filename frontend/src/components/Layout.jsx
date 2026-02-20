@@ -147,7 +147,6 @@ export const Footer = () => {
               <Link to="/leistungen" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Leistungen</Link>
               <Link to="/anfrage" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Anfrage</Link>
               <Link to="/kontakt" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Kontakt</Link>
-              <Link to="/admin" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Admin</Link>
             </nav>
           </div>
 
