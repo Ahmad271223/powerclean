@@ -23,7 +23,7 @@ function App() {
           <Route path="/leistungen/:serviceId" element={<ServiceDetailPage />} />
           <Route path="/anfrage" element={<InquiryPage />} />
           <Route path="/kontakt" element={<ContactPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/pcs-verwaltung-2024" element={<AdminPage />} />
           <Route path="/impressum" element={<ImpressumPage />} />
           <Route path="/datenschutz" element={<DatenschutzPage />} />
           <Route path="/agb" element={<AGBPage />} />
