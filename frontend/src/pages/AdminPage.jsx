@@ -105,7 +105,7 @@ const AdminPage = () => {
       await axios.patch(`${API}/admin/inquiries/${id}`, { status }, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-      fetchData();
+      fetchData(token);
       if (selectedInquiry?.id === id) {
         setSelectedInquiry({ ...selectedInquiry, status });
       }
@@ -123,7 +123,7 @@ const AdminPage = () => {
       await axios.patch(`${API}/admin/inquiries/${id}`, { notes }, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-      fetchData();
+      fetchData(token);
       toast.success('Notizen gespeichert');
     } catch (error) {
       console.error('Error updating notes:', error);
