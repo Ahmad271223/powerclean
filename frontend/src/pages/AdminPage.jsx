@@ -228,10 +228,6 @@ const AdminPage = () => {
               )}
             </button>
           </form>
-
-          <p className="text-center text-gray-400 text-sm mt-6">
-            Standardzugang: admin / powerclean2024
-          </p>
         </div>
       </div>
     );
@@ -331,8 +327,8 @@ const AdminPage = () => {
                 key={status}
                 onClick={() => setStatusFilter(status)}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${statusFilter === status
-                    ? 'bg-[#C41E3A] text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-[#C41E3A] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 data-testid={`filter-${status}`}
               >
@@ -494,8 +490,8 @@ const AdminPage = () => {
                           onClick={() => updateInquiryStatus(selectedInquiry.id, status)}
                           disabled={isUpdating || selectedInquiry.status === status}
                           className={`px-4 py-2 text-sm font-medium transition-colors ${selectedInquiry.status === status
-                              ? 'bg-[#C41E3A] text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-[#C41E3A] text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           data-testid={`status-btn-${status}`}
                         >
