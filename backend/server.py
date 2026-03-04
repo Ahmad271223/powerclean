@@ -220,10 +220,25 @@ async def get_stats(authorization: str = Header(None)):
 # Include the router in the main app
 app.include_router(api_router)
 
+origins_env = os.environ.get('CORS_ORIGINS', '')
+allow_origins = origins_env.split(',') if origins_env else []
+
+# Always ensure these common/production domains are allowed
+default_origins = [
+    "http://localhost:5173",
+    "https://www.powercleanservice.de",
+    "https://powercleanservice.de",
+    "http://www.powercleanservice.de",
+    "http://powercleanservice.de",
+]
+allow_origins.extend(default_origins)
+allow_origins = list(set([o.strip() for o in allow_origins if o.strip()]))
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
