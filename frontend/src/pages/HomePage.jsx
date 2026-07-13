@@ -141,11 +141,11 @@ const HomePage = () => {
                 style={{ animationDelay: `${index * 0.1}s` }}
                 data-testid={`service-card-${service.id}`}
               >
-                <div className="aspect-[4/3] overflow-hidden">
+                <div className={`aspect-[4/3] overflow-hidden ${service.name === 'Unterhaltsreinigung' ? 'flex items-center justify-center bg-gray-100' : ''}`}>
                   <img
                     src={service.image}
                     alt={service.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    className={service.name === 'Unterhaltsreinigung' ? 'w-2/3 h-2/3 object-cover transition-transform duration-500 group-hover:scale-110' : 'w-full h-full object-cover transition-transform duration-500 group-hover:scale-110'}
                   />
                 </div>
                 <div className="p-6">
