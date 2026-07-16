@@ -21,7 +21,7 @@ const HomePage = () => {
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 py-24">
           <div className="max-w-3xl">
             <h1 className="text-5xl md:text-7xl lg:text-8xl text-white mb-6 animate-fade-in-up">
-              <span className="block">Glanz.</span>
+              <span className="block text-right text-[#C41E3A]">Gans.</span>
               <span className="block">Hygiene.</span>
               <span className="block text-[#C41E3A]">Power.</span>
             </h1>
