@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://powerclean.example.com/</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/AdminPage.jsx</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/ContactPage.jsx</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/DatenschutzPage.jsx</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/HomePage.jsx</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/ImpressumPage.jsx</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/InquiryPage.jsx</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/ServiceDetailPage.jsx</loc></url>
+  <url><loc>https://powerclean.example.com/frontend/src/pages/ServicesPage.jsx</loc></url>
+</urlset>
