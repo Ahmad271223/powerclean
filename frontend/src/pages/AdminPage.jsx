@@ -242,9 +242,9 @@ const AdminPage = () => {
       <header className="bg-[#0A0A0A] text-white py-4 px-6 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+            <h2 className="text-xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
               <span className="text-[#C41E3A]">Power</span>CleanService Admin
-            </h1>
+            </h2>
           </div>
           <div className="flex items-center gap-4">
             <button

@@ -75,7 +75,7 @@ const InquiryPage = () => {
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-8">
               <CheckCircle className="text-green-600" size={40} />
             </div>
-            <h1 className="text-4xl md:text-5xl mb-6">Vielen Dank!</h1>
+            <h2 className="text-4xl md:text-5xl mb-6">Vielen Dank!</h2>
             <p className="text-gray-600 text-lg mb-8">
               Ihre Anfrage wurde erfolgreich übermittelt. Wir melden uns innerhalb von 24 Stunden bei Ihnen.
             </p>
