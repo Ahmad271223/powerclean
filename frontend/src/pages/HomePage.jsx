@@ -21,9 +21,7 @@ const HomePage = () => {
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 py-24">
           <div className="max-w-3xl">
             <h1 className="text-5xl md:text-7xl lg:text-8xl text-white mb-6 animate-fade-in-up">
-              <span className="block">Glanz.</span>
-              <span className="block">Hygiene.</span>
-              <span className="block text-[#C41E3A]">Power.</span>
+              <span className="block">Jetzt kostenloses Angebot sichern</span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-xl animate-fade-in-up animation-delay-200">
               Professionelle Reinigung für Gewerbe & Industrie. Seit {companyInfo.since} Ihr zuverlässiger Partner in Hannover.
