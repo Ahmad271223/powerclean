@@ -37,8 +37,8 @@ async def aendern(leistung_id: str, body: LeistungIn, user: dict = Depends(schre
     neu = {**s, **body.model_dump(), "updated_at": jetzt_iso()}
     neu["name"] = neu["name"].strip()
     await db().services.update_one({"id": leistung_id}, {"$set": {k: v for k, v in neu.items() if k != "id"}})
-    # Name am Eintrag nachziehen (der Satz bleibt der Stand zum Leistungszeitpunkt)
-    await db().entries.update_many({"firma_id": user["firma_id"], "service_id": leistung_id}, {"$set": {"service_name": neu["name"]}})
+    # Bestehende Einträge behalten Name und Satz als Momentaufnahme (unterschriebene Stundenzettel und Rechnungen bleiben unverändert);
+    # der neue Name gilt für künftige Einträge.
     await protokollieren(user, "leistung.geaendert", neu["name"], details={"satz": neu["hourly_rate"], "aktiv": neu["active"]})
     return {"leistung": neu}
 

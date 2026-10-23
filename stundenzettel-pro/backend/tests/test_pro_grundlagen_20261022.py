@@ -283,7 +283,7 @@ def test_09_import_aus_free_app(client):
         "invoices": [{"id": "r1", "company_id": "c1", "project_id": "p1", "year": 2026, "month": 3, "seq": 1, "number": "RE-2026-0001", "gross": 100}]}}
     r = client.post("/api/import/free-app?firmendaten_uebernehmen=true", json=sicherung, headers=kopf)
     assert r.status_code == 200, r.text
-    assert r.json() == {"projekte": 2, "eintraege": 1, "rechnungen": 1, "uebersprungen": 2}
+    assert {k: r.json()[k] for k in ("projekte", "eintraege", "rechnungen", "uebersprungen")} == {"projekte": 2, "eintraege": 1, "rechnungen": 1, "uebersprungen": 2}
     f = client.get("/api/firma", headers=kopf).json()["firma"]
     assert f["iban"] == "DE99" and f["default_hourly_rate"] == 25 and f["name"] == "PowerClean Test"
     projekte = client.get("/api/projekte", headers=kopf).json()["projekte"]

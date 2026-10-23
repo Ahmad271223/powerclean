@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Sheet, Btn, Field, TextInput, TextArea, SectionLabel, Toggle, Chip, Select } from './ui';
 
-const EMPTY = { name: '', customer_id: '', customer_name: '', customer_address: '', address: '', schedule: '', employee_ids: [], hourly_rate: '', color: PROJECT_COLORS[0], notes: '', archived: false, default_workers: 1, reverse_charge: false, budget_hours_month: '', budget_warn_percent: 80,
+const EMPTY = { name: '', customer_id: '', customer_name: '', customer_address: '', address: '', schedule: '', employee_ids: [], hourly_rate: '', color: PROJECT_COLORS[0], notes: '', archived: false, default_workers: 1, reverse_charge: false, budget_hours_month: '', budget_warn_percent: 80, kostenlos: false,
   projektnummer: '', auftraggeber: '', generalunternehmer: '', projektart: '', beschreibung: '', baubeginn: '', bauende: '', phasen: '', bauabschnitte: '', gewerke: '', projektstatus: '', volumen: '', kosten: '', anforderungen: '', lat: '', lon: '' };
 const liste = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
 const zuListe = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -49,6 +49,7 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
       projektnummer: (form.projektnummer || '').trim(), auftraggeber: (form.auftraggeber || '').trim(), generalunternehmer: (form.generalunternehmer || '').trim(), projektart: (form.projektart || '').trim(),
       beschreibung: form.beschreibung || '', anforderungen: form.anforderungen || '', baubeginn: form.baubeginn || null, bauende: form.bauende || null, phasen: zuListe(form.phasen), bauabschnitte: zuListe(form.bauabschnitte),
       gewerke: zuListe(form.gewerke), projektstatus: form.projektstatus || '', volumen: zahl(form.volumen), kosten: zahl(form.kosten), lat: zahl(form.lat), lon: zahl(form.lon),
+      kostenlos: !!form.kostenlos,
     };
     setBusy(true);
     try {
@@ -124,8 +125,8 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
         <section className="space-y-3">
           <SectionLabel>Abrechnung</SectionLabel>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Stundensatz (€ netto)" hint={rateText ? `Leer = Firmenstandard ${rateText} €` : undefined}>
-              <TextInput type="number" step="0.01" min="0" inputMode="decimal" value={form.hourly_rate} onChange={set('hourly_rate')} placeholder={rateText || 'z. B. 32,50'} />
+            <Field label="Stundensatz (€ netto)" hint={form.kostenlos ? 'Kostenlos: 0 € bleibt 0 €' : rateText ? `Leer = Firmenstandard ${rateText} €` : undefined}>
+              <TextInput type="number" step="0.01" min="0" inputMode="decimal" value={form.hourly_rate} onChange={set('hourly_rate')} placeholder={form.kostenlos ? '0' : rateText || 'z. B. 32,50'} disabled={!!form.kostenlos} />
             </Field>
             <Field label="Mitarbeiter je Einsatz (für Einträge ohne Person)">
               <TextInput type="number" min="1" max="99" inputMode="numeric" value={form.default_workers} onChange={set('default_workers')} />
@@ -137,6 +138,7 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
             </Field>
             <Field label="Warnung ab (%)"><TextInput type="number" min="1" max="100" inputMode="numeric" value={form.budget_warn_percent} onChange={set('budget_warn_percent')} /></Field>
           </div>
+          <div className="rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={!!form.kostenlos} onChange={(v) => setForm((f) => ({ ...f, kostenlos: v, hourly_rate: v ? '' : f.hourly_rate }))} label="Kostenlos (ohne Stundensatz)" hint="Sonst gilt bei leerem Stundensatz der Firmenstandard." /></div>
           <Field label="Notizen"><TextArea rows={2} value={form.notes} onChange={set('notes')} placeholder="Schlüssel, Besonderheiten, Ansprechpartner" /></Field>
         </section>
 

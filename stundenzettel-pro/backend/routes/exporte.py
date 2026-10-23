@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import tempfile
+import zipfile
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, Response
+
+import config
+from csvsicher import zeile as csv_zeile
 
 from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig
 from db import db
@@ -23,7 +29,7 @@ def _csv(zeilen: list[list], dateiname: str) -> Response:
     puffer = io.StringIO()
     w = csv.writer(puffer, delimiter=";", lineterminator="\r\n", quoting=csv.QUOTE_MINIMAL)
     for z in zeilen:
-        w.writerow(["" if v is None else v for v in z])
+        w.writerow(csv_zeile(["" if v is None else v for v in z]))
     daten = ("﻿" + puffer.getvalue()).encode("utf-8")
     return Response(content=daten, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{dateiname}"'})
@@ -177,18 +183,48 @@ async def milog(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(...
             "summe": {"minuten": minuten, "arbeitstage": len({e["date"] for e in eintraege})}, "erstellt_am": jetzt_iso()}
 
 
+SICHERUNG_FIRMA = (("users", {"pw_hash", "einladung_token", "pin_hash"}), ("customers", set()), ("projects", set()), ("entries", set()), ("absences", set()),
+                   ("invoices", set()), ("comments", set()), ("checklists", set()), ("signatures", set()), ("documents", {"path"}), ("protokoll", set()),
+                   ("services", set()), ("zeitkonto", set()), ("abschluesse", set()), ("stempel", set()), ("webhooks", {"secret"}), ("api_tokens", {"token_hash"}),
+                   ("ausschreibungen", set()), ("projekt_leiter", set()))
+SICHERUNG_PLATTFORM = ("beteiligungen", "aufgaben", "freigaben", "benachrichtigungen", "lieferungen", "maengel", "tagesberichte", "meilensteine",
+                       "ausschreibung_einladungen", "angebote", "ausschreibung_fragen", "vergaben", "webhook_ausgang")
+
+
 @router.get("/sicherung.json")
 async def sicherung(user: dict = Depends(rolle_noetig("inhaber"))):
-    """Komplettsicherung der Firma (ohne Passwörter, Schlüssel und Dateiinhalte)."""
+    """Datensicherung der Firma: alle Sammlungen (ohne Passwörter, Schlüssel-Hashes, Webhook-Geheimnisse). Dateiinhalte liegen getrennt
+    in /api/exporte/dateien.zip. Die Datei enthält Personaldaten – verschlüsselt ablegen, Zugriff beschränken."""
     f = user["firma_id"]
-    aus = {"app": "stundenzettel-pro", "version": 1, "exported_at": jetzt_iso(), "data": {}}
+    aus = {"app": "stundenzettel-pro", "version": 2, "exported_at": jetzt_iso(), "data": {},
+           "hinweis": "Dateiinhalte (Fotos, Dokumente) sind nicht enthalten: zusätzlich /api/exporte/dateien.zip sichern. Enthält Personaldaten – nur verschlüsselt aufbewahren."}
     aus["data"]["firma"] = {k: v for k, v in (await firma_laden(f)).items() if k != "plan"}
-    for sammlung, ausschluss in (("users", {"pw_hash", "einladung_token"}), ("customers", set()), ("projects", set()), ("entries", set()),
-                                 ("absences", set()), ("invoices", set()), ("comments", set()), ("checklists", set()),
-                                 ("signatures", set()), ("documents", {"path"}), ("protokoll", set())):
+    for sammlung, ausschluss in SICHERUNG_FIRMA:
         aus["data"][sammlung] = [{k: v for k, v in d.items() if k not in ausschluss} async for d in db()[sammlung].find({"firma_id": f}, {"_id": 0})]
-    await protokollieren(user, "export.sicherung")
+    projekt_ids = [p["id"] for p in aus["data"]["projects"]]
+    for sammlung in SICHERUNG_PLATTFORM:
+        filt = {"$or": [{"firma_id": f}, {"owner_firma_id": f}, {"project_id": {"$in": projekt_ids}}]}
+        aus["data"][sammlung] = [d async for d in db()[sammlung].find(filt, {"_id": 0})]
+    await protokollieren(user, "export.sicherung", details={"sammlungen": len(aus["data"])})
     return aus
+
+
+@router.get("/dateien.zip")
+async def dateien_zip(hintergrund: BackgroundTasks, user: dict = Depends(rolle_noetig("inhaber"))):
+    """Alle Dateien der Firma (Fotos, Dokumente, Anhänge) als ZIP – Ergänzung zur Datensicherung."""
+    f = user["firma_id"]
+    tmp = tempfile.NamedTemporaryFile(prefix="dateien-", suffix=".zip", delete=False)
+    tmp.close()
+    anzahl = 0
+    with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as z:
+        async for d in db().documents.find({"firma_id": f}, {"_id": 0, "id": 1, "path": 1, "filename": 1, "scope": 1}):
+            pfad = d.get("path") or ""
+            if pfad and os.path.isfile(pfad):
+                z.write(pfad, f"{d.get('scope', 'datei')}/{d['id']}_{d.get('filename') or 'datei'}")
+                anzahl += 1
+    hintergrund.add_task(os.unlink, tmp.name)
+    await protokollieren(user, "export.dateien", details={"dateien": anzahl})
+    return FileResponse(tmp.name, media_type="application/zip", filename=f"dateien-{jetzt_iso()[:10]}.zip")
 
 
 @router.get("/free-app.json")

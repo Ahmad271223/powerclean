@@ -94,6 +94,7 @@ export default function RechnungenPage() {
                   </div>
                 </Card>
               ))}
+              {daten.hat_mehr && <p className="text-[13px] text-[#6E6E73] px-1">Es werden die ersten {daten.rechnungen.length} von {daten.gesamt} Rechnungen angezeigt – bitte nach Jahr oder Status eingrenzen.</p>}
             </div>
           )}
         </>

@@ -38,8 +38,8 @@ def _summen(calc: dict) -> dict:
 
 
 @router.get("")
-async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), status: Optional[str] = None,
-                user: dict = Depends(rolle_noetig("buero"))):
+async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), status: Optional[str] = None, limit: int = Query(500, ge=1, le=3000),
+                offset: int = Query(0, ge=0), user: dict = Depends(rolle_noetig("buero"))):
     filt = {"firma_id": user["firma_id"]}
     if jahr:
         filt["year"] = jahr
@@ -49,15 +49,17 @@ async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), status: Opt
     async for p in db().projects.find({"firma_id": user["firma_id"]}, {"_id": 0, "id": 1, "name": 1, "customer_name": 1, "color": 1}):
         projekte[p["id"]] = p
     aus = []
-    async for r in db().invoices.find(filt, {"_id": 0, "positions": 0}).sort([("year", -1), ("seq", -1)]).limit(3000):
+    async for r in db().invoices.find(filt, {"_id": 0, "positions": 0}).sort([("year", -1), ("seq", -1)]).skip(offset).limit(limit + 1):
         p = projekte.get(r.get("project_id"), {})
         r["project_name"] = p.get("name", "Projekt gelöscht")
         r["customer_name"] = p.get("customer_name", "")
         r["project_color"] = p.get("color", "")
         r["extras_anzahl"] = len(r.get("extras") or [])
         aus.append(r)
+    hat_mehr = len(aus) > limit
+    aus = aus[:limit]
     jahre = sorted({r["year"] async for r in db().invoices.find({"firma_id": user["firma_id"]}, {"_id": 0, "year": 1})}, reverse=True)
-    return {"rechnungen": aus, "jahre": jahre}
+    return {"rechnungen": aus, "jahre": jahre, "hat_mehr": hat_mehr, "offset": offset, "limit": limit, "gesamt": await db().invoices.count_documents(filt)}
 
 
 async def _naechste_nummer(firma_id: str, jahr: int) -> int:

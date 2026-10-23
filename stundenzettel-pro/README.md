@@ -193,17 +193,25 @@ Lokal: `npm run cap:sync` (baut mit `.env.app`), `npm run assets`, `npm run cap:
 
 ## Tests
 
-`cd stundenzettel-pro/backend && python -m pytest -q` – 53 Tests ohne Datenbank (mongomock): Grundlagen
+`cd stundenzettel-pro/backend && python -m pytest -q` – 58 Tests ohne Datenbank (mongomock): Grundlagen
 (`test_pro_grundlagen_20261022.py`), Pro Plus (`test_pro_plus_20261022.py`: Feiertage, Konten, ArbZG, Sperren,
 Leistungen/Zusatzpositionen, Budget/Auswertung, Webhooks, Vorarbeiter, Stempelung beenden, Lohnsummen), E-Rechnung und
 Lohnvorbereitung (`test_erechnung_lohn_20261023.py`), Fotos (`test_fotos_20261023.py`), Plattform (`test_plattform_20261023.py`)
 Baustellenalltag (`test_baustelle_20261023.py`), Ausschreibungen/Vergabe (`test_ausschreibung_20261023.py`, Beispielablauf GOLDBECK),
-Go-live-Befunde (`test_golive_20261023.py`) und Berechtigungs-Negativtests (`test_rechte_20261023.py`).
+Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berechtigungs-Negativtests (`test_rechte_20261023.py`).
 
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).
 Im Betrieb startet der Server nur mit gesetztem `JWT_SECRET` (mindestens 32 Zeichen).
+
+Die Audit-Fixes liegen auf den Branches `plattform` → `ausschreibungen` → `go-live-fixes` (jeweils aufeinander aufbauend). Für eine erneute
+Prüfung müssen sie gepusht und nach `main` übernommen werden:
+
+```bash
+git push -u origin plattform ausschreibungen go-live-fixes
+git checkout main && git merge --ff-only go-live-fixes && git push origin main
+```
 
 ## Offen / nächste Schritte
 

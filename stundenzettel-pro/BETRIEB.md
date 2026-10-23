@@ -12,6 +12,10 @@ Stand 23.10.2026. Gilt für den Container-Betrieb aus dem README (ein App-Contai
 
 Datenbank und Dateien gehören zusammen: Dokumente in der Datenbank zeigen auf Dateien im Ordner. Beide immer aus demselben Zeitfenster sichern.
 
+Zusätzlich aus der Oberfläche (Inhaber, „Exporte & Abschluss“): `sicherung.json` (alle Sammlungen, ohne Passwörter/Schlüssel) und
+`dateien.zip` (alle Fotos und Dokumente). Beide enthalten Personaldaten: nur verschlüsselt ablegen, Zugriff beschränken; jeder Export
+steht im Sicherheitsprotokoll.
+
 ## 2. Sicherung
 
 Täglich (z. B. 02:00 Uhr per cron), Aufbewahrung 30 Tage, zusätzlich eine monatliche Kopie außer Haus:
@@ -42,6 +46,14 @@ Der Server startet im Betrieb (`DB_MODE` ≠ `memory`) nicht mehr mit Entwicklun
 - `ADMIN_TOKEN` leer = Betreiber-Route `/api/admin/plan` abgeschaltet.
 
 Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+
+## 4b. Schnittstellen
+
+- API-Schlüssel haben Rechte und ein Ablaufdatum (Standard 365 Tage); nur so viele Rechte wie nötig vergeben, abgelaufene Schlüssel
+  werden mit 401 abgewiesen, gesperrte Firmen mit 403. Schlüssel aus früheren Versionen ohne Rechteliste haben Vollzugriff – bitte erneuern.
+- Webhooks: nur öffentliche https-Ziele auf den Ports 80/443/8443 (`WEBHOOK_PORTS`), interne Netze sind gesperrt (SSRF-Schutz); `http`
+  nur mit `WEBHOOK_HTTP_ERLAUBEN=1` für Tests. Lieferungen werden im Ausgang gespeichert und bei Fehlern wiederholt; Stand je Webhook
+  in der Oberfläche (offen / fehlgeschlagen). Der Hintergrunddienst läuft im Betrieb automatisch (`WEBHOOK_DIENST=1` erzwingt ihn im Speichermodus).
 
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 

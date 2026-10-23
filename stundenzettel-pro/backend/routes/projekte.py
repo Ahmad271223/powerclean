@@ -12,7 +12,7 @@ from db import db
 from feiertage import feiertage_set
 from gemeinsam import projekt_fotos
 from gemeinsam import (budget_info, eintrag_anreichern, firma_oeffentlich, kunde_laden, kundenadresse, neue_id, nutzernamen,
-                       projekt_laden, projekt_leitung, projekt_normalisieren, projekt_sichtbar)
+                       projekt_fuer_nutzer, projekt_laden, projekt_leitung, projekt_normalisieren, projekt_sichtbar)
 from models import ChecklisteIn, ChecklisteUpdateIn, KommentarIn, ProjektIn, UnterschriftIn
 from protokoll import protokollieren
 from sperre import monat_abgeschlossen
@@ -39,10 +39,14 @@ async def _projektdaten(user: dict, body: ProjektIn, alt: Optional[dict] = None)
         gueltig = set()
         async for u in db().users.find({"firma_id": user["firma_id"], "id": {"$in": daten["employee_ids"]}}, {"_id": 0, "id": 1}):
             gueltig.add(u["id"])
-        daten["employee_ids"] = [i for i in daten["employee_ids"] if i in gueltig]
-    if not daten.get("hourly_rate"):
+        unbekannt = [i for i in daten["employee_ids"] if i not in gueltig]
+        if unbekannt:   # nie stillschweigend leeren – eine leere Liste hieße „für alle sichtbar“
+            raise HTTPException(400, "Mindestens ein zugewiesener Mitarbeiter ist unbekannt. Bitte die Seite neu laden und die Zuweisung prüfen.")
+    if not daten.get("hourly_rate") and not daten.get("kostenlos"):
         firma = user.get("_firma") or await firma_laden(user["firma_id"])
         daten["hourly_rate"] = float(firma.get("default_hourly_rate") or 0)
+    if daten.get("kostenlos"):
+        daten["hourly_rate"] = 0
     daten["name"] = daten["name"].strip()
     return daten
 
@@ -64,7 +68,7 @@ async def liste(archiviert: bool = False, user: dict = Depends(aktueller_nutzer)
             je_projekt[e["project_id"]] = je_projekt.get(e["project_id"], 0) + eintrag_minuten(e)
         for p in aus:
             p["budget"] = budget_info(p, je_projekt.get(p["id"], 0))
-    return {"projekte": aus}
+    return {"projekte": [projekt_fuer_nutzer(user, p) for p in aus]}
 
 
 @router.post("/api/projekte")
@@ -83,7 +87,7 @@ async def lesen(project_id: str, user: dict = Depends(aktueller_nutzer)):
     kunde = await kunde_laden(user["firma_id"], p.get("customer_id"))
     namen = await nutzernamen(user["firma_id"])
     p["employees"] = [{"id": i, "name": namen.get(i, "")} for i in p.get("employee_ids") or [] if i in namen]
-    return {"projekt": p, "kunde": kunde}
+    return {"projekt": projekt_fuer_nutzer(user, p), "kunde": kunde if hat_rolle(user, "buero") else None}
 
 
 @router.put("/api/projekte/{project_id}")
@@ -144,7 +148,7 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     if leitung:
         async for e in db().entries.find({"firma_id": user["firma_id"], "project_id": project_id, "date": {"$gte": erster, "$lte": letzter}}, {"_id": 0, "net_minutes": 1, "workers": 1}):
             monatsminuten += eintrag_minuten(e)
-    rechnung = await db().invoices.find_one({"firma_id": user["firma_id"], "project_id": project_id, "year": jahr, "month": monat}, {"_id": 0}) if leitung else None
+    rechnung = await db().invoices.find_one({"firma_id": user["firma_id"], "project_id": project_id, "year": jahr, "month": monat}, {"_id": 0}) if hat_rolle(user, "buero") else None
     unterschriften = []
     async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": project_id, "ersetzt": {"$ne": True},
                                          "week_monday": {"$gte": von, "$lte": bis}}, {"_id": 0}):
@@ -154,9 +158,10 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     mitarbeiter.sort(key=lambda m: m["name"])
     jahre = {int(von[:4]), int(bis[:4])}
     frei = feiertage_set(sorted(jahre), firma.get("bundesland") or "")
-    leistungen = [{"id": s["id"], "name": s["name"], "hourly_rate": s.get("hourly_rate") or 0} async for s in db().services.find({"firma_id": user["firma_id"], "active": True}, {"_id": 0}).sort("sort", 1)]
+    buero = hat_rolle(user, "buero")
+    leistungen = [{"id": s["id"], "name": s["name"], **({"hourly_rate": s.get("hourly_rate") or 0} if buero else {})} async for s in db().services.find({"firma_id": user["firma_id"], "active": True}, {"_id": 0}).sort("sort", 1)]
     fotos = await projekt_fotos(user["firma_id"], project_id, von, bis)
-    return {"firma": firma_oeffentlich(firma, user), "projekt": p, "eintraege": eintraege, "rechnung": rechnung, "fotos": fotos,
+    return {"firma": firma_oeffentlich(firma, user), "projekt": projekt_fuer_nutzer(user, p), "eintraege": eintraege, "rechnung": rechnung, "fotos": fotos,
             "unterschriften": unterschriften, "mitarbeiter": mitarbeiter, "raster": {"von": von, "bis": bis},
             "leitung": leitung, "budget": budget_info(p, monatsminuten) if leitung else None,
             "feiertage": {k: v for k, v in frei.items() if von <= k <= bis}, "leistungen": leistungen,

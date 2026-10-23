@@ -4,6 +4,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth import aktueller_nutzer, api_token_neu, betreiber_pruefen, firma_laden, jetzt_iso, plan_status, rolle_noetig, schreibend
+from datetime import timedelta
+
+from auth import API_RECHTE, jetzt
 from db import db
 from gemeinsam import firma_oeffentlich, neue_id
 from models import ApiTokenIn, FirmaIn, FirmaLoeschenIn, PlanIn, WebhookIn
@@ -75,10 +78,11 @@ async def api_tokens(user: dict = Depends(rolle_noetig("inhaber"))):
 @router.post("/api/firma/api-tokens")
 async def api_token_anlegen(body: ApiTokenIn, user: dict = Depends(schreibend("inhaber"))):
     roh, h = api_token_neu()
-    t = {"id": neue_id(), "firma_id": user["firma_id"], "name": body.name.strip(), "token_hash": h,
-         "created_at": jetzt_iso(), "created_by": user["id"], "last_used_at": None}
+    rechte = [r for r in dict.fromkeys(body.rechte) if r in API_RECHTE] or ["zeiten"]
+    t = {"id": neue_id(), "firma_id": user["firma_id"], "name": body.name.strip(), "token_hash": h, "rechte": rechte,
+         "gueltig_bis": (jetzt() + timedelta(days=body.tage)).isoformat(), "created_at": jetzt_iso(), "created_by": user["id"], "last_used_at": None}
     await db().api_tokens.insert_one(dict(t))
-    await protokollieren(user, "api_token.angelegt", t["name"])
+    await protokollieren(user, "api_token.angelegt", t["name"], details={"rechte": rechte, "tage": body.tage})
     t.pop("token_hash")
     return {"token": roh, "eintrag": t, "hinweis": "Der Schlüssel wird nur jetzt einmal angezeigt."}
 
@@ -96,7 +100,8 @@ async def api_token_loeschen(token_id: str, user: dict = Depends(rolle_noetig("i
 @router.get("/api/firma/webhooks")
 async def webhooks_liste(user: dict = Depends(rolle_noetig("inhaber"))):
     import webhooks as wh
-    aus = [h async for h in db().webhooks.find({"firma_id": user["firma_id"]}, {"_id": 0, "secret": 0})]
+    stand = await wh.ausgang_stand(user["firma_id"])
+    aus = [{**h, "ausgang": stand.get(h["id"], {"offen": 0, "fehlgeschlagen": 0})} async for h in db().webhooks.find({"firma_id": user["firma_id"]}, {"_id": 0, "secret": 0})]
     return {"webhooks": aus, "ereignisse": wh.EREIGNISSE}
 
 
@@ -105,7 +110,11 @@ async def webhook_anlegen(body: WebhookIn, user: dict = Depends(schreibend("inha
     import secrets
     import webhooks as wh
     events = [e for e in body.events if e == "*" or e in wh.EREIGNISSE] or ["*"]
-    h = {"id": neue_id(), "firma_id": user["firma_id"], "name": (body.name or "").strip() or body.url[:60], "url": body.url.strip(),
+    try:
+        url = wh.url_pruefen(body.url)   # SSRF-Schutz: nur öffentliche https-Ziele
+    except wh.UnsichereAdresse as exc:
+        raise HTTPException(400, str(exc))
+    h = {"id": neue_id(), "firma_id": user["firma_id"], "name": (body.name or "").strip() or url[:60], "url": url,
          "events": events, "active": body.active, "secret": secrets.token_hex(24), "created_at": jetzt_iso(), "last_status": None, "last_at": None}
     await db().webhooks.insert_one(dict(h))
     await protokollieren(user, "webhook.angelegt", h["url"], details={"ereignisse": events})

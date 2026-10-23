@@ -52,3 +52,7 @@ DATEN_SCHLUESSEL = env("DATEN_SCHLUESSEL", "")  # Betreiber-Schlüssel zum Freis
 ZEITZONE = env("ZEITZONE", "Europe/Berlin")
 
 MIN_JAHR = 2025
+
+# Webhooks: nur https und Standardports; http nur bewusst für Tests (WEBHOOK_HTTP_ERLAUBEN=1)
+WEBHOOK_HTTP_ERLAUBEN = env("WEBHOOK_HTTP_ERLAUBEN", "") == "1"
+WEBHOOK_PORTS = {int(p) for p in env("WEBHOOK_PORTS", "80,443,8443").split(",") if p.strip().isdigit()}

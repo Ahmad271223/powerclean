@@ -232,6 +232,7 @@ class ProjektIn(BaseModel):
     anforderungen: Optional[str] = Field(default="", max_length=4000)
     lat: Optional[float] = Field(default=None, ge=-90, le=90)
     lon: Optional[float] = Field(default=None, ge=-180, le=180)
+    kostenlos: bool = False   # bewusst ohne Stundensatz: 0 € bleibt 0 € (sonst gilt der Firmenstandard)
 
     @field_validator("baubeginn", "bauende")
     @classmethod
@@ -482,6 +483,8 @@ class PlanIn(BaseModel):
 
 class ApiTokenIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    rechte: list[str] = Field(default_factory=lambda: ["zeiten", "projekte"], max_length=10)   # projekte, kunden, mitarbeiter, zeiten, abwesenheiten, rechnungen
+    tage: int = Field(default=365, ge=1, le=730)                                                 # Gültigkeit ab Erzeugung
 
 
 def _iban_pruefen(iban: str) -> str:

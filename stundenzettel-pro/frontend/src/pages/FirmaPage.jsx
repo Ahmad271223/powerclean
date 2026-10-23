@@ -114,21 +114,30 @@ function Lizenz() {
   );
 }
 
+const API_RECHTE = [['zeiten', 'Zeiten'], ['projekte', 'Projekte'], ['abwesenheiten', 'Abwesenheiten'], ['mitarbeiter', 'Mitarbeiter'], ['kunden', 'Kunden'], ['rechnungen', 'Rechnungen']];
+
 function Schnittstelle() {
   const [tokens, setTokens] = useState(null);
   const [name, setName] = useState('');
+  const [rechte, setRechte] = useState(['zeiten', 'projekte']);
+  const [tage, setTage] = useState(365);
   const [neu, setNeu] = useState('');
   const laden = () => api.get('/api/firma/api-tokens').then((r) => setTokens(r.tokens)).catch((err) => toast.error(err.message));
   useEffect(() => { laden(); }, []);
+  const toggleRecht = (r) => setRechte((x) => (x.includes(r) ? x.filter((y) => y !== r) : [...x, r]));
   const anlegen = async (e) => {
     e.preventDefault();
-    try { const r = await api.post('/api/firma/api-tokens', { name: name.trim() || 'Schlüssel' }); setNeu(r.token); setName(''); laden(); } catch (err) { toast.error(err.message); }
+    if (!rechte.length) { toast.error('Bitte mindestens ein Recht wählen'); return; }
+    try { const r = await api.post('/api/firma/api-tokens', { name: name.trim() || 'Schlüssel', rechte, tage: Math.max(1, Math.min(730, parseInt(tage, 10) || 365)) }); setNeu(r.token); setName(''); laden(); } catch (err) { toast.error(err.message); }
   };
   const loeschen = async (t) => { if (!window.confirm(`Schlüssel „${t.name}“ löschen? Verbundene Programme verlieren den Zugriff.`)) return; try { await api.del(`/api/firma/api-tokens/${t.id}`); laden(); } catch (err) { toast.error(err.message); } };
   return (
     <Card className="p-5 sm:p-8 max-w-3xl mx-auto space-y-5">
       <div><h2 className="text-[17px]">API-Schlüssel</h2><p className="text-[14px] text-[#6E6E73] mt-1">Für Lohnbüro, Steuerberater oder eigene Auswertungen: lesender Zugriff auf Zeiten, Projekte, Mitarbeiter, Abwesenheiten und Rechnungen. Dokumentation unter <a href="/api/docs" target="_blank" rel="noreferrer" className="text-[#C41E3A] font-medium">/api/docs</a> (Bereich „API v1“).</p></div>
-      <form onSubmit={anlegen} className="flex gap-2"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, z. B. Lohnbüro Schmidt" /><Btn type="submit"><KeyRound size={16} /> Erzeugen</Btn></form>
+      <form onSubmit={anlegen} className="space-y-3">
+        <div className="flex gap-2"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, z. B. Lohnbüro Schmidt" /><TextInput type="number" min="1" max="730" inputMode="numeric" value={tage} onChange={(e) => setTage(e.target.value)} className="w-28" title="Gültig in Tagen" /><Btn type="submit"><KeyRound size={16} /> Erzeugen</Btn></div>
+        <div><span className="block text-[13px] font-medium text-[#6E6E73] mb-1.5">Rechte (nur so viel wie nötig)</span><div className="flex flex-wrap gap-2">{API_RECHTE.map(([r, l]) => <Chip key={r} active={rechte.includes(r)} onClick={() => toggleRecht(r)}>{l}</Chip>)}</div><span className="block text-[12px] text-[#86868B] mt-1">Gültig {tage || 365} Tage ab heute; danach einen neuen Schlüssel erzeugen. Jeder Abruf wird mit Zeitpunkt vermerkt.</span></div>
+      </form>
       {neu && (
         <div className="rounded-2xl bg-[#FFF4E5] px-4 py-3 text-[14px] text-[#7A4100]">
           <div className="font-semibold">Neuer Schlüssel – wird nur jetzt angezeigt:</div>
@@ -137,7 +146,7 @@ function Schnittstelle() {
         </div>
       )}
       {!tokens ? <Ladeanzeige /> : tokens.length === 0 ? <p className="text-[14px] text-[#6E6E73]">Noch keine Schlüssel.</p> : (
-        <ul className="divide-y divide-black/[0.06]">{tokens.map((t) => <li key={t.id} className="py-2.5 flex items-center gap-3 text-[14px]"><div className="flex-1"><div className="font-medium">{t.name}</div><div className="text-[12px] text-[#86868B]">erzeugt {fmtZeit(t.created_at)} · zuletzt benutzt {fmtZeit(t.last_used_at)}</div></div><Btn size="sm" variant="danger" onClick={() => loeschen(t)}><Trash2 size={14} /></Btn></li>)}</ul>
+        <ul className="divide-y divide-black/[0.06]">{tokens.map((t) => <li key={t.id} className="py-2.5 flex items-center gap-3 text-[14px]"><div className="flex-1"><div className="font-medium">{t.name}</div><div className="text-[12px] text-[#86868B]">{(t.rechte || ['alle (alter Schlüssel)']).join(', ')} · gültig bis {t.gueltig_bis ? fmtZeit(t.gueltig_bis) : 'unbegrenzt (alter Schlüssel – bitte erneuern)'} · erzeugt {fmtZeit(t.created_at)} · zuletzt benutzt {fmtZeit(t.last_used_at)}</div></div><Btn size="sm" variant="danger" onClick={() => loeschen(t)}><Trash2 size={14} /></Btn></li>)}</ul>
       )}
       <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3 text-[13px] font-mono break-all">curl -H "Authorization: Bearer sz_…" {window.location.origin}/api/v1/zeiten?von=2026-10-01&amp;bis=2026-10-31</div>
     </Card>
@@ -175,7 +184,7 @@ function Webhooks() {
       </form>
       {geheim && <div className="rounded-2xl bg-[#FFF4E5] px-4 py-3 text-[14px] text-[#7A4100]"><div className="font-semibold">Geheimnis für die Signatur – wird nur jetzt angezeigt:</div><div className="mt-1 break-all select-all font-mono text-[13px]">{geheim}</div><Btn size="sm" variant="dark" className="mt-2" onClick={() => navigator.clipboard?.writeText(geheim).then(() => toast.success('Kopiert'))}><Copy size={14} /> Kopieren</Btn></div>}
       {!daten ? <Ladeanzeige /> : daten.webhooks.length === 0 ? <p className="text-[14px] text-[#6E6E73]">Noch keine Webhooks.</p> : (
-        <ul className="divide-y divide-black/[0.06]">{daten.webhooks.map((h) => <li key={h.id} className="py-2.5 flex items-center gap-3 text-[14px]"><div className="flex-1 min-w-0"><div className="font-medium truncate">{h.name} <span className="text-[12px] font-normal text-[#86868B]">{h.url}</span></div><div className="text-[12px] text-[#86868B]">{(h.events || ['*']).join(', ')} · zuletzt {h.last_status ? `HTTP ${h.last_status} (${h.last_event})` : 'nie'} {h.last_at ? fmtZeit(h.last_at) : ''}</div></div><Btn size="sm" variant="soft" onClick={() => testen(h)} loading={busy === h.id}><Send size={14} /> Test</Btn><IconBtn size={30} variant="danger" onClick={() => loeschen(h)} title="Löschen"><Trash2 size={14} /></IconBtn></li>)}</ul>
+        <ul className="divide-y divide-black/[0.06]">{daten.webhooks.map((h) => <li key={h.id} className="py-2.5 flex items-center gap-3 text-[14px]"><div className="flex-1 min-w-0"><div className="font-medium truncate">{h.name} <span className="text-[12px] font-normal text-[#86868B]">{h.url}</span></div><div className="text-[12px] text-[#86868B]">{(h.events || ['*']).join(', ')} · zuletzt {h.last_status ? `HTTP ${h.last_status} (${h.last_event})` : 'nie'} {h.last_at ? fmtZeit(h.last_at) : ''}{h.ausgang?.offen ? ` · ${h.ausgang.offen} Lieferung(en) wartet auf Wiederholung` : ''}{h.ausgang?.fehlgeschlagen ? ` · ${h.ausgang.fehlgeschlagen} endgültig fehlgeschlagen` : ''}</div></div><Btn size="sm" variant="soft" onClick={() => testen(h)} loading={busy === h.id}><Send size={14} /> Test</Btn><IconBtn size={30} variant="danger" onClick={() => loeschen(h)} title="Löschen"><Trash2 size={14} /></IconBtn></li>)}</ul>
       )}
     </Card>
   );

@@ -128,7 +128,8 @@ def _zahl(x) -> str:
 
 def csv_bytes(zeilen: list[list]) -> bytes:
     puffer = io.StringIO()
-    w = csv.writer(puffer, delimiter=";", lineterminator="\r\n", quoting=csv.QUOTE_MINIMAL)
+    from csvsicher import Writer
+    w = Writer(puffer, delimiter=";", lineterminator="\r\n", quoting=csv.QUOTE_MINIMAL)
     for z in zeilen:
         w.writerow(["" if v is None else v for v in z])
     return ("﻿" + puffer.getvalue()).encode("utf-8")

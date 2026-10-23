@@ -32,7 +32,12 @@ PROJEKT_DEFAULTS = {
     # Bauvorhaben (Ausschreibungsplattform): alles optional, nur für Projekte mit Ausschreibungen/Beteiligungen relevant
     "projektnummer": "", "auftraggeber": "", "generalunternehmer": "", "projektart": "", "beschreibung": "", "baubeginn": None, "bauende": None,
     "phasen": [], "bauabschnitte": [], "gewerke": [], "projektstatus": "", "volumen": None, "kosten": None, "anforderungen": "", "lat": None, "lon": None,
+    "kostenlos": False,
 }
+
+# Felder, die Mitarbeiter und Vorarbeiter nicht sehen (Preise, Budgets, Kundendaten, interne Notizen)
+PROJEKT_FELDER_VERTRAULICH = {"hourly_rate", "kostenlos", "budget_hours_month", "budget_warn_percent", "budget", "notes", "customer_address",
+                              "customer_id", "reverse_charge", "volumen", "kosten", "quelle_id", "employee_name"}
 
 # Mitarbeiter sehen keine Bank-/Steuerdaten; Logo und Stempel brauchen sie für den Stundenzettel beim Kunden
 FIRMA_FELDER_MITARBEITER = {"id", "name", "owner", "street", "zip_code", "city", "phone", "email", "website", "logo",
@@ -78,6 +83,18 @@ def projekt_leitung(user: dict, projekt: dict) -> bool:
     if leiter:
         return user["id"] in leiter   # ausdrückliche Projektleitung: nur diese Personen
     return user.get("role") == "vorarbeiter" and projekt_sichtbar(user, projekt)
+
+
+def projekt_fuer_nutzer(user: dict, projekt: dict) -> dict:
+    """Projekt für die Antwort: Büro/Inhaber alles; Mitarbeiter ohne vertrauliche Felder; Projektleitung zusätzlich das Stundenbudget."""
+    if hat_rolle(user, "buero"):
+        return projekt
+    aus = {k: v for k, v in projekt.items() if k not in PROJEKT_FELDER_VERTRAULICH}
+    if projekt_leitung(user, projekt):
+        for k in ("budget_hours_month", "budget_warn_percent", "budget"):
+            if k in projekt:
+                aus[k] = projekt[k]
+    return aus
 
 
 async def projekt_laden(user: dict, project_id: str, schreiben: bool = False) -> dict:

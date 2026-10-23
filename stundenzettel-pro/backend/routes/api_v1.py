@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth import api_firma
+from auth import api_recht
 from db import db
 from gemeinsam import nutzernamen
 from zeiten import datum_pruefen, eintrag_minuten
@@ -23,7 +23,7 @@ def _bereich(von: str, bis: str) -> None:
 
 
 @router.get("/projekte")
-async def projekte(archiviert: Optional[bool] = None, firma_id: str = Depends(api_firma)):
+async def projekte(archiviert: Optional[bool] = None, firma_id: str = Depends(api_recht("projekte"))):
     filt = {"firma_id": firma_id}
     if archiviert is not None:
         filt["archived"] = archiviert
@@ -34,19 +34,19 @@ async def projekte(archiviert: Optional[bool] = None, firma_id: str = Depends(ap
 
 
 @router.get("/kunden")
-async def kunden(firma_id: str = Depends(api_firma)):
+async def kunden(firma_id: str = Depends(api_recht("kunden"))):
     return {"kunden": [k async for k in db().customers.find({"firma_id": firma_id}, {"_id": 0, "firma_id": 0})]}
 
 
 @router.get("/mitarbeiter")
-async def mitarbeiter(firma_id: str = Depends(api_firma)):
+async def mitarbeiter(firma_id: str = Depends(api_recht("mitarbeiter"))):
     felder = {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "personalnummer": 1, "active": 1, "weekly_hours": 1}
     return {"mitarbeiter": [u async for u in db().users.find({"firma_id": firma_id}, felder)]}
 
 
 @router.get("/zeiten")
 async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user_id: Optional[str] = None,
-                 limit: int = Query(5000, ge=1, le=50000), firma_id: str = Depends(api_firma)):
+                 limit: int = Query(5000, ge=1, le=50000), firma_id: str = Depends(api_recht("zeiten"))):
     _bereich(von, bis)
     filt = {"firma_id": firma_id, "date": {"$gte": von, "$lte": bis}}
     if project_id:
@@ -63,7 +63,7 @@ async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user_id: 
 
 
 @router.get("/abwesenheiten")
-async def abwesenheiten(von: str, bis: str, firma_id: str = Depends(api_firma)):
+async def abwesenheiten(von: str, bis: str, firma_id: str = Depends(api_recht("abwesenheiten"))):
     _bereich(von, bis)
     namen = await nutzernamen(firma_id)
     aus = []
@@ -74,7 +74,7 @@ async def abwesenheiten(von: str, bis: str, firma_id: str = Depends(api_firma)):
 
 
 @router.get("/rechnungen")
-async def rechnungen(jahr: Optional[int] = Query(None, ge=2025, le=2100), firma_id: str = Depends(api_firma)):
+async def rechnungen(jahr: Optional[int] = Query(None, ge=2025, le=2100), firma_id: str = Depends(api_recht("rechnungen"))):
     filt = {"firma_id": firma_id}
     if jahr:
         filt["year"] = jahr

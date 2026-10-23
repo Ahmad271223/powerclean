@@ -31,6 +31,30 @@ Reproduktionstest in `backend/tests/test_golive_20261023.py` (läuft ohne Datenb
 | 22 | Vorarbeiter buchen für beliebige Kollegen | Negativtest: Vorarbeiter konnten auf ihrem Projekt Zeiten für Personen eintragen, die dem Projekt nicht zugewiesen sind | bestätigt | Bei Projekten mit Zuweisung nur für zugewiesene Personen (403), Büro unverändert | `test_rechte_03` |
 | 20 | Nachtarbeit / Zeitumstellung | zu testen | geprüft | Stempelung über Mitternacht liefert Datum des Starttags und korrekte Nettominuten; Zeitstempel werden mit Zeitzone gespeichert (`clock_start_at`/`clock_end_at`), Anzeige rechnet mit absoluten Zeitstempeln. Zeitumstellung: die Dauer aus absoluten Zeitstempeln ist korrekt; die HH:MM-Felder der Nacht der Umstellung sind Wanduhrzeiten (Hinweis in der Doku) | `test_01` |
 
+## 1b. Prüfungsrunde 4 (23.10.2026) – 23 Befunde
+
+Vorbemerkung: Der Auditor sieht auf GitHub nur `main` (f487941). Alle Fixes liegen auf den lokalen Branches `plattform` →
+`ausschreibungen` → `go-live-fixes`; sie müssen gepusht und nach `main` übernommen werden, damit eine erneute Prüfung den
+aktuellen Stand sieht (siehe README „Go-live und Betrieb“).
+
+| Nr | Bereich | Befund | Geprüft | Maßnahme | Nachweis |
+|---|---|---|---|---|---|
+| 1 | Webhooks (P0) | SSRF: beliebige Adressen, auch interne, wurden angesprochen | bestätigt | `webhooks.url_pruefen` beim Anlegen (nur https, erlaubte Ports, keine Zugangsdaten, keine internen Namen/IP-Bereiche inkl. IPv6/IPv4-mapped/CGNAT) und `adressen_pruefen` vor jedem Senden (DNS auflösen, jede Adresse muss öffentlich sein); keine Weiterleitungen; Zeitlimit 8 s | `test_audit4_01` |
+| 2 | API-Schlüssel (P1) | Ein Schlüssel las alles | bestätigt | Rechte je Schlüssel (`zeiten`, `projekte`, `kunden`, `mitarbeiter`, `abwesenheiten`, `rechnungen`), Standard nur Zeiten+Projekte; jede Route verlangt ihr Recht (403); alte Schlüssel ohne Rechteliste behalten Vollzugriff bis zur Erneuerung (in der Oberfläche markiert) | `test_audit4_02` |
+| 3 | Import Rechnungsnummern (P1) | Bei Nummernkonflikt wurde nur `seq` geändert, die sichtbare Nummer blieb doppelt | bestätigt | Rechnung mit bereits vergebener Nummer oder bereits abgerechnetem Monat wird übersprungen (gezählt); Nummernkreis wird auf die höchste importierte Nummer nachgezogen; importierte Rechnungen gelten als ausgestellt | `test_audit4_03` |
+| 4 | Leistungen (P1) | Umbenennen änderte den Namen auf allen alten Einträgen | bestätigt | Einträge behalten Name und Satz als Momentaufnahme; neuer Name gilt künftig | `test_audit4_04` |
+| 5 | CSV (P1) | Formel-Einschleusung in Tätigkeiten/Namen | bestätigt | `csvsicher`: Zellen, die mit = + - @ oder Steuerzeichen beginnen, bekommen ein Hochkomma (Zahlen unverändert) – in allen CSV-Exporten (Zeiten, Lohn, Abwesenheiten, Protokoll, Lohnvorbereitung, LV) | `test_audit4_04` |
+| 6/7 | Projektdaten (P1) | Mitarbeiter bekamen Stundensätze, Budgets, Notizen, Kundendaten | bestätigt | `projekt_fuer_nutzer`: Mitarbeiter ohne vertrauliche Felder, Projektleitung zusätzlich Stundenbudget; Monat liefert Rechnung und Leistungssätze nur dem Büro | `test_audit4_04` |
+| 8/9/10 | Datensicherung (P1) | Unvollständig (keine Stundenkonten, Abschlüsse, Leistungen …), Dateien fehlen, Personaldaten ungeschützt | bestätigt | `sicherung.json` v2 mit allen Sammlungen inkl. Plattform; `dateien.zip` für Fotos/Dokumente; Hinweis auf Personaldaten in Datei und Oberfläche, Export im Protokoll; Aufbewahrung in `BETRIEB.md` | `test_audit4_05` |
+| 11/12/13 | Import (P1) | Teilimport möglich, keine stabile Kennung, keine Modellprüfung | bestätigt | Erst prüfen, dann schreiben; Projekte über `ProjektIn`; Kennung je Eintrag auch ohne Quell-ID (Hash) → Wiederholung legt nichts doppelt an; bei Schreibfehlern werden alle Datensätze des Imports entfernt (500, nichts übernommen) | `test_audit4_03` |
+| 14/15 | API-Schlüssel (P1) | Keine Sperr- und Ablaufprüfung | bestätigt | Gesperrte Firma → 403; `gueltig_bis` (1–730 Tage, Standard 365) → 401 nach Ablauf | `test_audit4_02` |
+| 16/17 | Webhooks (P1) | Nur Hintergrundaufgabe, kein Retry, Verlust bei Neustart | bestätigt | Ausgang `webhook_ausgang`: jedes Ereignis wird gespeichert, sofort zugestellt, bei Fehlern mit 1/5/15/60/240 Minuten Abstand wiederholt (Hintergrunddienst, läuft nach Neustart weiter), danach „fehlgeschlagen“ und sichtbar | `test_audit4_01` |
+| 18 | Stundensatz 0 (P1) | 0 wurde durch den Firmenstandard ersetzt | bestätigt (gewollt für „leer“) | Schalter „Kostenlos“ am Projekt: 0 € bleibt 0 € | `test_audit4_05` |
+| 19 | Mitarbeiter-IDs (P1) | Unbekannte IDs wurden entfernt – leere Liste = für alle sichtbar | bestätigt | Unbekannte IDs → 400, nichts wird stillschweigend geleert | `test_audit4_05` |
+| 20 | Projektlöschung (P1) | Verlust historischer Daten | schon in Runde 3 | Laufende Stempelung: nie; mit Zeiten nur Inhaber ausdrücklich; Archivieren ist der Normalfall | `test_golive_03` |
+| 21/22 | Listen (P2) | Feste Grenzen ohne Hinweis | bestätigt | Rechnungen und Zeiten mit `limit`/`offset`, `hat_mehr` und `gesamt`; Oberfläche zeigt den Hinweis | `test_audit4_05` |
+| 23 | Dashboard (P2) | Berechnung in einer Anfrage | zutreffend, kein Fehler | Bekannte Grenze: für sehr große Firmen vor dem Go-live Lasttest (BETRIEB.md); Indizes vorhanden | manuell |
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

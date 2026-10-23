@@ -120,9 +120,10 @@ export default function ExportePage() {
         {isInhaber && (
           <Card className="p-5 space-y-4">
             <h2 className="text-[17px] flex items-center gap-2"><Smartphone size={18} /> Sicherung &amp; Rückweg</h2>
-            <Btn variant="soft" onClick={() => holen('sich', '/api/exporte/sicherung.json')} loading={busy === 'sich'}><FileDown size={16} /> Komplettsicherung (JSON)</Btn>
+            <Btn variant="soft" onClick={() => holen('sich', '/api/exporte/sicherung.json')} loading={busy === 'sich'}><FileDown size={16} /> Datensicherung (JSON)</Btn>
+            <Btn variant="soft" onClick={() => holen('dateien', '/api/exporte/dateien.zip')} loading={busy === 'dateien'}><FileDown size={16} /> Dateien (Fotos, Dokumente) als ZIP</Btn>
             <Btn variant="soft" onClick={() => holen('free', '/api/exporte/free-app.json')} loading={busy === 'free'}><FileDown size={16} /> Daten für die kostenlose App</Btn>
-            <p className="text-[12px] text-[#86868B]">Deine Daten gehören dir: Die Sicherung enthält alles außer Passwörtern und Dateien. Die zweite Datei lässt sich in der kostenlosen Stundenzettel-App unter „Datensicherung → Wiederherstellen“ einspielen.</p>
+            <p className="text-[12px] text-[#86868B]">Deine Daten gehören dir: Die Datensicherung enthält alle Daten der Firma außer Passwörtern und Schlüsseln; die Dateien kommen als eigenes ZIP dazu. Beides enthält Personaldaten – nur verschlüsselt und mit beschränktem Zugriff aufbewahren. Die zweite Datei lässt sich in der kostenlosen Stundenzettel-App unter „Datensicherung → Wiederherstellen“ einspielen.</p>
           </Card>
         )}
       </div>

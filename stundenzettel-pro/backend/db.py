@@ -81,6 +81,8 @@ async def indizes_anlegen(d) -> None:
         ("ausschreibung_fragen", [("ausschreibung_id", 1), ("created_at", 1)], {"name": "ausschreibung_zeit"}),
         ("vergaben", [("ausschreibung_id", 1), ("status", 1)], {"name": "ausschreibung_status"}),
         ("vergaben", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
+        ("webhook_ausgang", [("status", 1), ("naechster_versuch_at", 1)], {"name": "faellig"}),
+        ("webhook_ausgang", [("firma_id", 1), ("webhook_id", 1), ("status", 1)], {"name": "firma_hook"}),
     ]
     for sammlung, schluessel, optionen in aufgaben:
         try:

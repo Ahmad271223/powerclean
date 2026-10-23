@@ -175,15 +175,38 @@ def api_token_neu() -> tuple[str, str]:
     return roh, hashlib.sha256(roh.encode()).hexdigest()
 
 
-async def api_firma(authorization: Optional[str] = Header(None)) -> str:
-    """Firma zu einem API-Schlüssel (Authorization: Bearer sz_…)."""
+API_RECHTE = ("projekte", "kunden", "mitarbeiter", "zeiten", "abwesenheiten", "rechnungen")
+
+
+async def api_schluessel(authorization: Optional[str] = Header(None)) -> dict:
+    """API-Schlüssel prüfen (Authorization: Bearer sz_…): vorhanden, nicht abgelaufen, Firma nicht gesperrt."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "API-Schlüssel fehlt.")
     roh = authorization.split(" ", 1)[1].strip()
     t = await db().api_tokens.find_one({"token_hash": hashlib.sha256(roh.encode()).hexdigest()}, {"_id": 0})
     if not t:
         raise HTTPException(401, "API-Schlüssel ungültig.")
+    if t.get("gueltig_bis") and t["gueltig_bis"] < jetzt_iso():
+        raise HTTPException(401, "API-Schlüssel ist abgelaufen – bitte in der Firma einen neuen erzeugen.")
+    firma = await db().firmen.find_one({"id": t["firma_id"]}, {"_id": 0, "plan": 1})
+    if not firma or plan_status(firma)["status"] == "gesperrt":
+        raise HTTPException(403, "Das Konto der Firma ist gesperrt.")
     await db().api_tokens.update_one({"id": t["id"]}, {"$set": {"last_used_at": jetzt_iso()}})
+    return t
+
+
+def api_recht(recht: str):
+    """Abhängigkeit: Firma eines API-Schlüssels, der das Recht trägt (Schlüssel ohne Rechteliste aus früheren Versionen: voller Lesezugriff)."""
+    async def pruefen(t: dict = Depends(api_schluessel)) -> str:
+        rechte = t.get("rechte") or ["*"]
+        if "*" not in rechte and recht not in rechte:
+            raise HTTPException(403, f"Der API-Schlüssel hat kein Recht „{recht}“.")
+        return t["firma_id"]
+    return pruefen
+
+
+async def api_firma(t: dict = Depends(api_schluessel)) -> str:
+    """Firma zu einem API-Schlüssel (ohne Rechteprüfung – nur für Routen, die kein eigenes Recht brauchen)."""
     return t["firma_id"]
 
 

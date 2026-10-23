@@ -6,6 +6,7 @@ API-Dokumentation:                 /api/docs
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -47,7 +48,13 @@ async def lebenszyklus(app: FastAPI):
         print("WARNUNG:", h)
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     await indizes_anlegen(db())
+    dienst = None
+    if config.DB_MODE != "memory" or os.environ.get("WEBHOOK_DIENST") == "1":
+        import webhooks
+        dienst = asyncio.create_task(webhooks.hintergrunddienst())   # stellt offene Webhook-Lieferungen zu (auch nach Neustart)
     yield
+    if dienst:
+        dienst.cancel()
 
 
 app = FastAPI(title="Stundenzettel Pro", version=VERSION, docs_url="/api/docs", openapi_url="/api/openapi.json",

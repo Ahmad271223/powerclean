@@ -109,8 +109,8 @@ async def _frisch(firma_id: str, eintrag_id: str) -> dict:
 
 # ---------------------------------------------------------------- Einträge
 @router.get("/api/zeiten")
-async def liste(von: str, bis: str, user_id: Optional[str] = None, project_id: Optional[str] = None,
-                user: dict = Depends(rolle_noetig("buero"))):
+async def liste(von: str, bis: str, user_id: Optional[str] = None, project_id: Optional[str] = None, limit: int = Query(5000, ge=1, le=20000),
+                offset: int = Query(0, ge=0), user: dict = Depends(rolle_noetig("buero"))):
     von, bis = _bereich(von, bis)
     filt = {"firma_id": user["firma_id"], "date": {"$gte": von, "$lte": bis}}
     if user_id:
@@ -122,12 +122,14 @@ async def liste(von: str, bis: str, user_id: Optional[str] = None, project_id: O
     async for p in db().projects.find({"firma_id": user["firma_id"]}, {"_id": 0, "id": 1, "name": 1, "color": 1}):
         projekte[p["id"]] = p
     aus = []
-    async for e in db().entries.find(filt, {"_id": 0}).sort([("date", 1), ("start_time", 1)]).limit(5000):
+    async for e in db().entries.find(filt, {"_id": 0}).sort([("date", 1), ("start_time", 1)]).skip(offset).limit(limit + 1):
         e = eintrag_anreichern(e, namen)
         e["project_name"] = projekte.get(e.get("project_id"), {}).get("name", "")
         e["project_color"] = projekte.get(e.get("project_id"), {}).get("color", "")
         aus.append(e)
-    return {"eintraege": aus}
+    hat_mehr = len(aus) > limit
+    aus = aus[:limit]
+    return {"hat_mehr": hat_mehr, "offset": offset, "limit": limit, "eintraege": aus}
 
 
 @router.get("/api/zeiten/warnungen")

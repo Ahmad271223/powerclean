@@ -165,10 +165,12 @@ def test_05_leistungen_zusatzpositionen_rechnung(client):
     # erneutes Anlegen behält die Positionen und rechnet neu
     inv3 = client.post("/api/rechnungen/anlegen", json={"project_id": p["id"], "year": 2026, "month": 10}, headers=kopf).json()["rechnung"]
     assert inv3["extras_net"] == 73 and len(inv3["positions"]) == 3
-    # Leistung umbenennen zieht den Namen am Eintrag nach; Löschen mit Einträgen = deaktivieren
+    # Leistung umbenennen ändert alte Einträge nicht (Go-live-Audit: Momentaufnahme auf unterschriebenen Stundenzetteln); Löschen mit Einträgen = deaktivieren
+    alter_name = glas["name"]
     client.put(f"/api/leistungen/{glas['id']}", json={"name": "Glas- und Rahmenreinigung", "hourly_rate": 48}, headers=kopf)
     m = client.get(f"/api/projekte/{p['id']}/monat?jahr=2026&monat=10", headers=kopf).json()
-    assert any(e["service_name"] == "Glas- und Rahmenreinigung" and e["service_rate"] == 45 for e in m["eintraege"])
+    assert any(e["service_name"] == alter_name and e["service_rate"] == 45 for e in m["eintraege"])
+    assert not any(e.get("service_name") == "Glas- und Rahmenreinigung" for e in m["eintraege"])
     r = client.delete(f"/api/leistungen/{glas['id']}", headers=kopf).json()
     assert r["deaktiviert"] is True
     assert [l["name"] for l in client.get("/api/leistungen", headers=kopf).json()["leistungen"]] == ["Unterhaltsreinigung"]

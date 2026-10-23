@@ -178,7 +178,8 @@ def _csv_lesen(text: str) -> list[dict]:
 
 def _csv_schreiben(positionen: list[dict], preise: Optional[dict] = None) -> str:
     buf = io.StringIO()
-    w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
+    from csvsicher import Writer
+    w = Writer(buf, delimiter=";", lineterminator="\r\n")
     kopf = ["Nr", "Leistung", "Menge", "Einheit", "Beschreibung"] + (["Einzelpreis", "Gesamt"] if preise is not None else [])
     w.writerow(kopf)
     for p in positionen:
