@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Phone, MessageCircle, Menu, X, ChevronRight } from 'lucide-react';
-import { companyInfo } from '../data/services';
+import { companyInfo, services } from '../data/services';
 import { CookieBanner } from './CookieBanner';
+
+// Interne Links auf die wichtigsten Leistungsseiten (hilft Besuchern und Suchmaschinen)
+const FOOTER_LEISTUNGEN = ['unterhaltsreinigung', 'bueroreinigung', 'baureinigung', 'fenster-glasreinigung']
+  .map((id) => services.find((s) => s.id === id))
+  .filter(Boolean);
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -25,7 +30,7 @@ export const Header = () => {
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center" data-testid="logo-link">
+          <Link to="/" className="flex items-center" aria-label="PowerCleanService – zur Startseite" data-testid="logo-link">
             <span className="logo-power text-2xl md:text-3xl">Power</span>
             <span className="logo-clean text-2xl md:text-3xl">Clean-Service</span>
           </Link>
@@ -128,7 +133,7 @@ export const Footer = () => {
               <p>{companyInfo.street}</p>
               <p>{companyInfo.city}</p>
               <p className="pt-2">
-                <a href={`tel:${companyInfo.phone}`} className="hover:text-[#C41E3A] transition-colors">
+                <a href={`tel:${companyInfo.phoneIntl}`} className="hover:text-[#C41E3A] transition-colors">
                   Tel.: {companyInfo.phone}
                 </a>
               </p>
@@ -143,8 +148,13 @@ export const Footer = () => {
           {/* Quick Links */}
           <div>
             <h4 className="text-lg font-bold mb-6 text-white">Schnellzugriff</h4>
-            <nav className="space-y-3">
-              <Link to="/leistungen" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Leistungen</Link>
+            <nav className="space-y-3" aria-label="Schnellzugriff">
+              {FOOTER_LEISTUNGEN.map((s) => (
+                <Link key={s.id} to={`/leistungen/${s.id}`} className="block text-gray-400 hover:text-[#C41E3A] transition-colors">
+                  {s.name}
+                </Link>
+              ))}
+              <Link to="/leistungen" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Alle Leistungen</Link>
               <Link to="/anfrage" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Anfrage</Link>
               <Link to="/kontakt" className="block text-gray-400 hover:text-[#C41E3A] transition-colors">Kontakt</Link>
             </nav>
@@ -167,7 +177,7 @@ export const Footer = () => {
           </p>
           <div className="flex gap-4">
             <a
-              href={`https://wa.me/49${companyInfo.phone.replace(/\s/g, '').replace(/^0/, '')}`}
+              href={`https://wa.me/${companyInfo.phoneIntl.slice(1)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-[#25D366] transition-colors"
@@ -176,7 +186,7 @@ export const Footer = () => {
               WhatsApp
             </a>
             <a
-              href={`tel:${companyInfo.phone}`}
+              href={`tel:${companyInfo.phoneIntl}`}
               className="text-gray-400 hover:text-[#C41E3A] transition-colors"
               data-testid="footer-phone"
             >
@@ -193,7 +203,7 @@ export const FloatingButtons = () => {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3" data-testid="floating-buttons">
       <a
-        href={`tel:${companyInfo.phone}`}
+        href={`tel:${companyInfo.phoneIntl}`}
         className="flex items-center gap-2 bg-white text-gray-900 px-4 py-3 rounded-full shadow-lg hover:shadow-xl transition-all border border-gray-200"
         data-testid="floating-call-button"
       >
@@ -201,7 +211,7 @@ export const FloatingButtons = () => {
         <span className="font-medium text-sm">Anrufen</span>
       </a>
       <a
-        href={`https://wa.me/49${companyInfo.phone.replace(/\s/g, '').replace(/^0/, '')}`}
+        href={`https://wa.me/${companyInfo.phoneIntl.slice(1)}`}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-2 bg-[#25D366] text-white px-4 py-3 rounded-full shadow-lg hover:shadow-xl transition-all hover:bg-[#20bd5a]"
@@ -231,7 +241,7 @@ export const PageWrapper = ({ children, className = "" }) => {
 export const Breadcrumb = ({ items }) => {
   return (
     <nav className="flex items-center gap-2 text-sm text-gray-500 mb-8" data-testid="breadcrumb">
-      <Link to="/" className="hover:text-[#C41E3A] transition-colors">Home</Link>
+      <Link to="/" className="hover:text-[#C41E3A] transition-colors">Startseite</Link>
       {items.map((item, index) => (
         <React.Fragment key={index}>
           <ChevronRight size={14} />

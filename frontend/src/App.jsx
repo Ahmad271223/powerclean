@@ -1,8 +1,10 @@
 import "@/index.css";
 import "@/App.css";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import ScrollToTop from "./components/ScrollToTop";
+import RouteSeo from "./components/Seo";
 
 // Pages
 import HomePage from "./pages/HomePage";
@@ -10,33 +12,40 @@ import ServicesPage from "./pages/ServicesPage";
 import ServiceDetailPage from "./pages/ServiceDetailPage";
 import InquiryPage from "./pages/InquiryPage";
 import ContactPage from "./pages/ContactPage";
-import AdminPage from "./pages/AdminPage";
 import ImpressumPage from "./pages/ImpressumPage";
 import DatenschutzPage from "./pages/DatenschutzPage";
 import AGBPage from "./pages/AGBPage";
-import StundenzettelPage from "./pages/StundenzettelPage";
-import ProjektKalenderPage from "./pages/ProjektKalenderPage";
-import FirmaPage from "./pages/FirmaPage";
+import NotFoundPage from "./pages/NotFoundPage";
+
+// Interne Bereiche erst bei Bedarf laden, damit die öffentliche Website schnell bleibt
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const StundenzettelPage = lazy(() => import("./pages/StundenzettelPage"));
+const ProjektKalenderPage = lazy(() => import("./pages/ProjektKalenderPage"));
+const FirmaPage = lazy(() => import("./pages/FirmaPage"));
 
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
         <ScrollToTop />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/leistungen" element={<ServicesPage />} />
-          <Route path="/leistungen/:serviceId" element={<ServiceDetailPage />} />
-          <Route path="/anfrage" element={<InquiryPage />} />
-          <Route path="/kontakt" element={<ContactPage />} />
-          <Route path="/pcs-verwaltung-2024" element={<AdminPage />} />
-          <Route path="/stundenzettel" element={<StundenzettelPage />} />
-          <Route path="/stundenzettel/firma/:companyId" element={<FirmaPage />} />
-          <Route path="/stundenzettel/projekt/:projectId" element={<ProjektKalenderPage />} />
-          <Route path="/impressum" element={<ImpressumPage />} />
-          <Route path="/datenschutz" element={<DatenschutzPage />} />
-          <Route path="/agb" element={<AGBPage />} />
-        </Routes>
+        <RouteSeo />
+        <Suspense fallback={null}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/leistungen" element={<ServicesPage />} />
+            <Route path="/leistungen/:serviceId" element={<ServiceDetailPage />} />
+            <Route path="/anfrage" element={<InquiryPage />} />
+            <Route path="/kontakt" element={<ContactPage />} />
+            <Route path="/pcs-verwaltung-2024" element={<AdminPage />} />
+            <Route path="/stundenzettel" element={<StundenzettelPage />} />
+            <Route path="/stundenzettel/firma/:companyId" element={<FirmaPage />} />
+            <Route path="/stundenzettel/projekt/:projectId" element={<ProjektKalenderPage />} />
+            <Route path="/impressum" element={<ImpressumPage />} />
+            <Route path="/datenschutz" element={<DatenschutzPage />} />
+            <Route path="/agb" element={<AGBPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </div>
   );

@@ -40,8 +40,8 @@ const ServicesPage = () => {
           <Breadcrumb items={[{ label: 'Leistungen' }]} />
           <h1 className="text-5xl md:text-6xl lg:text-7xl mb-6">Unsere Leistungen</h1>
           <p className="text-xl text-gray-400 max-w-2xl">
-            14 professionelle Dienstleistungen für Reinigung, Pflege und Facility Management. 
-            Qualität seit 2009.
+            {services.length} professionelle Dienstleistungen für Reinigung, Pflege und Facility Management
+            in Hannover und Region. Qualität seit 2009.
           </p>
         </div>
       </section>
@@ -110,7 +110,11 @@ const ServicesPage = () => {
                   <div className="aspect-[16/10] overflow-hidden">
                     <img
                       src={service.image}
-                      alt={service.name}
+                      alt={`${service.name} in Hannover – PowerCleanService`}
+                      width="800"
+                      height="500"
+                      loading={index < 3 ? 'eager' : 'lazy'}
+                      decoding="async"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                     />
                   </div>

@@ -18,7 +18,7 @@ export const services = [
       "Erfahrenes Fachpersonal",
       "Modernste Reinigungstechnik"
     ],
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=75",
     icon: "HardHat"
   },
   {
@@ -40,7 +40,7 @@ export const services = [
       "Flexible Einsatzzeiten",
       "Sicherheitsgeschultes Personal"
     ],
-    image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=75",
     icon: "Factory"
   },
   {
@@ -62,7 +62,7 @@ export const services = [
       "Umweltschonende Reinigungsmittel",
       "Langfristiger Schutz"
     ],
-    image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=75",
     icon: "Building2"
   },
   {
@@ -84,7 +84,7 @@ export const services = [
       "Flexible Terminvereinbarung",
       "Auch für schwer zugängliche Bereiche"
     ],
-    image: "https://images.unsplash.com/photo-1596466588585-3b7f0a4387c0?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1596466588585-3b7f0a4387c0?auto=format&fit=crop&w=800&q=75",
     icon: "Sparkles"
   },
   {
@@ -106,7 +106,7 @@ export const services = [
       "Qualitätskontrolle inklusive",
       "Flexible Vertragsgestaltung"
     ],
-    image: "https://images.unsplash.com/photo-1628177142898-93e36e4e3a50?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1628177142898-93e36e4e3a50?auto=format&fit=crop&w=800&q=75",
     icon: "CalendarCheck"
   },
   {
@@ -128,7 +128,7 @@ export const services = [
       "Professionelles Erscheinungsbild",
       "Regelmäßige Qualitätskontrollen"
     ],
-    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=75",
     icon: "Briefcase"
   },
   {
@@ -150,7 +150,7 @@ export const services = [
       "Professionelle Koordination",
       "Werterhalt der Immobilie"
     ],
-    image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=75",
     icon: "Building"
   },
   {
@@ -172,7 +172,7 @@ export const services = [
       "Regelmäßige Objektbegehung",
       "Entlastung für Eigentümer"
     ],
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=75",
     icon: "Wrench"
   },
   {
@@ -194,7 +194,7 @@ export const services = [
       "Präventiver Schutz möglich",
       "Erfahrung mit allen Materialien"
     ],
-    image: "https://images.unsplash.com/photo-1567359781514-3b964e2b04d6?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1567359781514-3b964e2b04d6?auto=format&fit=crop&w=800&q=75",
     icon: "Eraser"
   },
   {
@@ -216,7 +216,7 @@ export const services = [
       "24/7 Einsatzbereitschaft",
       "Diskrete Arbeitsweise"
     ],
-    image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=75",
     icon: "PartyPopper"
   },
   {
@@ -238,7 +238,7 @@ export const services = [
       "Moderne Gerätschaften",
       "Individuelle Pflegepläne"
     ],
-    image: "https://images.unsplash.com/photo-1558904541-efa843a96f01?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1558904541-efa843a96f01?auto=format&fit=crop&w=800&q=75",
     icon: "Trees"
   },
   {
@@ -260,7 +260,7 @@ export const services = [
       "Werterhalt des Fahrzeugs",
       "Auch für Firmenflotten"
     ],
-    image: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&w=800&q=75",
     icon: "Car"
   },
   {
@@ -282,7 +282,7 @@ export const services = [
       "Sicherheitsgeprüftes Personal",
       "Regelmäßige Wartungsverträge"
     ],
-    image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=800&q=75",
     icon: "Sun"
   },
   {
@@ -304,7 +304,7 @@ export const services = [
       "Professionelles Sicherheitspersonal",
       "Flexible Einsatzplanung"
     ],
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80",
+    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=75",
     icon: "Shield"
   }
 ];
@@ -323,6 +323,7 @@ export const companyInfo = {
   street: "Baldurstraße 5",
   city: "30657 Hannover",
   phone: "0174 9254 925",
+  phoneIntl: "+491749254925",
   email: "info@powercleanservice.de",
   since: "2009"
 };

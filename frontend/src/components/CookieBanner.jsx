@@ -15,6 +15,7 @@ export const CookieBanner = () => {
 
   const acceptCookies = () => {
     localStorage.setItem('cookieConsent', 'accepted');
+    window.pcsStartAnalytics?.();
     setIsVisible(false);
   };
 

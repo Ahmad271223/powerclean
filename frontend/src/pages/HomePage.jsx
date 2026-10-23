@@ -12,7 +12,7 @@ const HomePage = () => {
         <div 
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1555238920-7a6bea18473b?w=1600&q=80)'
+            backgroundImage: 'url(https://images.unsplash.com/photo-1555238920-7a6bea18473b?auto=format&fit=crop&w=1600&q=75)'
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-transparent"></div>
@@ -21,6 +21,7 @@ const HomePage = () => {
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 py-24">
           <div className="max-w-3xl">
             <h1 className="text-5xl md:text-7xl lg:text-8xl text-white mb-6 animate-fade-in-up">
+              <span className="block text-base md:text-lg tracking-[0.25em] text-gray-300 mb-4">Gebäudereinigung in Hannover</span>
               <span className="block">Glanz.</span>
               <span className="block">Hygiene.</span>
               <span className="block text-[#C41E3A]">Power.</span>
@@ -39,7 +40,7 @@ const HomePage = () => {
               </Link>
               <Link
                 to="/leistungen"
-                className="btn-secondary bg-white/10 border-white text-white hover:bg-white hover:text-black px-8 py-4 text-lg"
+                className="btn-secondary !bg-white/10 !border-white !text-white hover:!bg-white hover:!text-black px-8 py-4 text-lg"
                 data-testid="hero-cta-secondary"
               >
                 Leistungen ansehen
@@ -81,7 +82,7 @@ const HomePage = () => {
             </div>
             <div>
               <div className="text-4xl md:text-5xl font-bold text-[#C41E3A] mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                14
+                {services.length}
               </div>
               <div className="text-gray-400 text-sm uppercase tracking-wider">Dienstleistungen</div>
             </div>
@@ -110,7 +111,9 @@ const HomePage = () => {
               >
                 <img 
                   src={logo.url} 
-                  alt={logo.name} 
+                  alt={`Logo ${logo.name}`}
+                  loading="lazy"
+                  decoding="async"
                   className="h-12 md:h-16 w-auto object-contain"
                   onError={(e) => {
                     e.target.style.display = 'none';
@@ -141,11 +144,15 @@ const HomePage = () => {
                 style={{ animationDelay: `${index * 0.1}s` }}
                 data-testid={`service-card-${service.id}`}
               >
-                <div className={`aspect-[4/3] overflow-hidden ${service.name === 'Unterhaltsreinigung' ? 'flex items-center justify-center bg-gray-100' : ''}`}>
+                <div className="aspect-[4/3] overflow-hidden bg-gray-100">
                   <img
                     src={service.image}
-                    alt={service.name}
-                    className={service.name === 'Unterhaltsreinigung' ? 'w-2/3 h-2/3 object-cover transition-transform duration-500 group-hover:scale-110' : 'w-full h-full object-cover transition-transform duration-500 group-hover:scale-110'}
+                    alt={`${service.name} in Hannover – PowerCleanService`}
+                    width="800"
+                    height="600"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
                 </div>
                 <div className="p-6">
@@ -229,8 +236,12 @@ const HomePage = () => {
 
             <div className="relative">
               <img
-                src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80"
-                alt="Professionelle Reinigung"
+                src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=75"
+                alt="Reinigungskraft von PowerCleanService bei der Arbeit"
+                width="800"
+                height="600"
+                loading="lazy"
+                decoding="async"
                 className="w-full aspect-[4/3] object-cover"
               />
               <div className="absolute -bottom-8 -left-8 bg-[#C41E3A] text-white p-8">
@@ -296,7 +307,7 @@ const HomePage = () => {
               Jetzt Anfragen
             </Link>
             <a
-              href={`tel:${companyInfo.phone}`}
+              href={`tel:${companyInfo.phoneIntl}`}
               className="border-2 border-white text-white px-8 py-4 text-lg font-bold uppercase tracking-wider hover:bg-white hover:text-[#C41E3A] transition-colors"
               data-testid="cta-phone"
             >

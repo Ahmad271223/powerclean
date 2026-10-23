@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /stundenzettel
+Disallow: /app/
+
+Sitemap: https://powercleanservice.de/sitemap.xml

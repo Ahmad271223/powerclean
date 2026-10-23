@@ -37,7 +37,7 @@ const ContactPage = () => {
                       Telefon
                     </h3>
                     <a 
-                      href={`tel:${companyInfo.phone}`}
+                      href={`tel:${companyInfo.phoneIntl}`}
                       className="text-2xl text-gray-700 hover:text-[#C41E3A] transition-colors"
                       data-testid="contact-phone"
                     >
@@ -77,7 +77,7 @@ const ContactPage = () => {
                       WhatsApp
                     </h3>
                     <a 
-                      href={`https://wa.me/49${companyInfo.phone.replace(/\s/g, '').replace(/^0/, '')}`}
+                      href={`https://wa.me/${companyInfo.phoneIntl.slice(1)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-2xl text-gray-700 hover:text-[#25D366] transition-colors"

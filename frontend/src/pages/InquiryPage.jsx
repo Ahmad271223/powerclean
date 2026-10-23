@@ -308,7 +308,7 @@ const InquiryPage = () => {
                   </h3>
                   <div className="space-y-4">
                     <a
-                      href={`tel:${companyInfo.phone}`}
+                      href={`tel:${companyInfo.phoneIntl}`}
                       className="flex items-center gap-3 text-gray-300 hover:text-white transition-colors"
                     >
                       <Phone size={20} className="text-[#C41E3A]" />

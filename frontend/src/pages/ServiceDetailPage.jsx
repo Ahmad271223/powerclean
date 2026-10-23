@@ -2,8 +2,14 @@ import React from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { PageWrapper, Breadcrumb } from '../components/Layout';
 import { services, companyInfo } from '../data/services';
-import { ArrowRight, CheckCircle, Phone, Mail, Clock, ArrowLeft } from 'lucide-react';
-import * as Icons from 'lucide-react';
+import {
+  ArrowRight, CheckCircle, Phone, Mail, Clock, ArrowLeft,
+  HardHat, Factory, Building2, Sparkles, CalendarCheck, Briefcase, Building,
+  Wrench, Eraser, PartyPopper, Trees, Car, Sun, Shield,
+} from 'lucide-react';
+
+// Nur die Icons aus services.js importieren (statt der ganzen Icon-Bibliothek)
+const Icons = { HardHat, Factory, Building2, Sparkles, CalendarCheck, Briefcase, Building, Wrench, Eraser, PartyPopper, Trees, Car, Sun, Shield };
 
 const ServiceDetailPage = () => {
   const { serviceId } = useParams();
@@ -122,7 +128,7 @@ const ServiceDetailPage = () => {
                   </h3>
                   <div className="space-y-4">
                     <a 
-                      href={`tel:${companyInfo.phone}`}
+                      href={`tel:${companyInfo.phoneIntl}`}
                       className="flex items-center gap-3 text-gray-700 hover:text-[#C41E3A] transition-colors"
                     >
                       <Phone size={20} className="text-[#C41E3A]" />
@@ -237,7 +243,11 @@ const ServiceDetailPage = () => {
                 <div className="aspect-[16/10] overflow-hidden pointer-events-none">
                   <img
                     src={s.image}
-                    alt={s.name}
+                    alt={`${s.name} in Hannover – PowerCleanService`}
+                    width="800"
+                    height="500"
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
                 </div>
