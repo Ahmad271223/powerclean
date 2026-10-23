@@ -624,3 +624,90 @@ class AufgabeZuteilungIn(BaseModel):
 
 class WochenFreigabeIn(BaseModel):
     week_monday: str
+
+
+class LieferungIn(BaseModel):
+    material: str = Field(min_length=1, max_length=200)
+    menge: Optional[str] = Field(default="", max_length=60)
+    lieferant: Optional[str] = Field(default="", max_length=160)
+    firma_id: Optional[str] = None                      # zuständige Firma (leer = eigene)
+    geplant_am: str
+    zeitfenster_von: Optional[str] = None
+    zeitfenster_bis: Optional[str] = None
+    entladeort: Optional[str] = Field(default="", max_length=160)
+    ansprechpartner: Optional[str] = Field(default="", max_length=120)
+    bemerkungen: Optional[str] = Field(default="", max_length=1000)
+
+
+class LieferungUpdateIn(BaseModel):
+    material: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    menge: Optional[str] = Field(default=None, max_length=60)
+    lieferant: Optional[str] = Field(default=None, max_length=160)
+    firma_id: Optional[str] = None
+    geplant_am: Optional[str] = None
+    tatsaechlich_am: Optional[str] = None
+    zeitfenster_von: Optional[str] = None
+    zeitfenster_bis: Optional[str] = None
+    entladeort: Optional[str] = Field(default=None, max_length=160)
+    ansprechpartner: Optional[str] = Field(default=None, max_length=120)
+    bemerkungen: Optional[str] = Field(default=None, max_length=1000)
+
+
+class LieferungStatusIn(BaseModel):
+    status: str = Field(pattern="^(angefragt|bestaetigt|unterwegs|eingetroffen|entladen|abgeschlossen|verspaetet|storniert)$")
+    kommentar: Optional[str] = Field(default="", max_length=500)
+    tatsaechlich_am: Optional[str] = None
+
+
+class MangelIn(BaseModel):
+    beschreibung: str = Field(min_length=1, max_length=2000)
+    bereich: Optional[str] = Field(default="", max_length=160)
+    kategorie: Optional[str] = Field(default="", max_length=60)
+    firma_id: Optional[str] = None                      # verantwortliche Firma
+    frist: Optional[str] = None
+    prioritaet: str = Field(default="normal", pattern="^(niedrig|normal|hoch|dringend)$")
+
+
+class MangelUpdateIn(BaseModel):
+    beschreibung: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+    bereich: Optional[str] = Field(default=None, max_length=160)
+    kategorie: Optional[str] = Field(default=None, max_length=60)
+    firma_id: Optional[str] = None
+    frist: Optional[str] = None
+    prioritaet: Optional[str] = Field(default=None, pattern="^(niedrig|normal|hoch|dringend)$")
+
+
+class MangelStatusIn(BaseModel):
+    status: str = Field(pattern="^(offen|zugewiesen|in_bearbeitung|behoben_gemeldet|in_pruefung|abgenommen|erneut_geoeffnet)$")
+    kommentar: Optional[str] = Field(default="", max_length=500)
+
+
+class TagesberichtIn(BaseModel):
+    datum: str
+    bereich: Optional[str] = Field(default="", max_length=160)
+    wetter: Optional[str] = Field(default="", max_length=80)
+    firmen: list[str] = Field(default_factory=list, max_length=50)
+    mitarbeiter_anzahl: int = Field(default=0, ge=0, le=10000)
+    taetigkeiten: Optional[str] = Field(default="", max_length=4000)
+    fortschritt: Optional[str] = Field(default="", max_length=1000)
+    lieferungen: Optional[str] = Field(default="", max_length=2000)
+    behinderungen: Optional[str] = Field(default="", max_length=2000)
+    maengel: Optional[str] = Field(default="", max_length=2000)
+    besondere_vorkommnisse: Optional[str] = Field(default="", max_length=2000)
+    notizen: Optional[str] = Field(default="", max_length=2000)
+
+
+class TagesberichtStatusIn(BaseModel):
+    status: str = Field(pattern="^(entwurf|eingereicht|freigegeben)$")
+    kommentar: Optional[str] = Field(default="", max_length=500)
+
+
+class MeilensteinIn(BaseModel):
+    titel: str = Field(min_length=1, max_length=160)
+    datum: str
+    erledigt: bool = False
+    notiz: Optional[str] = Field(default="", max_length=500)
+
+
+class DokumentFreigabeIn(BaseModel):
+    fuer_alle: bool = False

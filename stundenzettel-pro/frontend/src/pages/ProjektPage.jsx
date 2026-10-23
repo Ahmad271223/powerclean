@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check,
   Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera,
-  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake,
+  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
@@ -20,6 +20,12 @@ import AufgabenTab from '../components/plattform/AufgabenTab';
 import AnwesenheitTab from '../components/plattform/AnwesenheitTab';
 import NachweiseTab from '../components/plattform/NachweiseTab';
 import FreigabenTab from '../components/plattform/FreigabenTab';
+import LieferungenTab from '../components/plattform/LieferungenTab';
+import MaengelTab from '../components/plattform/MaengelTab';
+import BerichteTab from '../components/plattform/BerichteTab';
+import DokumenteTab from '../components/plattform/DokumenteTab';
+import MeilensteineKarte from '../components/plattform/MeilensteineKarte';
+import PlattformTag from '../components/plattform/PlattformTag';
 import { AppIcon, Btn, Card, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Field } from '../components/ui';
 import { api, openFile } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -35,7 +41,7 @@ const fmtZeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit',
 export default function ProjektPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { isBuero } = useAuth();
+  const { isBuero, isVorarbeiter } = useAuth();
   const today = useMemo(() => new Date(), []);
   const [{ year, month }, setYm] = useState(() => clampMonth(today.getFullYear(), today.getMonth()));
   const [tab, setTab] = useState('kalender');
@@ -70,6 +76,19 @@ export default function ProjektPage() {
   const byDay = useMemo(() => { const m = {}; for (const e of entries) (m[e.date] ||= []).push(e); return m; }, [entries]);
   const fotos = data?.fotos || [];
   const fotosByDay = useMemo(() => fotosNachTag(fotos), [fotos]);
+  const plattformProjektId = data?.projekt?.verknuepft?.project_id || projectId;
+  const [plattformKalender, setPlattformKalender] = useState(null);
+  useEffect(() => {
+    if (!data) return;
+    const von = toKey(new Date(year, month, 1));
+    const bis = toKey(monthLastDay(year, month));
+    api.get(`/api/projekte/${plattformProjektId}/plattform-kalender?von=${von}&bis=${bis}`).then(setPlattformKalender).catch(() => setPlattformKalender(null));
+  }, [data, plattformProjektId, year, month]);
+  const plattformByDay = useMemo(() => {
+    const m = {};
+    for (const art of ['aufgaben', 'lieferungen', 'meilensteine', 'fristen']) for (const x of plattformKalender?.[art] || []) ((m[x.datum] ||= { aufgaben: [], lieferungen: [], meilensteine: [], fristen: [] })[art]).push(x);
+    return m;
+  }, [plattformKalender]);
   const recentActivities = useMemo(() => { const seen = []; for (let i = entries.length - 1; i >= 0 && seen.length < 4; i--) { const a = (entries[i].activity || '').trim(); if (a && !seen.includes(a)) seen.push(a); } return seen; }, [entries]);
 
   if (!project) return <Layout><div className="py-24 flex justify-center text-[#A1A1A6]"><Loader2 className="animate-spin" size={28} /></div></Layout>;
@@ -139,12 +158,13 @@ export default function ProjektPage() {
   // Plattform: verknüpftes Projekt eines Auftraggebers (Partnerseite) oder eigenes Projekt mit Firmen/Aufgaben (Eigentümerseite)
   const verknuepft = project.verknuepft;
   const plattformId = verknuepft?.project_id || project.id;
+  const baustelleTabs = [{ value: 'lieferungen', label: 'Lieferungen', icon: Truck }, { value: 'maengel', label: 'Mängel', icon: AlertTriangle }, { value: 'berichte', label: 'Berichte', icon: BookOpen }, { value: 'dokumente', label: 'Dokumente', icon: FolderOpen }];
   const tabs = [
     { value: 'kalender', label: 'Kalender', icon: FileText }, { value: 'akte', label: 'Akte', icon: Paperclip }, { value: 'checklisten', label: 'Checklisten', icon: ListChecks },
     ...(verknuepft
-      ? [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...(isBuero ? [{ value: 'freigaben', label: 'Freigaben', icon: Share2 }] : [])]
+      ? [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...(isBuero || isVorarbeiter ? baustelleTabs : []), ...(isBuero ? [{ value: 'freigaben', label: 'Freigaben', icon: Share2 }] : [])]
       : leitung
-        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
+        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
   ];
 
@@ -230,6 +250,14 @@ export default function ProjektPage() {
                               ))}
                               {dayEntries.length > 3 && <div className="text-[11px] text-[#86868B] px-1.5">+{dayEntries.length - 3} weitere</div>}
                             </div>
+                            {plattformByDay[key] && (
+                              <div className="mt-1 flex flex-wrap gap-1 px-0.5">
+                                {plattformByDay[key].aufgaben.length > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold rounded-full bg-[#E8F0FE] text-[#1D4ED8] px-1.5 py-0.5" title="Aufgaben"><ClipboardList size={10} /> {plattformByDay[key].aufgaben.length}</span>}
+                                {plattformByDay[key].lieferungen.length > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold rounded-full bg-[#FFF4E5] text-[#B25E00] px-1.5 py-0.5" title="Lieferungen"><Truck size={10} /> {plattformByDay[key].lieferungen.length}</span>}
+                                {plattformByDay[key].meilensteine.map((m) => <span key={m.id} className="inline-flex items-center gap-0.5 max-w-full text-[10px] font-semibold rounded-full bg-[#EEE8FD] text-[#6D28D9] px-1.5 py-0.5" title={m.titel}><Flag size={10} /> <span className="truncate">{m.titel}</span></span>)}
+                                {plattformByDay[key].fristen.length > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold rounded-full bg-[#FDE8E8] text-[#C41E3A] px-1.5 py-0.5" title="Mängel-Fristen"><AlertTriangle size={10} /> {plattformByDay[key].fristen.length}</span>}
+                              </div>
+                            )}
                           </button>
                         );
                       })}
@@ -305,11 +333,16 @@ export default function ProjektPage() {
       {tab === 'anwesenheit' && <AnwesenheitTab projectId={project.id} />}
       {tab === 'nachweise' && <NachweiseTab projectId={project.id} />}
       {tab === 'freigaben' && <FreigabenTab project={project} />}
+      {tab === 'aufgaben' && verknuepft && <MeilensteineKarte projectId={plattformId} className="mt-5" />}
+      {tab === 'lieferungen' && <LieferungenTab projectId={plattformId} />}
+      {tab === 'maengel' && <MaengelTab projectId={plattformId} />}
+      {tab === 'berichte' && <BerichteTab projectId={plattformId} />}
+      {tab === 'dokumente' && <DokumenteTab projectId={plattformId} />}
 
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}
         entries={selectedDate ? (byDay[selectedDate] || []) : []} lastEntry={lastEntry} recentActivities={recentActivities}
         defaultWorkers={project.default_workers || 1} mitarbeiter={data.mitarbeiter || []} leistungen={data.leistungen || []} kannPersonen={leitung}
-        fotoBereich={selectedDate ? <TagFotos projectId={project.id} dateKey={selectedDate} fotos={fotosByDay[selectedDate] || []} onChanged={laden} darfHochladen={!project.archived} /> : null}
+        fotoBereich={selectedDate ? <><PlattformTag daten={plattformByDay[selectedDate]} onTab={(ziel) => { setSelectedDate(null); setTab(tabs.some((x) => x.value === ziel) ? ziel : 'aufgaben'); }} /><TagFotos projectId={project.id} dateKey={selectedDate} fotos={fotosByDay[selectedDate] || []} onChanged={laden} darfHochladen={!project.archived} /></> : null}
         gesperrt={gesperrt} feiertag={selectedDate ? feiertage[selectedDate] || '' : ''} onChanged={laden} onWeekPdf={() => selectedDate && weekDoc(fromKey(selectedDate))} />
       <SerieDialog open={serie} onOpenChange={setSerie} projectId={project.id} year={year} month0={month} mitarbeiter={data.mitarbeiter || []} leistungen={data.leistungen || []} defaultWorkers={project.default_workers || 1} onDone={laden} />
       <UnterschriftDialog open={!!sigMonday} onOpenChange={(o) => { if (!o) setSigMonday(null); }} projectId={project.id} mondayKey={sigMonday} customerName={sigs[sigMonday]?.signer_name || ''} onSaved={laden} />

@@ -31,6 +31,16 @@ GEWERKE = ["Reinigung", "Elektro", "Sanitär / Heizung", "Trockenbau", "Maler", 
            "Garten / Außenanlagen", "Logistik", "Sicherheit", "Sonstiges"]
 EINLADUNG_TAGE = 30
 
+LIEFERUNG_STATUS = ("angefragt", "bestaetigt", "unterwegs", "eingetroffen", "entladen", "abgeschlossen", "verspaetet", "storniert")
+LIEFERUNG_STATUS_NAMEN = {"angefragt": "Angefragt", "bestaetigt": "Bestätigt", "unterwegs": "Unterwegs", "eingetroffen": "Eingetroffen", "entladen": "Entladen",
+                          "abgeschlossen": "Abgeschlossen", "verspaetet": "Verspätet", "storniert": "Storniert"}
+LIEFERUNG_FIRMA_STATUS = {"bestaetigt", "unterwegs", "eingetroffen", "entladen", "verspaetet"}
+MANGEL_STATUS = ("offen", "zugewiesen", "in_bearbeitung", "behoben_gemeldet", "in_pruefung", "abgenommen", "erneut_geoeffnet")
+MANGEL_STATUS_NAMEN = {"offen": "Offen", "zugewiesen": "Zugewiesen", "in_bearbeitung": "In Bearbeitung", "behoben_gemeldet": "Behoben gemeldet",
+                       "in_pruefung": "In Prüfung", "abgenommen": "Abgenommen", "erneut_geoeffnet": "Erneut geöffnet"}
+MANGEL_FIRMA_STATUS = {"in_bearbeitung", "behoben_gemeldet"}
+SCOPE_SAMMLUNG = {"aufgabe": "aufgaben", "lieferung": "lieferungen", "mangel": "maengel", "tagesbericht": "tagesberichte"}
+
 
 async def firma_kurz(firma_id: Optional[str]) -> dict:
     """Öffentlich unkritische Firmendaten für Partner (Name, Ort, Kontakt), nie Lizenz, Bank oder Einstellungen."""
@@ -137,3 +147,55 @@ async def eigentuemer_benachrichtigen(projekt: dict, art: str, text: str, link: 
         if u["id"] not in ids:
             ids.append(u["id"])
     await benachrichtigen(projekt["firma_id"], art, text, link, user_ids=ids or None)
+
+
+def zuteilungs_filter(user_id: str) -> list:
+    """$or-Bedingung für Mitarbeiter: eigene Aufgaben, Aufgaben als Vorarbeiter und Aufgaben ohne Zuteilung.
+    `$size: 0` statt `$in: [[]]`, damit es in MongoDB und in der Speicher-Datenbank (mongomock) gleich funktioniert."""
+    return [{"mitarbeiter_ids": user_id}, {"vorarbeiter_user_id": user_id}, {"mitarbeiter_ids": {"$size": 0}}, {"mitarbeiter_ids": None}]
+
+
+def partner_leitung(z: dict, user: dict) -> bool:
+    """Leitung auf Partnerseite: Büro/Inhaber der beteiligten Firma oder Vorarbeiter/Leitung ihres verknüpften lokalen Projekts."""
+    if z["eigentuemer"]:
+        return bool(z["leitung"])
+    lokal = z.get("lokal")
+    return hat_rolle(user, "buero") or bool(lokal and projekt_leitung(user, lokal))
+
+
+async def firma_am_projekt(project_id: str, projekt: dict, firma_id: Optional[str]) -> tuple[str, Optional[dict]]:
+    """Zuständige Firma: Eigentümerin oder aktiv beteiligte Firma."""
+    if not firma_id or firma_id == projekt["firma_id"]:
+        return projekt["firma_id"], None
+    b = await db().beteiligungen.find_one({"project_id": project_id, "firma_id": firma_id, "status": "aktiv"}, {"_id": 0})
+    if not b:
+        raise HTTPException(400, "Diese Firma ist nicht am Projekt beteiligt.")
+    return firma_id, b
+
+
+async def eintrag_laden(sammlung: str, user: dict, eintrag_id: str) -> tuple[dict, dict]:
+    """Lieferung/Mangel/Tagesbericht plus Zugang: Eigentümer-Leitung sieht alles, Partnerfirmen nur Einträge ihrer Firma."""
+    e = await db()[sammlung].find_one({"id": eintrag_id}, {"_id": 0})
+    if not e:
+        raise HTTPException(404, "Eintrag nicht gefunden.")
+    z = await zugang(user, e["project_id"])
+    if z["eigentuemer"]:
+        if not z["leitung"]:
+            raise HTTPException(404, "Eintrag nicht gefunden.")
+    elif e.get("firma_id") != user["firma_id"] or not partner_leitung(z, user):
+        raise HTTPException(404, "Eintrag nicht gefunden.")
+    return e, z
+
+
+async def dokument_zugang(user: dict, scope: str, ref_id: str) -> None:
+    """Zugriff auf ein Foto/Dokument eines Plattform-Eintrags: über den Eintrag selbst (404 ohne Zugang)."""
+    if scope == "aufgabe":
+        await aufgabe_laden(user, ref_id)
+    elif scope in SCOPE_SAMMLUNG:
+        await eintrag_laden(SCOPE_SAMMLUNG[scope], user, ref_id)
+    elif scope == "plattform":
+        z = await zugang(user, ref_id)
+        if z["eigentuemer"] and not z["leitung"]:
+            raise HTTPException(404, "Dokument nicht gefunden.")
+    else:
+        raise HTTPException(404, "Dokument nicht gefunden.")

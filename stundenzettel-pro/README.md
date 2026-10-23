@@ -142,7 +142,12 @@ Ein Auftraggeber (z. B. Generalunternehmer) führt das Projekt, lädt Subunterne
 trägt mehrere Projektleiter ein und plant Aufgaben je Tag und Firma. Die Partnerfirma nimmt an, bekommt ein verknüpftes eigenes
 Projekt (Stempeluhr, Stundenzettel, Rechnung an den Auftraggeber wie gewohnt), teilt Aufgaben ihren Leuten zu, meldet Status und Fotos
 und gibt Wochen-Nachweise ausdrücklich frei. Lohndaten, Konten, Personalakten und Rechnungen bleiben immer in der eigenen Firma.
-Oberfläche: „Zusammenarbeit“ (Büro), Projekt-Reiter Firmen / Aufgaben / Anwesenheit / Nachweise bzw. Freigaben, Seite „Aufgaben“ für alle.
+Dazu Baustellenalltag (Phase 5): Lieferungen je Tag (zuständige Firma bestätigt, meldet Verspätung und Eintreffen, Lieferschein-Foto),
+Mängel mit Firma, Frist, Priorität, Kommentaren und Fotos (Behebung melden, Abnahme nur durch die Leitung), Bautagesberichte mit
+Vorbelegung aus Aufgaben/Lieferungen/Anwesenheit, Einreichen, Freigabe und PDF, Meilensteine, geteilte Projektdokumente mit Freigabe
+für alle Firmen, Plattform-Kalender (Markierungen in den Tageszellen, Liste im Tagesdialog).
+Oberfläche: „Zusammenarbeit“ (Büro), Projekt-Reiter Firmen / Aufgaben / Lieferungen / Mängel / Berichte / Dokumente / Anwesenheit / Nachweise
+bzw. Freigaben, Seite „Aufgaben“ für alle.
 Architektur, Rechtemodell, Datenmodell, Migration und offene Punkte: **`PLATTFORM.md`**.
 
 ## E-Rechnung (XRechnung / ZUGFeRD)
@@ -175,15 +180,16 @@ Lokal: `npm run cap:sync` (baut mit `.env.app`), `npm run assets`, `npm run cap:
 
 ## Tests
 
-`cd stundenzettel-pro/backend && python -m pytest -q` – 22 Tests ohne Datenbank (mongomock): Grundlagen
-(`test_pro_grundlagen_20261022.py`) und Pro Plus (`test_pro_plus_20261022.py`: Feiertage, Konten, ArbZG, Sperren,
-Leistungen/Zusatzpositionen, Budget/Auswertung, Webhooks, Vorarbeiter, Stempelung beenden, Lohnsummen).
+`cd stundenzettel-pro/backend && python -m pytest -q` – 38 Tests ohne Datenbank (mongomock): Grundlagen
+(`test_pro_grundlagen_20261022.py`), Pro Plus (`test_pro_plus_20261022.py`: Feiertage, Konten, ArbZG, Sperren,
+Leistungen/Zusatzpositionen, Budget/Auswertung, Webhooks, Vorarbeiter, Stempelung beenden, Lohnsummen), E-Rechnung und
+Lohnvorbereitung (`test_erechnung_lohn_20261023.py`), Fotos (`test_fotos_20261023.py`), Plattform (`test_plattform_20261023.py`)
+und Baustellenalltag (`test_baustelle_20261023.py`).
 
 ## Offen / nächste Schritte
 
 - Zahlung (Stripe oder Lemon Squeezy) statt Freischaltung von Hand; Stufe Pro/Plus im Code durchsetzen.
 - E-Mail-Versand der Einladungen und Erinnerungen per Web-Push (heute: Link kopieren und per WhatsApp schicken).
-- E-Rechnung (XRechnung-XML) zur Rechnung, Pflicht für alle B2B-Rechnungen ab 2028.
 - Lexware Office / sevdesk: Rechnungsliste übergeben (Webhooks sind der erste Schritt).
 - Mehrsprachige Oberfläche für Mitarbeiter (Türkisch, Polnisch, Rumänisch, Arabisch).
 - KI-Texte (Beschreibungen verbessern, Rechnungstexte) über die Claude-API, sobald ein Schlüssel hinterlegt wird.

@@ -79,4 +79,19 @@ if r.status_code == 200:
     ok(c.post("/api/projekte/" + p1["id"] + "/aufgaben", json={"titel": "Leuchten im Foyer tauschen", "beschreibung": "12 Panels, Leiter mitbringen", "gewerk": "Elektro",
                                                                "firma_id": el["firma"]["id"], "datum": heute, "start_time": "07:00", "end_time": "11:00", "prioritaet": "hoch", "bereich": "Foyer EG"}, headers=H))
     ok(c.post("/api/projekte/" + p1["id"] + "/aufgaben", json={"titel": "Treppenhaus Grundreinigung", "datum": heute, "start_time": "06:00", "end_time": "09:00", "bereich": "Treppenhaus A"}, headers=H))
+    # Phase 5: Lieferung heute, Mangel mit Frist, Meilenstein, Bautagesbericht (Entwurf der Partnerfirma), geteilter Bauplan
+    from datetime import date, timedelta
+    frist = (date.fromisoformat(heute) + timedelta(days=3)).isoformat()
+    meilenstein = (date.fromisoformat(heute) + timedelta(days=10)).isoformat()
+    ok(c.post("/api/projekte/" + p1["id"] + "/lieferungen", json={"material": "LED-Panels 12 Stück", "menge": "2 Paletten", "lieferant": "Elektro-Großhandel Nord", "firma_id": el["firma"]["id"],
+                                                                 "geplant_am": heute, "zeitfenster_von": "07:00", "zeitfenster_bis": "09:00", "entladeort": "Hof, Tor 2", "ansprechpartner": "Erika Mustermann"}, headers=H))
+    m = ok(c.post("/api/projekte/" + p1["id"] + "/maengel", json={"beschreibung": "Kabelkanal im Foyer lose, Abdeckung fehlt", "bereich": "Foyer", "kategorie": "Elektro",
+                                                               "firma_id": el["firma"]["id"], "frist": frist, "prioritaet": "hoch"}, headers=H))["mangel"]
+    ok(c.post("/api/maengel/" + m["id"] + "/kommentare", json={"text": "Abdeckung ist bestellt, Montage am Freitag."}, headers=HE))
+    ok(c.post("/api/projekte/" + p1["id"] + "/meilensteine", json={"titel": "Elektro Foyer fertig", "datum": meilenstein, "notiz": "Abnahme mit Hausverwaltung"}, headers=H))
+    v = ok(c.get("/api/projekte/" + p1["id"] + "/tagesbericht-vorschlag?datum=" + heute, headers=HE))
+    ok(c.post("/api/projekte/" + p1["id"] + "/tagesberichte", json={"datum": heute, "bereich": "Foyer", "wetter": "bedeckt, 11 °C", "firmen": v["firmen"], "mitarbeiter_anzahl": max(1, v["mitarbeiter_anzahl"]),
+                                                                   "taetigkeiten": v["taetigkeiten"] or "Leuchten im Foyer getauscht", "lieferungen": v["lieferungen"], "fortschritt": "8 von 12 Panels montiert"}, headers=HE))
+    ok(c.post("/api/projekte/" + p1["id"] + "/dokumente", data={"kategorie": "Baupläne", "note": "Grundriss EG mit Leuchtenplan", "fuer_alle": "true"},
+              files={"datei": ("Grundriss-EG.pdf", b"%PDF-1.4\n% Demo-Bauplan Stundenzettel Pro\n", "application/pdf")}, headers=H))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

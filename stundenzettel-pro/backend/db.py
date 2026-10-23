@@ -64,6 +64,10 @@ async def indizes_anlegen(d) -> None:
         ("freigaben", [("project_id", 1), ("week_monday", -1)], {"name": "projekt_woche"}),
         ("freigaben", [("beteiligung_id", 1), ("week_monday", 1)], {"name": "beteiligung_woche"}),
         ("benachrichtigungen", [("firma_id", 1), ("created_at", -1)], {"name": "firma_zeit"}),
+        ("lieferungen", [("project_id", 1), ("geplant_am", 1)], {"name": "projekt_datum"}),
+        ("maengel", [("project_id", 1), ("status", 1)], {"name": "projekt_status"}),
+        ("tagesberichte", [("project_id", 1), ("datum", -1)], {"name": "projekt_datum"}),
+        ("meilensteine", [("project_id", 1), ("datum", 1)], {"name": "projekt_datum"}),
     ]
     for sammlung, schluessel, optionen in aufgaben:
         try:

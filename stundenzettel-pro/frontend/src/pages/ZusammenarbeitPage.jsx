@@ -59,7 +59,7 @@ export default function ZusammenarbeitPage() {
             <ul className="divide-y divide-black/[0.06]">{d.projekte.map((p) => (
               <li key={p.id}><Link to={`/projekte/${p.id}`} className="py-2.5 flex items-center gap-3 text-[14px]">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color || '#C41E3A' }} />
-                <div className="flex-1 min-w-0"><div className="font-semibold truncate">{p.name}</div><div className="text-[12px] text-[#6E6E73]">{p.address ? `${p.address} · ` : ''}{p.leiter} Projektleiter · {p.firmen} Firmen{p.eingeladen ? ` (+${p.eingeladen} eingeladen)` : ''} · {p.aufgaben_offen} offene Aufgaben{p.aufgaben_heute ? `, ${p.aufgaben_heute} heute` : ''}</div></div>
+                <div className="flex-1 min-w-0"><div className="font-semibold truncate">{p.name}</div><div className="text-[12px] text-[#6E6E73]">{p.address ? `${p.address} · ` : ''}{p.leiter} Projektleiter · {p.firmen} Firmen{p.eingeladen ? ` (+${p.eingeladen} eingeladen)` : ''} · {p.aufgaben_offen} offene Aufgaben{p.aufgaben_heute ? `, ${p.aufgaben_heute} heute` : ''}{p.lieferungen_heute ? ` · ${p.lieferungen_heute} Lieferungen heute` : ''}{p.maengel_offen ? ` · ${p.maengel_offen} offene Mängel` : ''}{p.berichte_offen ? ` · ${p.berichte_offen} Berichte zur Freigabe` : ''}</div></div>
                 <ChevronRight size={16} className="text-[#A1A1A6]" />
               </Link></li>
             ))}</ul>

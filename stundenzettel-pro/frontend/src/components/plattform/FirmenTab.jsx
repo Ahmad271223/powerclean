@@ -3,6 +3,7 @@ import { Building2, Copy, Link2, Mail, Plus, Search, Trash2, UserCog } from 'luc
 import { toast } from 'sonner';
 import { Btn, Card, Chip, Field, IconBtn, Select, Sheet, TextArea, TextInput } from '../ui';
 import { api } from '../../lib/api';
+import MeilensteineKarte from './MeilensteineKarte';
 
 const STATUS = { eingeladen: ['Eingeladen', 'bg-[#FFF4E5] text-[#B25E00]'], aktiv: ['Beteiligt', 'bg-[#E8F8EC] text-[#1B7F3B]'], abgelehnt: ['Abgelehnt', 'bg-black/[0.06] text-[#6E6E73]'] };
 
@@ -61,6 +62,7 @@ export default function FirmenTab({ projectId, isBuero }) {
           </ul>
         )}
       </Card>
+      <MeilensteineKarte projectId={projectId} className="lg:col-span-2" />
       <EinladenDialog open={einladen} onOpenChange={setEinladen} projectId={projectId} gewerke={daten.gewerke} rollen={daten.rollen} onSaved={laden} />
     </div>
   );

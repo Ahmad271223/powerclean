@@ -16,8 +16,8 @@ from db import db
 from gemeinsam import neue_id, nutzernamen, projekt_laden, projekt_normalisieren
 from models import (AufgabeIn, AufgabeStatusIn, AufgabeUpdateIn, AufgabeZuteilungIn, BeteiligungAntwortIn, EinladungFirmaIn,
                     FreigabeNamenIn, LeiterIn, TokenIn, VerzeichnisIn, WochenFreigabeIn)
-from plattform import (AUFGABEN_STATUS, EINLADUNG_TAGE, GEWERKE, MITARBEITER_STATUS, OFFEN, PARTNER_STATUS, ROLLEN_BETEILIGUNG,
-                       STATUS_NAMEN, aufgabe_laden, benachrichtigen, eigentuemer_benachrichtigen, firma_kurz, leitung_noetig,
+from plattform import (zuteilungs_filter, AUFGABEN_STATUS, EINLADUNG_TAGE, GEWERKE, MITARBEITER_STATUS, OFFEN, PARTNER_STATUS, ROLLEN_BETEILIGUNG,
+                       STATUS_NAMEN, aufgabe_laden, benachrichtigen, eigentuemer_benachrichtigen, firma_am_projekt, firma_kurz, leitung_noetig,
                        meine_benachrichtigungen, rolle_fuer_aufgabe, zugang)
 from protokoll import protokollieren
 from zeiten import datum_pruefen, lokal_jetzt, zeit_pruefen
@@ -270,8 +270,12 @@ async def uebersicht(user: dict = Depends(rolle_noetig("buero"))):
             continue
         offen = await db().aufgaben.count_documents({"project_id": p["id"], "status": {"$in": list(OFFEN)}})
         heute_n = await db().aufgaben.count_documents({"project_id": p["id"], "datum": heute, "status": {"$in": list(OFFEN)}})
+        lieferungen_heute = await db().lieferungen.count_documents({"project_id": p["id"], "geplant_am": heute, "status": {"$nin": ["storniert", "abgeschlossen"]}})
+        maengel_offen = await db().maengel.count_documents({"project_id": p["id"], "status": {"$ne": "abgenommen"}})
+        berichte_offen = await db().tagesberichte.count_documents({"project_id": p["id"], "status": "eingereicht"})
         projekte.append({"id": p["id"], "name": p["name"], "address": p.get("address") or "", "color": p.get("color"), "leiter": len(p.get("leiter_ids") or []),
-                         "firmen": firmen, "eingeladen": eingeladen, "aufgaben_offen": offen, "aufgaben_heute": heute_n})
+                         "firmen": firmen, "eingeladen": eingeladen, "aufgaben_offen": offen, "aufgaben_heute": heute_n, "lieferungen_heute": lieferungen_heute,
+                         "maengel_offen": maengel_offen, "berichte_offen": berichte_offen})
     b = await meine_beteiligungen(user)
     ungelesen = sum(1 for n in await meine_benachrichtigungen(user, 100) if not n["gelesen"])
     return {"projekte": projekte, "einladungen": b["einladungen"], "beteiligungen": b["aktiv"], "ungelesen": ungelesen}
@@ -288,13 +292,7 @@ def _aufgabe_pruefen(daten: dict) -> None:
 
 
 async def _firma_am_projekt(project_id: str, projekt: dict, firma_id: Optional[str]) -> tuple[str, Optional[dict]]:
-    """Beauftragte Firma: Eigentümerin oder aktiv beteiligte Firma."""
-    if not firma_id or firma_id == projekt["firma_id"]:
-        return projekt["firma_id"], None
-    b = await db().beteiligungen.find_one({"project_id": project_id, "firma_id": firma_id, "status": "aktiv"}, {"_id": 0})
-    if not b:
-        raise HTTPException(400, "Diese Firma ist nicht am Projekt beteiligt.")
-    return firma_id, b
+    return await firma_am_projekt(project_id, projekt, firma_id)
 
 
 async def _aufgabe_anreichern(a: dict, namen_cache: dict) -> dict:
@@ -317,7 +315,7 @@ async def aufgaben_liste(project_id: str, von: Optional[str] = None, bis: Option
     if not (z["eigentuemer"] and z["leitung"]):
         filt["firma_id"] = user["firma_id"]
         if not z["leitung"] and not hat_rolle(user, "buero"):
-            filt["$or"] = [{"mitarbeiter_ids": user["id"]}, {"vorarbeiter_user_id": user["id"]}, {"mitarbeiter_ids": {"$in": [[], None]}}]
+            filt["$or"] = zuteilungs_filter(user["id"])
     cache: dict = {}
     aus = [await _aufgabe_anreichern(a, cache) async for a in db().aufgaben.find(filt, {"_id": 0}).sort([("datum", 1), ("start_time", 1)]).limit(2000)]
     firmen = [{"id": z["projekt"]["firma_id"], "name": (await firma_kurz(z["projekt"]["firma_id"]))["name"], "eigentuemer": True}]
@@ -354,7 +352,7 @@ async def meine_aufgaben(user: dict = Depends(aktueller_nutzer)):
     von = (lokal_jetzt().date() - timedelta(days=14)).isoformat()
     filt: dict = {"firma_id": user["firma_id"], "status": {"$in": list(OFFEN)}, "datum": {"$gte": von}}
     if not hat_rolle(user, "vorarbeiter"):
-        filt["$or"] = [{"mitarbeiter_ids": user["id"]}, {"vorarbeiter_user_id": user["id"]}, {"mitarbeiter_ids": {"$in": [[], None]}}]
+        filt["$or"] = zuteilungs_filter(user["id"])
     cache: dict = {}
     aus = []
     projekte: dict = {}

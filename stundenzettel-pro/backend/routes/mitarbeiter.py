@@ -187,10 +187,14 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
     d = await db().documents.find_one({"id": dokument_id}, {"_id": 0})
     if not d:
         raise HTTPException(404, "Dokument nicht gefunden.")
-    if d["scope"] == "aufgabe":
-        # Aufgabenfotos: Eigentümer-Projektleitung und beauftragte Firma (Rechte kommen aus der Aufgabe, nicht aus der firma_id der Datei)
-        from plattform import aufgabe_laden
-        await aufgabe_laden(user, d["ref_id"])
+    if d["scope"] in ("aufgabe", "lieferung", "mangel", "tagesbericht", "plattform"):
+        # Plattform-Dateien: Rechte kommen aus dem Eintrag/Projekt, nicht aus der firma_id der Datei
+        from plattform import dokument_zugang, zugang
+        await dokument_zugang(user, d["scope"], d["ref_id"])
+        if d["scope"] == "plattform":
+            z = await zugang(user, d["ref_id"])
+            if not ((z["eigentuemer"] and z["leitung"]) or d.get("firma_id") == user["firma_id"] or d.get("freigabe_alle")):
+                raise HTTPException(404, "Dokument nicht gefunden.")
         return d
     if d.get("firma_id") != user["firma_id"]:
         raise HTTPException(404, "Dokument nicht gefunden.")
