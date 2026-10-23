@@ -43,7 +43,8 @@ PROJEKT_DEFAULTS = {
 
 # Felder, die Mitarbeiter und Vorarbeiter nicht sehen (Preise, Budgets, Kundendaten, interne Notizen)
 PROJEKT_FELDER_VERTRAULICH = {"hourly_rate", "kostenlos", "budget_hours_month", "budget_warn_percent", "budget", "notes", "customer_address",
-                              "customer_id", "reverse_charge", "volumen", "kosten", "quelle_id", "employee_name", "gu_abo"}
+                              "customer_id", "reverse_charge", "volumen", "kosten", "quelle_id", "employee_name", "gu_abo",
+                              "total_minutes", "entry_count", "employee_ids"}
 
 # Mitarbeiter sehen keine Bank-/Steuerdaten; Logo und Stempel brauchen sie für den Stundenzettel beim Kunden
 FIRMA_FELDER_MITARBEITER = {"id", "name", "owner", "street", "zip_code", "city", "phone", "email", "website", "logo",
@@ -96,10 +97,7 @@ def projekt_fuer_nutzer(user: dict, projekt: dict) -> dict:
     if hat_rolle(user, "buero"):
         return projekt
     aus = {k: v for k, v in projekt.items() if k not in PROJEKT_FELDER_VERTRAULICH}
-    if projekt_leitung(user, projekt):
-        for k in ("budget_hours_month", "budget_warn_percent", "budget"):
-            if k in projekt:
-                aus[k] = projekt[k]
+    # Detail-Zeiten und Stundenbudgets anderer Personen bleiben allein beim Inhaber.
     return aus
 
 
