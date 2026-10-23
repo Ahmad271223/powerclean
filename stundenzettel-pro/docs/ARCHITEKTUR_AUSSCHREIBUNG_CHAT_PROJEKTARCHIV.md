@@ -1,5 +1,9 @@
 # Stundenzettel Pro: Ausschreibung, Kommunikation, Vergabe und vollständige ZIP-Projektakte
 
+## Grundsatz: ZIP-Projektarchiv steht ebenfalls normalen Firmen zu
+Reguläre Firmenabonnenten können alle **eigenen** abgeschlossenen oder berechtigt exportierbaren Firmenprojekte über «Meine Projekte → [Projekt] → Archiv» bzw. «Berichte & Exporte → Projektarchive» exportieren, ohne irgendein kostenpflichtiges GU-Bauprojekt. Die ZIP enthält alle vorhandenen berechtigten Zeiten, Fotos, Tätigkeiten, Unterschriften, Rechnungen, Angebote, Unterlagen und freigegebenen Nachrichten. Bei Projekten ohne GU-Vergabe entfällt der Ausschreibungs-/Zuschlagsbereich. Bei GU-Teilnahme dürfen nur eigenes Angebot und freigegebene fremde Unterlagen enthalten sein. Die GU-Projektakte ist ein separater Exportumfang. Das aktuelle `archived=true` bedeutet lediglich ausgeblendet, **nicht** ZIP erzeugt. Ein Export ist niemals ein Löschsignal.
+
+
 > **Produktentscheidung 23.10.2026:** Normale Handwerksunternehmen dürfen keine formalen Ausschreibungen veröffentlichen; nur verifizierte GU-/Großunternehmensorganisationen mit Projektberechtigung dürfen das. Handwerksfirmen können Subunternehmen finden, direkt kontaktieren, GU-Einladungen beantworten und Angebote einreichen. GU-Projekte kosten geplant 50,99 € netto/Monat und haben individuelle Projektleiter-Logins. Details: [PRODUKTMODELL_GU_FIRMEN_PROJEKTPREIS.md](./PRODUKTMODELL_GU_FIRMEN_PROJEKTPREIS.md). Diese spätere Entscheidung hat bei abweichenden Beispielen Vorrang.
 
 
