@@ -1,5 +1,17 @@
 # Produktentscheidung: Handwerksfirmen versus Generalunternehmer — Rollen, Logins und 50,99-€-Projektabo
 
+## Klarstellung: vollständiges Projektarchiv für JEDE zahlende Handwerksfirma
+- Das vollständige ZIP-Projektarchiv ist eine **Standardfunktion des regulären Firmen-Abos**, nicht exklusiv für GU und nicht an den 50,99-€-GU-Projektpreis gebunden.
+- Jede Handwerksfirma kann ihre **eigenen** Projekte archivieren und eine komplette eigene Projektakte mit PDF-Index, Manifest/Prüfsummen, Fotos nach Tag und Mitarbeiter, Stunden, Tätigkeiten, Checklisten, Unterschriften, Rechnungen, Anlagen, berechtigten Nachrichten, E-Mail-Nachweisen und eigenen Angeboten erzeugen.
+- Bei reinen eigenen Firmenprojekten fehlen GU-Ausschreibung, Zuschlag oder GU-Chat möglicherweise; das ZIP lässt diese Sektionen korrekt aus, statt Platzhalter als echte Dokumente auszugeben.
+- Bei GU-Auftrag enthält die Projektakte der Firma deren Einladung, **eigene** Angebotsversionen, Zuschlag, Auftrag, freigegebene GU-Nachrichten sowie eigene Ausführung und Rechnungen, niemals Konkurrenzangebote oder fremde Personalakten.
+- GU-Projektarchiv ist eine **separate** berechtigungsspezifische Gesamtprojekt-Sicht. GU-Gebühren sind **nicht** Voraussetzung, damit ein normaler Betrieb sein eigenes Archiv nutzen kann.
+- Zugang im Frontend: Normale Firma → **Meine Projekte → [Projekt] → Archiv / Projektakte herunterladen** und unter **Berichte & Exporte → Projektarchive**; bei GU **Bauprojekte → [Projekt] → Archiv**. Auch bei reinem eigenen Firmenprojekt verfügbar.
+- Archiv erzeugen ist nicht dasselbe wie Projekt im Listenfilter «Archiviert» markieren; das vorhandene archived=true ist **kein ZIP-Export**. Eigene Originaldateien werden durch Download niemals gelöscht.
+- Gast/Bieter ohne Firmen-Vollabo: eigene eingereichte Angebots-/Korrespondenz-Nachweise kostenlos gemäß Datenschutz/Vertragsregel; vollständige **interne** Firmen-Projektakte nur im berechtigten Firmen-Abo, nicht als erzwungene Bedingung für die Ausschreibungsteilnahme.
+- Abnahmetest: Eine Handwerksfirma ohne GU-Beziehung erzeugt eine ZIP-Projektakte für ein abgeschlossenes eigenes Projekt und lädt sie herunter, ohne GU-Projektabo, ohne fremde Daten und ohne Verlust von Originalen.
+
+
 Status: verbindlicher Architektur- und Preismodellvorschlag, **keine bereits implementierte Funktion**. Basis: main f487941 vom 23.10.2026.
 Ergänzt die Dokumente ARCHITEKTUR_AUSSCHREIBUNG_CHAT_PROJEKTARCHIV.md und APP_UX_AUDIT_UND_UMBAU.md.
 **Diese Kundentyp-Trennung hat Vorrang**, wo frühere Konzepte normale Firmen zu Ausschreibungserstellern gemacht haben.
