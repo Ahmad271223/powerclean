@@ -13,6 +13,7 @@ const NAV_BUERO = [
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
   { to: '/ausschreibungen', label: 'Ausschreibungen', icon: Gavel },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
+  { to: '/einsatzplan', label: 'Einsatzplanung', icon: CalendarOff },
   { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
   { to: '/rechnungen', label: 'Rechnungen', icon: Receipt },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
@@ -30,6 +31,7 @@ const NAV_AUFTRAGGEBER = [
   { to: '/ausschreibungen', label: 'Ausschreibungen', icon: Gavel },
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
+  { to: '/einsatzplan', label: 'Einsatzplanung', icon: CalendarOff },
   { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
   { to: '/auswertung', label: 'Auswertung', icon: BarChart3 },
@@ -41,6 +43,7 @@ const NAV_AUFTRAGGEBER = [
 const NAV_MITARBEITER = [
   { to: '/', label: 'Stempeluhr', icon: Timer, end: true },
   { to: '/meine-zeiten', label: 'Meine Zeiten', icon: Clock },
+  { to: '/einsatzplan', label: 'Meine Einsätze', icon: CalendarOff },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
   { to: '/abwesenheiten', label: 'Abwesenheit', icon: CalendarOff },
