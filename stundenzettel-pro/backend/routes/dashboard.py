@@ -26,7 +26,7 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
     firma = await firma_laden(f)
     aus = {"heute": heute, "plan": plan_status(firma), "rolle": user.get("role")}
 
-    if hat_rolle(user, "buero"):
+    if user.get("role") == "inhaber":
         projekte = {}
         async for p in db().projects.find({"firma_id": f}, {"_id": 0}):
             projekte[p["id"]] = projekt_normalisieren(p)
