@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check,
   Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera,
-  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen, Gavel,
+  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen, Gavel, FileSignature,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
@@ -27,6 +27,9 @@ import DokumenteTab from '../components/plattform/DokumenteTab';
 import MeilensteineKarte from '../components/plattform/MeilensteineKarte';
 import PlattformTag from '../components/plattform/PlattformTag';
 import AusschreibungenTab from '../components/plattform/AusschreibungenTab';
+import NachtraegeTab from '../components/plattform/NachtraegeTab';
+import AbnahmenTab from '../components/plattform/AbnahmenTab';
+import ProjektakteKarte from '../components/ProjektakteKarte';
 import { AppIcon, Btn, Card, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Field } from '../components/ui';
 import { api, openFile } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -170,12 +173,13 @@ export default function ProjektPage() {
   const verknuepft = project.verknuepft;
   const plattformId = verknuepft?.project_id || project.id;
   const baustelleTabs = [{ value: 'lieferungen', label: 'Lieferungen', icon: Truck }, { value: 'maengel', label: 'Mängel', icon: AlertTriangle }, { value: 'berichte', label: 'Berichte', icon: BookOpen }, { value: 'dokumente', label: 'Dokumente', icon: FolderOpen }];
+  const vertragTab = { value: 'vertrag', label: 'Nachträge & Abnahmen', icon: FileSignature };
   const tabs = [
     { value: 'kalender', label: 'Kalender', icon: FileText }, { value: 'akte', label: 'Akte', icon: Paperclip }, { value: 'checklisten', label: 'Checklisten', icon: ListChecks },
     ...(verknuepft
-      ? [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...(isBuero || isVorarbeiter ? baustelleTabs : []), ...(isBuero ? [{ value: 'freigaben', label: 'Freigaben', icon: Share2 }] : [])]
+      ? [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...(isBuero || isVorarbeiter ? baustelleTabs : []), ...(isBuero ? [vertragTab, { value: 'freigaben', label: 'Freigaben', icon: Share2 }] : [])]
       : leitung
-        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, ...((eigeneFirma?.art || 'betrieb') !== 'betrieb' ? [{ value: 'ausschreibungen', label: 'Ausschreibungen', icon: Gavel }] : []), { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
+        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, ...((eigeneFirma?.art || 'betrieb') !== 'betrieb' ? [{ value: 'ausschreibungen', label: 'Ausschreibungen', icon: Gavel }] : []), { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, vertragTab, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
   ];
 
@@ -337,7 +341,7 @@ export default function ProjektPage() {
         </div>
       )}
 
-      {tab === 'akte' && <Akte projectId={project.id} leitung={leitung} />}
+      {tab === 'akte' && <><Akte projectId={project.id} leitung={leitung} />{isBuero && <ProjektakteKarte projectId={project.id} className="mt-5" />}</>}
       {tab === 'checklisten' && <Checklisten projectId={project.id} leitung={leitung} />}
       {tab === 'firmen' && <FirmenTab projectId={project.id} isBuero={isBuero} />}
       {tab === 'ausschreibungen' && <AusschreibungenTab projectId={project.id} />}
@@ -350,6 +354,7 @@ export default function ProjektPage() {
       {tab === 'maengel' && <MaengelTab projectId={plattformId} />}
       {tab === 'berichte' && <BerichteTab projectId={plattformId} />}
       {tab === 'dokumente' && <DokumenteTab projectId={plattformId} />}
+      {tab === 'vertrag' && <><NachtraegeTab projectId={plattformId} /><AbnahmenTab projectId={plattformId} className="mt-6" /></>}
 
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}
         entries={selectedDate ? (byDay[selectedDate] || []) : []} lastEntry={lastEntry} recentActivities={recentActivities}

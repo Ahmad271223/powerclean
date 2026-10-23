@@ -44,9 +44,10 @@ SCOPE_SAMMLUNG = {"aufgabe": "aufgaben", "lieferung": "lieferungen", "mangel": "
 
 async def firma_kurz(firma_id: Optional[str]) -> dict:
     """Öffentlich unkritische Firmendaten für Partner (Name, Ort, Kontakt), nie Lizenz, Bank oder Einstellungen."""
-    f = await db().firmen.find_one({"id": firma_id}, {"_id": 0, "id": 1, "name": 1, "city": 1, "zip_code": 1, "street": 1, "email": 1, "phone": 1, "logo": 1}) if firma_id else None
+    f = await db().firmen.find_one({"id": firma_id}, {"_id": 0, "id": 1, "name": 1, "city": 1, "zip_code": 1, "street": 1, "email": 1, "phone": 1, "logo": 1, "verifiziert": 1}) if firma_id else None
     if not f:
-        return {"id": firma_id, "name": "Unbekannte Firma", "city": ""}
+        return {"id": firma_id, "name": "Unbekannte Firma", "city": "", "verifiziert": False}
+    f["verifiziert"] = bool((f.get("verifiziert") or {}).get("status"))
     return f
 
 

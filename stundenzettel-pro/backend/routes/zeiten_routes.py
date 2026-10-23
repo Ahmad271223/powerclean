@@ -397,7 +397,7 @@ async def stempel_weiter(user: dict = Depends(schreibender_nutzer)):
 
 
 async def _stempel_beenden(s: dict, firma: dict, handelnder: dict, activity: str, gps: Optional[dict], service_id: Optional[str],
-                           beendet_durch: Optional[str] = None) -> dict:
+                           beendet_durch: Optional[str] = None, grund: Optional[str] = None) -> dict:
     """Stempelung abschließen: Eintrag für die gestempelte Person anlegen (auch durch das Büro)."""
     jetzt = lokal_jetzt()
     start = datetime.fromisoformat(s["start_at"])
@@ -430,8 +430,17 @@ async def _stempel_beenden(s: dict, firma: dict, handelnder: dict, activity: str
     await db().entries.insert_one(dict(e))              # erst der Arbeitszeitnachweis …
     await db().stempel.delete_one({"id": s["id"]})       # … dann die laufende Stempelung entfernen
     await _nach_aenderung(firma, {e["project_id"]}, e["user_id"], {e["date"]})
-    await protokollieren(handelnder, "stempel.stop", e["project_id"], details={"date": e["date"], "start": e["start_time"], "ende": e["end_time"], "pause": e["pause_minutes"], "netto": e["net_minutes"], "user_id": s["user_id"], "beendet_durch": beendet_durch, "pruefen": e["pruefen"]})
+    await protokollieren(handelnder, "stempel.stop", e["project_id"], details={"date": e["date"], "start": e["start_time"], "ende": e["end_time"], "pause": e["pause_minutes"], "netto": e["net_minutes"], "user_id": s["user_id"], "beendet_durch": beendet_durch, "grund": grund, "pruefen": e["pruefen"]})
     return {"eintrag": await _frisch(firma["id"], e["id"]), "verworfen": False}
+
+
+async def stempelungen_abschliessen(firma: dict, user_id: str, handelnder: dict, grund: str) -> int:
+    """Laufende Stempelungen einer Person sauber abschließen (Arbeitszeitnachweis statt Löschung) – beim Deaktivieren oder Löschen des Kontos."""
+    n = 0
+    async for s in db().stempel.find({"firma_id": firma["id"], "user_id": user_id}, {"_id": 0}):
+        await _stempel_beenden(s, firma, handelnder, grund, None, None, beendet_durch=handelnder.get("name"), grund=grund)
+        n += 1
+    return n
 
 
 @router.post("/api/stempel/stop")

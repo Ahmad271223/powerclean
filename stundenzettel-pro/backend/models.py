@@ -75,6 +75,7 @@ class LohnExportIn(BaseModel):
 class FirmaIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
     art: Optional[str] = Field(default=None, pattern="^(betrieb|auftraggeber|beides)$")
+    email_benachrichtigungen: Optional[bool] = None   # E-Mails zu Einladungen, Angeboten, Zuschlägen, Nachträgen, Abnahmen (Standard: an)
     owner: Optional[str] = Field(default=None, max_length=120)
     street: Optional[str] = Field(default=None, max_length=200)
     zip_code: Optional[str] = Field(default=None, max_length=20)
@@ -485,6 +486,49 @@ class PlanIn(BaseModel):
 
 class GuAboIn(BaseModel):
     aktiv: bool
+
+
+class VerifizierungIn(BaseModel):
+    """Betreiber bestätigt eine Firma (z. B. Handelsregister, Gewerbeanmeldung geprüft)."""
+    firma_id: Optional[str] = None
+    email: Optional[EmailStr] = None
+    verifiziert: bool = True
+    hinweis: Optional[str] = Field(default="", max_length=300)
+
+
+# ---------------------------------------------------------------- Bauabwicklung: Nachträge und Abnahmen
+class NachtragIn(BaseModel):
+    firma_id: Optional[str] = None                     # nur Auftraggeber: beauftragte Firma (bei Anfrage)
+    titel: str = Field(min_length=1, max_length=160)
+    beschreibung: Optional[str] = Field(default="", max_length=8000)
+    grund: Optional[str] = Field(default="", max_length=2000)
+    gewerk: Optional[str] = Field(default=None, max_length=60)
+    betrag_netto: Optional[float] = Field(default=None, ge=0, le=1e9)
+    ust_satz: Optional[float] = Field(default=None, ge=0, le=30)
+
+
+class NachtragEntscheidungIn(BaseModel):
+    freigeben: bool
+    begruendung: Optional[str] = Field(default="", max_length=2000)
+
+
+class AbnahmeIn(BaseModel):
+    firma_id: Optional[str] = None                     # nur Auftraggeber: beauftragte Firma
+    art: str = Field(default="abnahme", pattern="^(teilabnahme|abnahme|endabnahme)$")
+    gewerk: Optional[str] = Field(default=None, max_length=60)
+    bereich: Optional[str] = Field(default="", max_length=120)
+    datum: Optional[str] = None
+    teilnehmer: Optional[str] = Field(default="", max_length=500)
+    ergebnis: Optional[str] = Field(default=None, pattern="^(abgenommen|abgenommen_mit_maengeln|verweigert)$")
+    vorbehalte: Optional[str] = Field(default="", max_length=4000)
+    nachbesserung_bis: Optional[str] = None
+    bemerkung: Optional[str] = Field(default="", max_length=2000)
+    maengel_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class AbnahmeAntwortIn(BaseModel):
+    bestaetigen: bool
+    kommentar: Optional[str] = Field(default="", max_length=2000)
 
 
 class ApiTokenIn(BaseModel):

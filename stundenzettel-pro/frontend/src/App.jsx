@@ -24,6 +24,9 @@ import ProtokollPage from './pages/ProtokollPage';
 import MeineZeitenPage from './pages/MeineZeitenPage';
 import ProfilPage from './pages/ProfilPage';
 import AuswertungPage from './pages/AuswertungPage';
+import MitteilungenPage from './pages/MitteilungenPage';
+import ProjektleiterPage from './pages/ProjektleiterPage';
+import AbosPage from './pages/AbosPage';
 
 function CrashScreen({ error }) {
   return (
@@ -106,6 +109,9 @@ export default function App() {
             <Route path="/exporte" element={<Geschuetzt buero><ExportePage /></Geschuetzt>} />
             <Route path="/firma" element={<Geschuetzt buero><FirmaPage /></Geschuetzt>} />
             <Route path="/protokoll" element={<Geschuetzt buero><ProtokollPage /></Geschuetzt>} />
+            <Route path="/mitteilungen" element={<Geschuetzt><MitteilungenPage /></Geschuetzt>} />
+            <Route path="/projektleiter" element={<Geschuetzt buero><ProjektleiterPage /></Geschuetzt>} />
+            <Route path="/abos" element={<Geschuetzt buero><AbosPage /></Geschuetzt>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </HashRouter>

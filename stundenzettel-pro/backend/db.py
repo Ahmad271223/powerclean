@@ -82,6 +82,15 @@ async def indizes_anlegen(d) -> None:
         ("vergaben", [("ausschreibung_id", 1), ("status", 1)], {"name": "ausschreibung_status"}),
         ("vergaben", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
         ("webhook_ausgang", [("status", 1), ("naechster_versuch_at", 1)], {"name": "faellig"}),
+        # E-Mail-Ausgang, Bauabwicklung, Projektakten
+        ("email_ausgang", [("status", 1), ("naechster_versuch_at", 1)], {"name": "faellig"}),
+        ("email_ausgang", [("firma_id", 1), ("created_at", -1)], {"name": "firma_zeit"}),
+        ("email_ausgang", [("absender_firma_id", 1), ("created_at", -1)], {"name": "absender_zeit"}),
+        ("nachtraege", [("project_id", 1), ("firma_id", 1), ("status", 1)], {"name": "projekt_firma_status"}),
+        ("nachtraege", [("owner_firma_id", 1), ("status", 1)], {"name": "eigentuemer_status"}),
+        ("abnahmen", [("project_id", 1), ("firma_id", 1), ("status", 1)], {"name": "projekt_firma_status"}),
+        ("abnahmen", [("owner_firma_id", 1), ("status", 1)], {"name": "eigentuemer_status"}),
+        ("projektakten", [("firma_id", 1), ("project_id", 1), ("created_at", -1)], {"name": "firma_projekt_zeit"}),
         ("webhook_ausgang", [("firma_id", 1), ("webhook_id", 1), ("status", 1)], {"name": "firma_hook"}),
     ]
     for sammlung, schluessel, optionen in aufgaben:

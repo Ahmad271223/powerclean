@@ -410,60 +410,20 @@ async def bericht_loeschen(bericht_id: str, user: dict = Depends(aktueller_nutze
 
 @router.get("/api/tagesberichte/{bericht_id}/pdf")
 async def bericht_pdf(bericht_id: str, user: dict = Depends(aktueller_nutzer)):
-    """Bautagesbericht als PDF (A4, eingebettete Schrift, bis zu sechs Fotos)."""
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.units import mm
-    from reportlab.lib.utils import ImageReader
-    from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-    from pdfbasis import SCHRIFT, SCHRIFT_FETT, schrift_registrieren
+    """Bautagesbericht als PDF (A4, eingebettete Schrift, bis zu sechs Fotos) – dieselbe Erzeugung wie in der ZIP-Projektakte (pdfs.py)."""
+    import pdfs
     b, z = await eintrag_laden("tagesberichte", user, bericht_id)
     b = await _bericht_anreichern(b)
-    fotos = await _fotos("tagesbericht", bericht_id)
-    schrift_registrieren()
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm, topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"Bautagesbericht {b['datum']} – {z['projekt']['name']}", author=b["firma_name"], creator="Stundenzettel Pro")
-    h1 = ParagraphStyle("h1", fontName=SCHRIFT_FETT, fontSize=15, leading=19)
-    h2 = ParagraphStyle("h2", fontName=SCHRIFT_FETT, fontSize=10, leading=13, spaceBefore=6)
-    norm = ParagraphStyle("n", fontName=SCHRIFT, fontSize=9.5, leading=13)
-    klein = ParagraphStyle("k", fontName=SCHRIFT, fontSize=8, leading=10, textColor=colors.HexColor("#666666"))
-    esc = lambda t: (t or "–").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")  # noqa: E731
-    teile = [Paragraph(f"Bautagesbericht {b['datum']}", h1), Paragraph(f"{esc(z['projekt']['name'])}{' · ' + esc(z['projekt'].get('address')) if z['projekt'].get('address') else ''}", norm),
-             Paragraph(f"Verfasser: {esc(b.get('verfasser'))} ({esc(b['firma_name'])}) · Status: {esc(b['status_name'])}{' · Bauabschnitt ' + esc(b.get('bereich')) if b.get('bereich') else ''}{' · Wetter: ' + esc(b.get('wetter')) if b.get('wetter') else ''}", klein), Spacer(1, 4 * mm)]
-    kopf = [["Beteiligte Firmen", esc(", ".join(b.get("firmen") or []))], ["Mitarbeiter vor Ort", str(b.get("mitarbeiter_anzahl") or 0)], ["Fortschritt", esc(b.get("fortschritt"))]]
-    t = Table([[Paragraph(k, h2), Paragraph(v, norm)] for k, v in kopf], colWidths=[45 * mm, 125 * mm])
-    t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#DDDDDD"))]))
-    teile.append(t)
-    for titel, feld in (("Tätigkeiten", "taetigkeiten"), ("Lieferungen", "lieferungen"), ("Behinderungen", "behinderungen"), ("Mängel", "maengel"),
-                        ("Besondere Vorkommnisse", "besondere_vorkommnisse"), ("Notizen", "notizen")):
-        if b.get(feld):
-            teile += [Paragraph(titel, h2), Paragraph(esc(b[feld]), norm)]
-    if fotos:
-        teile.append(Paragraph("Fotos", h2))
-        zellen = []
-        for f in fotos[:6]:
-            d = await db().documents.find_one({"id": f["id"]}, {"_id": 0, "path": 1})
-            try:
-                bild = ImageReader(io.BytesIO(bild_verkleinern(d["path"], 700)))
-                bw, bh = bild.getSize()
-                w = 82 * mm
-                h = w * bh / bw
-                if h > 60 * mm:
-                    h, w = 60 * mm, 60 * mm * bw / bh
-                zellen.append([Image(io.BytesIO(bild_verkleinern(d["path"], 700)), width=w, height=h), Paragraph(esc(f.get("note") or f.get("uploaded_by_name") or ""), klein)])
-            except Exception:  # noqa: BLE001 – defektes Bild auslassen
-                continue
-        zeilen = [zellen[i:i + 2] for i in range(0, len(zellen), 2)]
-        for zeile in zeilen:
-            while len(zeile) < 2:
-                zeile.append("")
-            teile.append(Table([[z_[0] if z_ else "" for z_ in zeile], [z_[1] if z_ else "" for z_ in zeile]], colWidths=[88 * mm, 88 * mm]))
-    teile += [Spacer(1, 8 * mm), Paragraph("Erstellt mit Stundenzettel Pro · Freigabe: " + ("erteilt" if b.get("status") == "freigegeben" else "offen"), klein)]
-    doc.build(teile)
+    fotos = []
+    for f in (await _fotos("tagesbericht", bericht_id))[:6]:
+        d = await db().documents.find_one({"id": f["id"]}, {"_id": 0, "path": 1})
+        try:
+            fotos.append((bild_verkleinern(d["path"], 700), f.get("note") or f.get("uploaded_by_name") or ""))
+        except Exception:  # noqa: BLE001 – defektes Bild auslassen
+            continue
+    pdf = pdfs.tagesbericht_pdf(b, z["projekt"], fotos)
     await protokollieren(user, "tagesbericht.pdf", b["datum"])
-    return _datei(buf.getvalue(), f"Bautagesbericht_{b['datum']}.pdf", "application/pdf")
+    return _datei(pdf, f"Bautagesbericht_{b['datum']}.pdf", "application/pdf")
 
 
 # ================================================================ Meilensteine

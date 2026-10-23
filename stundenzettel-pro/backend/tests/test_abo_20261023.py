@@ -35,8 +35,12 @@ def test_01_nur_auftraggeber_und_gu_projektabo(client):
     # Beenden nur Inhaber; eine spätere Veröffentlichung aktiviert wieder (neuer Zeitraum); Detailseite zeigt den Stand
     assert client.post(f"/api/projekte/{p['id']}/gu-abo", json={"aktiv": False}, headers=buero).status_code == 403
     r = client.post(f"/api/projekte/{p['id']}/gu-abo", json={"aktiv": False}, headers=chef)
-    assert r.status_code == 200 and r.json()["gu_abo"]["status"] == "beendet" and r.json()["gu_abo"]["zeitraeume"][0]["bis"]
-    assert client.get("/api/firma/abos", headers=chef).json()["gu_projekte_aktiv"] == 0
+    abo = r.json()["gu_abo"]
+    assert r.status_code == 200 and abo["status"] == "gekuendigt" and abo["endet_am"] and abo["zeitraeume"][0]["bis"] == abo["endet_am"]
+    assert client.get("/api/firma/abos", headers=chef).json()["gu_projekte_aktiv"] == 1   # bis zum Periodenende (Monatsende) kostenpflichtig
+    gestern = (jetzt() - timedelta(days=1)).date().isoformat()
+    asyncio.run(dbmodul.db().projects.update_one({"id": p["id"]}, {"$set": {"gu_abo.endet_am": gestern}}))
+    assert client.get("/api/firma/abos", headers=chef).json()["gu_projekte_aktiv"] == 0   # Periodenende vorbei → beendet
     a3 = client.post(f"/api/projekte/{p['id']}/ausschreibungen", json={**TENDER, "titel": "Maler", "gewerk": "Maler"}, headers=chef).json()["ausschreibung"]
     assert client.post(f"/api/ausschreibungen/{a3['id']}/veroeffentlichen", headers=chef).status_code == 200
     d = client.get(f"/api/ausschreibungen/{a3['id']}", headers=chef).json()["ausschreibung"]

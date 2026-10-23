@@ -59,3 +59,16 @@ WEBHOOK_PORTS = {int(p) for p in env("WEBHOOK_PORTS", "80,443,8443").split(",") 
 
 # Lizenzmodell: nach der Testphase kostenlose Projektteilnahme (Ausschreibungen, Angebote, Mitarbeit in GU-Projekten) statt Vollsperre
 TEILNAHME_KOSTENLOS = env("TEILNAHME_KOSTENLOS", "1") == "1"
+
+# E-Mail-Versand (Einladungen, Einreichungsnachweise, Zuschlag/Absage, Nachträge, Abnahmen). Ohne SMTP_HOST werden E-Mails nur als
+# Nachweis in email_ausgang gespeichert (Status nicht_konfiguriert); Einladungslinks stehen weiterhin in der Oberfläche.
+SMTP_HOST = env("SMTP_HOST", "")
+SMTP_PORT = int(env("SMTP_PORT", "587"))
+SMTP_USER = env("SMTP_USER", "")
+SMTP_PASSWORT = env("SMTP_PASSWORT", "")
+SMTP_ABSENDER = env("SMTP_ABSENDER", "")              # z. B. noreply@stundenzettel.app
+SMTP_ABSENDER_NAME = env("SMTP_ABSENDER_NAME", "Stundenzettel Pro")
+SMTP_TLS = env("SMTP_TLS", "starttls")                # starttls | ssl | none
+
+# Projektakten (ZIP): Aufbewahrungsfrist in Jahren (Rechnungen/Belege 10 Jahre nach § 147 AO)
+AUFBEWAHRUNG_JAHRE = int(env("AUFBEWAHRUNG_JAHRE", "10"))

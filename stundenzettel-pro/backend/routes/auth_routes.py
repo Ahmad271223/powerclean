@@ -111,7 +111,9 @@ async def konto_loeschen(body: KontoLoeschenIn, user: dict = Depends(aktueller_n
         if not andere:
             raise HTTPException(400, "Du bist der einzige Inhaber. Entweder einen anderen Inhaber ernennen oder unter „Firma“ die ganze Firma löschen.")
     await protokollieren(user, "konto.geloescht", user.get("name", ""))
-    await db().stempel.delete_many({"firma_id": user["firma_id"], "user_id": user["id"]})
+    from auth import firma_laden
+    from routes.zeiten_routes import stempelungen_abschliessen
+    await stempelungen_abschliessen(await firma_laden(user["firma_id"]), user["id"], user, "Konto gelöscht – laufende Stempelung automatisch beendet")
     await db().users.update_one({"id": user["id"]}, {"$set": {"active": False, "email": f"geloescht-{user['id'][:8]}@konto.geloescht", "phone": "", "notes": "",
                                                               "pw_hash": None, "deleted_at": jetzt_iso()},
                                                      "$unset": {"einladung_token": "", "einladung_bis": "", "pin_hash": ""}})

@@ -1,48 +1,55 @@
 /** Rahmen der App: Kopfzeile, Navigation (Seitenleiste am Rechner, Tab-Leiste am Handy), Lizenz- und Offline-Hinweis. */
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel } from 'lucide-react';
+import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel, Bell, UserCog, BadgeEuro, FileArchive } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { AppIcon, Sheet } from './ui';
 import { initials } from '../lib/utils';
 import { cn } from '../lib/utils';
 
-const NAV_BUERO = [
+/** Handwerksbetrieb: die vier Hauptaktionen unten am Handy (Übersicht, Projekte, Stempeluhr, Rechnungen), der Rest unter „Mehr“. */
+const NAV_BETRIEB = [
   { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
+  { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
+  { to: '/rechnungen', label: 'Rechnungen', icon: Receipt },
+  { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
+  { to: '/ausschreibungen', label: 'Aufträge & Angebote', icon: Gavel },
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
-  { to: '/ausschreibungen', label: 'Ausschreibungen', icon: Gavel },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
   { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
-  { to: '/rechnungen', label: 'Rechnungen', icon: Receipt },
-  { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
   { to: '/auswertung', label: 'Auswertung', icon: BarChart3 },
   { to: '/kunden', label: 'Kunden', icon: Contact },
   { to: '/abwesenheiten', label: 'Abwesenheiten', icon: CalendarOff },
-  { to: '/exporte', label: 'Exporte & Abschluss', icon: FileDown },
+  { to: '/exporte', label: 'Exporte & Archiv', icon: FileDown },
   { to: '/firma', label: 'Firma', icon: Building2 },
   { to: '/protokoll', label: 'Protokoll', icon: ShieldCheck },
 ];
-/** Auftraggeber (GU, Bauherr): keine Rechnungen/Kunden im Menü, Projekte heißen Bauprojekte; „beides“ bekommt das volle Menü. */
+/** Auftraggeber (GU, Bauherr): Bauprojekte, Ausschreibungen, Mitteilungen, Projektleiter und Projektabos – ohne Rechnungen und Kunden. */
 const NAV_AUFTRAGGEBER = [
-  { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
+  { to: '/', label: 'Startseite', icon: LayoutDashboard, end: true },
   { to: '/projekte', label: 'Bauprojekte', icon: FolderKanban },
   { to: '/ausschreibungen', label: 'Ausschreibungen', icon: Gavel },
+  { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
+  { to: '/aufgaben', label: 'Aufgaben & Abnahmen', icon: ClipboardList },
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
-  { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
+  { to: '/projektleiter', label: 'Projektleiter & Rechte', icon: UserCog },
+  { to: '/abos', label: 'Projektabos', icon: BadgeEuro },
+  { to: '/exporte', label: 'Archiv & Berichte', icon: FileArchive },
   { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
-  { to: '/auswertung', label: 'Auswertung', icon: BarChart3 },
   { to: '/abwesenheiten', label: 'Abwesenheiten', icon: CalendarOff },
-  { to: '/exporte', label: 'Exporte & Abschluss', icon: FileDown },
   { to: '/firma', label: 'Firma', icon: Building2 },
   { to: '/protokoll', label: 'Protokoll', icon: ShieldCheck },
 ];
+/** Beides: das Betriebsmenü plus Projektleiter und Projektabos. */
+const NAV_BEIDES = [...NAV_BETRIEB.slice(0, 13), { to: '/projektleiter', label: 'Projektleiter & Rechte', icon: UserCog }, { to: '/abos', label: 'Projektabos', icon: BadgeEuro }, ...NAV_BETRIEB.slice(13)];
 const NAV_MITARBEITER = [
   { to: '/', label: 'Stempeluhr', icon: Timer, end: true },
   { to: '/meine-zeiten', label: 'Meine Zeiten', icon: Clock },
-  { to: '/projekte', label: 'Projekte', icon: FolderKanban },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
+  { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
+  { to: '/projekte', label: 'Projekte', icon: FolderKanban },
   { to: '/abwesenheiten', label: 'Abwesenheit', icon: CalendarOff },
   { to: '/profil', label: 'Profil', icon: Contact },
 ];
@@ -74,7 +81,8 @@ export default function Layout({ children, title, subtitle, action, wide = false
   const navigate = useNavigate();
   const location = useLocation();
   const [mehr, setMehr] = useState(false);
-  const nav = isBuero ? (firma?.art === 'auftraggeber' ? NAV_AUFTRAGGEBER : NAV_BUERO) : NAV_MITARBEITER;
+  const art = firma?.art || 'betrieb';
+  const nav = isBuero ? (art === 'auftraggeber' ? NAV_AUFTRAGGEBER : art === 'beides' ? NAV_BEIDES : NAV_BETRIEB) : NAV_MITARBEITER;
   const tabs = nav.slice(0, 4);
   const rest = nav.slice(4);
   const restAktiv = rest.some((n) => location.pathname.startsWith(n.to) && n.to !== '/');

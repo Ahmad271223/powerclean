@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 from db import db, indizes_anlegen
 from routes import (abschluss, api_v1, ausschreibungen, auth_routes, auswertung, baustelle, dashboard, exporte, firma, import_free, konten, kunden,
-                    leistungen, lohn, mitarbeiter, plattform, projekte, rechnungen, zeiten_routes)
+                    leistungen, lohn, mitarbeiter, plattform, projekte, rechnungen, zeiten_routes, abwicklung, archiv)
 
 VERSION = "1.1.0"
 
@@ -37,6 +37,8 @@ def sicherheit_pruefen() -> list[str]:
         hinweise.append("DATEN_SCHLUESSEL ist nicht gesetzt – Lohndaten werden mit einem aus JWT_SECRET abgeleiteten Schlüssel verschlüsselt (bitte setzen).")
     if not config.ADMIN_TOKEN:
         hinweise.append("ADMIN_TOKEN ist nicht gesetzt – die Betreiber-Route /api/admin/plan ist deaktiviert.")
+    if not (config.SMTP_HOST and config.SMTP_ABSENDER):
+        hinweise.append("SMTP_HOST/SMTP_ABSENDER sind nicht gesetzt – E-Mails (Einladungen, Nachweise) werden nur gespeichert, nicht versendet.")
     if fehler and os.environ.get("UNSICHER_ERLAUBEN") != "1":
         raise RuntimeError("Start abgebrochen – " + "; ".join(fehler) + ". Werte in der .env setzen (siehe README); zum bewussten Übergehen UNSICHER_ERLAUBEN=1.")
     return hinweise
@@ -48,12 +50,15 @@ async def lebenszyklus(app: FastAPI):
         print("WARNUNG:", h)
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     await indizes_anlegen(db())
-    dienst = None
+    dienste = []
     if config.DB_MODE != "memory" or os.environ.get("WEBHOOK_DIENST") == "1":
         import webhooks
-        dienst = asyncio.create_task(webhooks.hintergrunddienst())   # stellt offene Webhook-Lieferungen zu (auch nach Neustart)
+        dienste.append(asyncio.create_task(webhooks.hintergrunddienst()))   # stellt offene Webhook-Lieferungen zu (auch nach Neustart)
+    if config.DB_MODE != "memory" or os.environ.get("MAIL_DIENST") == "1":
+        import mail
+        dienste.append(asyncio.create_task(mail.hintergrunddienst()))       # stellt offene E-Mails zu (Wiederholungen, auch nach Neustart)
     yield
-    if dienst:
+    for dienst in dienste:
         dienst.cancel()
 
 
@@ -62,7 +67,7 @@ app = FastAPI(title="Stundenzettel Pro", version=VERSION, docs_url="/api/docs", 
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 for modul in (auth_routes, firma, mitarbeiter, kunden, projekte, zeiten_routes, rechnungen, exporte, import_free, api_v1, dashboard,
-              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle, ausschreibungen):
+              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle, ausschreibungen, abwicklung, archiv):
     app.include_router(modul.router)
 
 

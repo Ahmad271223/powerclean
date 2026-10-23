@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Play, Square, Pause, MapPin, MapPinOff, Coffee, Clock, Users, WifiOff, QrCode, AlertTriangle, Tag, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
@@ -7,7 +7,8 @@ import MicButton from '../components/MicButton';
 import { AppIcon, Btn, Card, Chip, Sheet, TextArea, Toggle } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { addDays, fmtDate, fmtHours, fromKey, toKey } from '../lib/dates';
+import { addDays, fmtDate, fmtHours, fmtDecimalHours, fmtSigned, fromKey, toKey } from '../lib/dates';
+import { OffenePunkte } from './MitteilungenPage';
 import { initials } from '../lib/utils';
 
 const GPS_KEY = 'szpro-gps';
@@ -279,6 +280,7 @@ export default function StempeluhrPage() {
           </Card>
 
           <div className="space-y-4">
+            {!isBuero && <MeinTag />}
             {isBuero && (
               <Card className="p-5">
                 <h2 className="text-[16px] mb-2 flex items-center gap-2"><Users size={16} /> Gerade im Einsatz</h2>
@@ -314,5 +316,32 @@ export default function StempeluhrPage() {
         </div>
       </Sheet>
     </Layout>
+  );
+}
+
+
+/** Mitarbeiter-Startseite: Heute, Woche, Stundenkonto, Resturlaub und offene Punkte – direkt neben der Stempeluhr. */
+function MeinTag() {
+  const [d, setD] = useState(null);
+  const [punkte, setPunkte] = useState(null);
+  useEffect(() => {
+    api.get('/api/dashboard').then(setD).catch(() => setD(null));
+    api.get('/api/dashboard/aufgaben').then((r) => setPunkte(r.punkte)).catch(() => setPunkte([]));
+  }, []);
+  if (!d) return null;
+  return (
+    <>
+      <Card className="p-5">
+        <h2 className="text-[16px] mb-2 flex items-center gap-2"><Clock size={16} /> Mein Tag</h2>
+        <div className="grid grid-cols-2 gap-2 text-[13px]">
+          <div className="rounded-2xl bg-[#F5F5F7] px-3 py-2"><div className="text-[11px] text-[#6E6E73]">Diese Woche</div><div className="text-[18px] font-bold">{fmtDecimalHours(d.woche_minuten)} h</div></div>
+          <div className="rounded-2xl bg-[#F5F5F7] px-3 py-2"><div className="text-[11px] text-[#6E6E73]">Dieser Monat</div><div className="text-[18px] font-bold">{fmtDecimalHours(d.monat_minuten)} h</div></div>
+          {d.saldo_minuten !== null && d.saldo_minuten !== undefined && <div className="rounded-2xl bg-[#F5F5F7] px-3 py-2"><div className="text-[11px] text-[#6E6E73]">Stundenkonto</div><div className={`text-[18px] font-bold ${d.saldo_minuten < 0 ? 'text-[#C41E3A]' : 'text-[#1B7F3B]'}`}>{fmtSigned(d.saldo_minuten)}</div></div>}
+          {d.urlaub && <div className="rounded-2xl bg-[#F5F5F7] px-3 py-2"><div className="text-[11px] text-[#6E6E73]">Resturlaub</div><div className="text-[18px] font-bold">{d.resturlaub} Tage</div></div>}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-[13px]"><Link to="/meine-zeiten" className="text-[#C41E3A] font-medium">Meine Zeiten</Link><span className="text-[#C7C7CC]">·</span><Link to="/aufgaben" className="text-[#C41E3A] font-medium">Aufgaben</Link><span className="text-[#C7C7CC]">·</span><Link to="/mitteilungen" className="text-[#C41E3A] font-medium">Mitteilungen</Link></div>
+      </Card>
+      {punkte && punkte.length > 0 && <OffenePunkte punkte={punkte} titel="Für dich offen" />}
+    </>
   );
 }

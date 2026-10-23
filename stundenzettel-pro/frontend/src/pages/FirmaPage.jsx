@@ -7,6 +7,7 @@ import { Btn, Card, Chip, Field, IconBtn, Segmented, TextInput, Toggle } from '.
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDate } from '../lib/dates';
+import AbosKarte, { PreisListe } from '../components/AbosKarte';
 
 const fmtZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–');
 
@@ -24,7 +25,7 @@ export default function FirmaPage() {
   return (
     <Layout title="Firma" subtitle="Logo, Stempel, Rechnungsdaten, Arbeitszeitregeln und Leistungen gelten für alle Stundenzettel und Rechnungen.">
       <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar"><Segmented value={tab} onChange={setTab} options={optionen} /></div>
-      {tab === 'firma' && <div className="max-w-3xl mx-auto space-y-5"><FirmenartKarte /><Card className="p-5 sm:p-8">{firma ? <CompanyForm company={firma} onSave={speichern} /> : <Ladeanzeige />}</Card></div>}
+      {tab === 'firma' && <div className="max-w-3xl mx-auto space-y-5"><FirmenartKarte /><BenachrichtigungenKarte /><Card className="p-5 sm:p-8">{firma ? <CompanyForm company={firma} onSave={speichern} /> : <Ladeanzeige />}</Card></div>}
       {tab === 'leistungen' && <Leistungen />}
       {tab === 'lizenz' && <Lizenz />}
       {tab === 'api' && <Schnittstelle />}
@@ -53,7 +54,7 @@ function FirmenartKarte() {
   };
   return (
     <Card className="p-5 sm:p-8">
-      <h2 className="text-[17px]">Firmenart</h2>
+      <h2 className="text-[17px] flex items-center gap-2">Firmenart{firma?.verifiziert?.status && <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#1B7F3B] bg-[#E8F8EC] rounded-full px-2 py-0.5" title={firma.verifiziert.hinweis || 'Vom Anbieter geprüft'}><BadgeCheck size={12} /> Geprüfte Firma</span>}</h2>
       <p className="text-[14px] text-[#6E6E73] mt-1 mb-3">Auftraggeber (z. B. Generalunternehmer) und ausführende Betriebe sehen unterschiedliche Menüs und Startseiten. Eine Firma kann auch beides sein.</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {FIRMENARTEN.map((a) => (
@@ -63,6 +64,24 @@ function FirmenartKarte() {
         ))}
       </div>
       {!isInhaber && <p className="text-[12px] text-[#86868B] mt-2">Ändern kann das nur der Inhaber.</p>}
+    </Card>
+  );
+}
+
+/** E-Mails zu Einladungen, Angeboten, Zuschlägen, Nachträgen und Abnahmen – nie zu jeder Statusänderung. */
+function BenachrichtigungenKarte() {
+  const { firma, isInhaber, refresh } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const an = firma?.email_benachrichtigungen !== false;
+  const setzen = async (v) => {
+    setBusy(true);
+    try { await api.put('/api/firma', { email_benachrichtigungen: v }); await refresh(); toast.success(v ? 'E-Mail-Versand an' : 'E-Mail-Versand aus'); } catch (err) { toast.error(err.message); } finally { setBusy(false); }
+  };
+  return (
+    <Card className="p-5 sm:p-8">
+      <h2 className="text-[17px]">E-Mails an eure Firma</h2>
+      <p className="text-[14px] text-[#6E6E73] mt-1 mb-2">Büro und Inhaber bekommen E-Mails zu Projekteinladungen, Ausschreibungen, Einreichungsnachweisen, Zuschlägen, Nachträgen und Abnahmen. Jede E-Mail steht als Nachweis unter „Protokoll → E-Mail-Nachweise“.</p>
+      <div className="rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={an} onChange={(v) => { if (!busy && isInhaber) setzen(v); }} label="E-Mail-Benachrichtigungen" hint={isInhaber ? 'Nur der Inhaber ändert das.' : 'Ändern kann das nur der Inhaber.'} /></div>
     </Card>
   );
 }
@@ -109,13 +128,7 @@ function Leistungen() {
 function Lizenz() {
   const { firma, isInhaber, logout } = useAuth();
   const [plan, setPlan] = useState(null);
-  const [abos, setAbos] = useState(null);
-  const ladenAbos = () => api.get('/api/firma/abos').then(setAbos).catch(() => setAbos(null));
-  useEffect(() => { api.get('/api/firma/plan').then(setPlan).catch((err) => toast.error(err.message)); ladenAbos(); }, []);
-  const guAbo = async (p, aktiv) => {
-    if (!window.confirm(aktiv ? `„${p.name}“ als GU-Projekt aktivieren (50,99 € netto je Monat)?` : `GU-Abo für „${p.name}“ beenden? Veröffentlichen oder Einladen aktiviert es wieder.`)) return;
-    try { await api.post(`/api/projekte/${p.id}/gu-abo`, { aktiv }); toast.success(aktiv ? 'GU-Projekt aktiviert' : 'GU-Abo beendet'); ladenAbos(); } catch (err) { toast.error(err.message); }
-  };
+  useEffect(() => { api.get('/api/firma/plan').then(setPlan).catch((err) => toast.error(err.message)); }, []);
   const firmaLoeschen = async () => {
     const name = window.prompt(`Firma „${firma?.name}“ mit ALLEN Daten (Mitarbeiter, Zeiten, Rechnungen, Akten) unwiderruflich löschen?\nZur Bestätigung den Firmennamen eingeben:`);
     if (name === null) return;
@@ -126,7 +139,6 @@ function Lizenz() {
   };
   if (!plan) return <Ladeanzeige />;
   const farbe = plan.status === 'aktiv' ? 'text-[#1B7F3B]' : plan.status === 'test' || plan.status === 'teilnahme' ? 'text-[#B25E00]' : 'text-[#C41E3A]';
-  const fmtGeld = (n) => `${Number(n || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
   return (
     <Card className="p-5 sm:p-8 max-w-3xl mx-auto space-y-5">
       <div><div className="text-[13px] text-[#6E6E73]">Stand</div><div className={`text-[28px] font-bold tracking-tight ${farbe}`}>{{ test: 'Testphase', aktiv: plan.stufe === 'teilnahme' ? 'Kostenlose Projektteilnahme' : 'Firmenabo aktiv', abgelaufen: 'Abgelaufen', gesperrt: 'Gesperrt', teilnahme: 'Kostenlose Projektteilnahme' }[plan.status] || plan.status}</div><div className="text-[14px] text-[#6E6E73] mt-1">{plan.hinweis}</div></div>
@@ -136,21 +148,8 @@ function Lizenz() {
         {plan.gueltig_bis && <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3"><div className="text-[12px] text-[#6E6E73]">Gültig bis</div><div className="text-[20px] font-bold">{fmtDate(new Date(plan.gueltig_bis))}</div></div>}
       </div>
       {plan.hinweis_betreiber && <p className="text-[14px]">{plan.hinweis_betreiber}</p>}
-      <div className="rounded-2xl bg-[#F5F5F7] px-4 py-4 text-[14px] space-y-2">
-        <div className="font-semibold">Preise (netto je Monat)</div>
-        <div><strong>Firmenabo</strong> – 4,99 € je Firma plus 3,99 € je weiterem Nutzer (Inhaber enthalten): Mitarbeiter, Stempeluhr, Stundenzettel, Rechnungen und E-Rechnung, Lohnvorbereitung, eigene Projekte, Schnittstellen.</div>
-        <div><strong>GU-Projekt</strong> – 50,99 € je aktivem Bauprojekt eines Auftraggebers: beliebig viele Gewerke, Ausschreibungen, Projektleiter und beteiligte Firmen. Die Abrechnung beginnt mit der ersten Veröffentlichung oder Einladung, Entwürfe sind kostenlos.</div>
-        <div><strong>Kostenlose Projektteilnahme</strong> – eingeladene Betriebe sehen Ausschreibungen, geben Angebote ab, stellen Rückfragen und arbeiten in Projekten der Auftraggeber mit (Aufgaben, Fotos, Zeiten, Berichte), ohne zu zahlen.</div>
-        <div className="text-[#6E6E73]">14 Tage Test mit allem. Abrechnung per Rechnung des Anbieters; ein Zahlungsdienst (Karte/Lastschrift) folgt. Lesen und Exportieren geht immer weiter.</div>
-      </div>
-      {abos && (
-        <div className="rounded-2xl bg-[#F5F5F7] px-4 py-4 text-[14px] space-y-2">
-          <div className="font-semibold">Eure Abos</div>
-          <div className="flex flex-wrap gap-x-6 gap-y-1"><span>Firmenabo: <strong>{abos.firmenabo ? `${fmtGeld(abos.kosten_firma_monat)} (${abos.nutzer_aktiv} Nutzer)` : 'kostenlose Projektteilnahme'}</strong>{abos.plan.status === 'test' ? ' – in der Testphase noch frei' : ''}</span><span>GU-Projekte aktiv: <strong>{abos.gu_projekte_aktiv} × {fmtGeld(abos.preise.projekt_gu)}</strong></span><span>Summe: <strong>{fmtGeld(abos.kosten_monat)}</strong> je Monat</span></div>
-          {abos.projekte.length > 0 && <ul className="divide-y divide-black/[0.06]">{abos.projekte.map((p) => <li key={p.id} className="py-1.5 flex items-center gap-2"><span className="flex-1 min-w-0 truncate">{p.name}</span><span className="text-[12px] text-[#6E6E73]">{p.gu_abo.status === 'aktiv' ? `aktiv seit ${fmtDate(new Date(p.gu_abo.aktiviert_am))}` : `beendet ${p.gu_abo.beendet_am ? fmtDate(new Date(p.gu_abo.beendet_am)) : ''}`}</span>{isInhaber && (p.gu_abo.status === 'aktiv' ? <Btn size="sm" variant="ghost" onClick={() => guAbo(p, false)}>Beenden</Btn> : <Btn size="sm" variant="ghost" onClick={() => guAbo(p, true)}>Aktivieren</Btn>)}</li>)}</ul>}
-          <div className="text-[12px] text-[#86868B]">{abos.zahlung}</div>
-        </div>
-      )}
+      <PreisListe />
+      <AbosKarte />
       <div className="text-[13px] text-[#6E6E73]"><a href="/datenschutz" target="_blank" rel="noreferrer" className="text-[#C41E3A] font-medium">Datenschutzerklärung</a> · <a href="/impressum" target="_blank" rel="noreferrer" className="text-[#C41E3A] font-medium">Impressum</a></div>
       {isInhaber && (
         <div className="pt-4 border-t border-black/[0.06]">

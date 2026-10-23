@@ -37,7 +37,7 @@ def test_01_definition_of_done_szenario(client):
 
     # 6: Firmensuche im Verzeichnis (nur sichtbare Firmen, nur freigegebene Felder)
     treffer = client.get("/api/verzeichnis/firmen?q=mustermann", headers=pl1_kopf).json()["firmen"]
-    assert [t["name"] for t in treffer] == ["Elektro Mustermann GmbH"] and treffer[0]["gewerke"] == ["Elektro"] and set(treffer[0]) == {"id", "name", "ort", "gewerke", "beschreibung", "art"}
+    assert [t["name"] for t in treffer] == ["Elektro Mustermann GmbH"] and treffer[0]["gewerke"] == ["Elektro"] and set(treffer[0]) == {"id", "name", "ort", "gewerke", "beschreibung", "art", "verifiziert"}
     assert client.get("/api/verzeichnis/firmen?q=goldbeck", headers=el).json()["firmen"] == []     # GOLDBECK ist nicht sichtbar geschaltet
 
     # 7: Projektleiter 2 (Vorarbeiter-Rolle, aber Projektleitung) lädt die Firma ein; doppelt geht nicht

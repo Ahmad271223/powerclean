@@ -65,6 +65,20 @@ bleiben erhalten), Firmenabo 4,99 € + 3,99 € je weiterem Nutzer, kostenlose 
 Offen (bewusst): kein Zahlungsdienst, keine automatischen Rechnungen oder Mahnungen, kein Enterprise-Vertrag im Code; die Monatsrechnung
 stellt der Anbieter von Hand aus `/api/admin/abos` (siehe `BETRIEB.md` 4c). Die Nutzeranzahl zählt aktive Konten am Abruftag, nicht tagesgenau.
 
+## 1d. Prüfung „Plattform-Kern“ (23.10.2026)
+
+| Befund (extern) | Geprüft | Ergebnis |
+|---|---|---|
+| `routes/mitarbeiter.py` löscht beim Deaktivieren laufende Stempelungen | bestätigt (`stempel.delete_many`) | behoben: `stempelungen_abschliessen` legt den Eintrag an (Vermerk „Konto deaktiviert …“, `beendet_durch`, Protokoll `stempel.stop` mit `grund`) |
+| `routes/auth_routes.py` löscht bei Kontolöschung laufende Stempelungen | bestätigt | behoben: gleiche Abschluss-Funktion; die Zeit bleibt beim Arbeitgeber |
+| Lizenzprüfung nur über den Firmenplan | bestätigt, bereits in Runde 1c getrennt (`firmenabo_noetig` vs. kostenlose Teilnahme) | Test `test_abo_20261023.py::test_02` |
+
+Neu umgesetzt und getestet (`tests/test_kern_20261023.py`, 7 Tests): GU-Abo mit Kündigung zum Monatsende und erneuter Aktivierung,
+E-Mail-Ausgang mit Nachweisen und Wiederholung, Nachträge mit Freigabe, Abnahmen mit Bestätigung, ZIP-Projektakte für beide Seiten
+(Inhalt geprüft), Startseiten-Aufgaben, Projektleiter-Übersicht, Verifizierung, Unterauftrag-Kette.
+
+Offen: echter SMTP-Versand auf dem Zielserver (Testmail), Projektakte bei sehr großen Projekten (Laufzeit, Speicher), Chat.
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.
@@ -89,6 +103,8 @@ Manuell auf dem Zielsystem (je Gerät, Datum und Ergebnis notieren):
 - Lasttest mit mehreren gleichzeitigen Nutzern auf der Zielumgebung.
 - Store-Builds auf echten Geräten (Android/iOS) – siehe `STORE.md`.
 - E-Rechnung gegen einen externen Validator (XSD-Prüfung läuft in den Tests; KoSIT-Validator/Portalannahme steht aus).
+- E-Mail-Versand: SMTP-Zugang eintragen und eine Einladung an eine echte Adresse prüfen (Protokoll → E-Mail-Nachweise zeigt den Status).
+- Projektakte eines großen Projekts (viele Fotos) einmal erzeugen und die Laufzeit messen.
 - Rechtliche Prüfung (AV-Vertrag, Aufbewahrung, Datenschutzerklärung) durch eine fachkundige Person.
 - Abrechnung in der Praxis: Monatslauf über `/api/admin/abos`, Rechnungstellung und Zahlungseingang sind Handarbeit, bis ein Zahlungsdienst angebunden ist.
 

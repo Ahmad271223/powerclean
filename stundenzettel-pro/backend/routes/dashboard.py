@@ -100,3 +100,79 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
                     "antraege_offen": antraege, "projekte_sichtbar": sichtbar,
                     "saldo_minuten": konto["saldo_minuten"] if konto else None, "resturlaub": urlaub["rest"], "urlaub": urlaub})
     return aus
+
+
+@router.get("/aufgaben")
+async def aufgaben(user: dict = Depends(aktueller_nutzer)):
+    """Offene Punkte für die Startseite – was jetzt eine Entscheidung oder Handlung braucht, je Rolle, mit Link und Dringlichkeit (1 = zuerst)."""
+    from datetime import datetime
+    from auth import jetzt_iso
+    from plattform import OFFEN, zuteilungs_filter
+    f = user["firma_id"]
+    heute_d = lokal_jetzt().date()
+    heute = heute_d.isoformat()
+    punkte: list[dict] = []
+
+    def punkt(art: str, text: str, anzahl: int, link: str, prio: int = 2) -> None:
+        if anzahl:
+            punkte.append({"art": art, "text": text, "anzahl": int(anzahl), "link": link, "prio": prio})
+
+    if hat_rolle(user, "buero"):
+        firma = await firma_laden(f)
+        art = firma.get("art") or "betrieb"
+        punkt("antraege", "Abwesenheitsanträge entscheiden", await db().absences.count_documents({"firma_id": f, "status": "beantragt"}), "/abwesenheiten", 2)
+        lange = 0
+        async for s in db().stempel.find({"firma_id": f}, {"_id": 0, "start_at": 1}):
+            try:
+                start = datetime.fromisoformat(s["start_at"])
+                jetzt_l = lokal_jetzt() if start.tzinfo else lokal_jetzt().replace(tzinfo=None)
+                if (jetzt_l - start).total_seconds() >= 10 * 3600:
+                    lange += 1
+            except (ValueError, TypeError):
+                continue
+        punkt("stempelungen", "Stempelungen über 10 Stunden beenden", lange, "/stempeluhr", 1)
+        punkt("pruefen", "Zeiteinträge mit Prüfhinweis klären", await db().entries.count_documents({"firma_id": f, "pruefen": True, "date": {"$gte": (heute_d - timedelta(days=60)).isoformat()}}), "/auswertung", 2)
+        if art != "auftraggeber":
+            vormonat = heute_d.replace(day=1) - timedelta(days=1)
+            zu = await db().abschluesse.find_one({"firma_id": f, "year": vormonat.year, "month": vormonat.month})
+            hat_zeiten = await db().entries.count_documents({"firma_id": f, "date": {"$gte": vormonat.replace(day=1).isoformat(), "$lte": vormonat.isoformat()}}) > 0
+            punkt("abschluss", f"Monatsabschluss {vormonat.month:02d}/{vormonat.year} fehlt", 1 if (hat_zeiten and not zu) else 0, "/exporte", 3)
+        # Partnerseite: Einladungen, Ausschreibungen, Aufträge, Nachträge, Abnahmen
+        punkt("projekt_einladungen", "Projekteinladungen beantworten", await db().beteiligungen.count_documents({"firma_id": f, "status": "eingeladen"}), "/zusammenarbeit", 1)
+        offen_einladungen = 0
+        async for e in db().ausschreibung_einladungen.find({"firma_id": f, "status": {"$in": ["eingeladen", "angesehen"]}}, {"_id": 0, "ausschreibung_id": 1}):
+            a = await db().ausschreibungen.find_one({"id": e["ausschreibung_id"]}, {"_id": 0, "status": 1, "angebotsfrist": 1})
+            if a and a.get("status") == "veroeffentlicht" and (a.get("angebotsfrist") or heute) >= heute:
+                offen_einladungen += 1
+        punkt("ausschreibung_einladungen", "Einladungen zu Ausschreibungen: Angebot abgeben", offen_einladungen, "/ausschreibungen", 2)
+        punkt("vergaben_annehmen", "Erhaltene Aufträge verbindlich annehmen", await db().vergaben.count_documents({"firma_id": f, "status": "mitgeteilt"}), "/ausschreibungen", 1)
+        punkt("nachtraege_angefragt", "Angefragte Nachträge bepreisen und einreichen", await db().nachtraege.count_documents({"firma_id": f, "status": "angefragt"}), "/zusammenarbeit", 2)
+        punkt("abnahmen_bestaetigen", "Abnahmeprotokolle bestätigen oder widersprechen", await db().abnahmen.count_documents({"firma_id": f, "status": "erstellt"}), "/zusammenarbeit", 1)
+        punkt("maengel_firma", "Überfällige Mängel beheben", await db().maengel.count_documents({"firma_id": f, "status": {"$nin": ["abgenommen"]}, "frist": {"$lt": heute}}), "/zusammenarbeit", 2)
+        # Eigentümerseite: Vergaben, Angebote, Rückfragen, Fristen, Nachträge, Abnahmen, Berichte
+        punkt("vergaben_freigeben", "Vergabevorschläge freigeben", await db().vergaben.count_documents({"owner_firma_id": f, "status": "vorgeschlagen"}), "/ausschreibungen", 1)
+        punkt("vergaben_mitteilen", "Freigegebene Vergaben den Firmen mitteilen", await db().vergaben.count_documents({"owner_firma_id": f, "status": "freigegeben"}), "/ausschreibungen", 2)
+        laufend = [a async for a in db().ausschreibungen.find({"firma_id": f, "status": {"$in": ["veroeffentlicht", "in_vergabe"]}}, {"_id": 0, "id": 1, "angebotsfrist": 1, "titel": 1})]
+        ids = [a["id"] for a in laufend]
+        if ids:
+            punkt("angebote_neu", "Eingereichte Angebote prüfen", await db().angebote.count_documents({"ausschreibung_id": {"$in": ids}, "status": {"$in": ["eingereicht", "ueberarbeitet"]}}), "/ausschreibungen", 2)
+            fragen = 0
+            async for fr in db().ausschreibung_fragen.find({"ausschreibung_id": {"$in": ids}}, {"_id": 0, "antwort": 1}):
+                if not fr.get("antwort"):
+                    fragen += 1
+            punkt("fragen_offen", "Rückfragen von Bietern beantworten", fragen, "/ausschreibungen", 2)
+            bald = (heute_d + timedelta(days=3)).isoformat()
+            punkt("fristen", "Angebotsfristen enden in den nächsten 3 Tagen", sum(1 for a in laufend if a.get("angebotsfrist") and heute <= a["angebotsfrist"] <= bald), "/ausschreibungen", 3)
+        punkt("nachtraege_eingereicht", "Nachträge freigeben oder ablehnen", await db().nachtraege.count_documents({"owner_firma_id": f, "status": "eingereicht"}), "/projekte", 1)
+        punkt("abnahmen_angefordert", "Angeforderte Abnahmen durchführen", await db().abnahmen.count_documents({"owner_firma_id": f, "status": "angefordert"}), "/projekte", 2)
+        punkt("abnahmen_widersprochen", "Widersprochene Abnahmen klären", await db().abnahmen.count_documents({"owner_firma_id": f, "status": "widersprochen"}), "/projekte", 1)
+        eigene_ids = [p["id"] async for p in db().projects.find({"firma_id": f, "archived": False, "verknuepft": None}, {"_id": 0, "id": 1})]
+        if eigene_ids:
+            punkt("berichte_freigeben", "Bautagesberichte freigeben", await db().tagesberichte.count_documents({"project_id": {"$in": eigene_ids}, "status": "eingereicht"}), "/projekte", 3)
+            punkt("maengel_ueberfaellig", "Überfällige Mängel in eigenen Projekten", await db().maengel.count_documents({"project_id": {"$in": eigene_ids}, "status": {"$nin": ["abgenommen"]}, "frist": {"$lt": heute}}), "/projekte", 2)
+    else:
+        punkt("aufgaben_heute", "Aufgaben für heute", await db().aufgaben.count_documents({"firma_id": f, "datum": heute, "status": {"$in": list(OFFEN)}, "$or": zuteilungs_filter(user["id"])}), "/aufgaben", 1)
+        punkt("antraege_eigene", "Offene Abwesenheitsanträge", await db().absences.count_documents({"firma_id": f, "user_id": user["id"], "status": "beantragt"}), "/abwesenheiten", 3)
+        punkt("pruefen_eigene", "Zeiteinträge mit Prüfhinweis", await db().entries.count_documents({"firma_id": f, "user_id": user["id"], "pruefen": True}), "/meine-zeiten", 2)
+    punkte.sort(key=lambda x: (x["prio"], x["text"]))
+    return {"punkte": punkte, "stand": jetzt_iso()}

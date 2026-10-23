@@ -8,12 +8,13 @@ import { useAuth } from '../lib/auth';
 import { MONTHS_DE, toKey, monthLastDay, MIN_YEAR, MAX_YEAR, fmtDecimalHours } from '../lib/dates';
 import { milogPdf } from '../lib/pdf';
 import { deliverPdf } from '../lib/utils';
+import { ProjektarchiveKarte } from '../components/ProjektakteKarte';
 
 const YEARS = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
 const fmtZeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export default function ExportePage() {
-  const { isInhaber } = useAuth();
+  const { isInhaber, firma } = useAuth();
   const heute = new Date();
   const [jahr, setJahr] = useState(heute.getFullYear());
   const [monat, setMonat] = useState(heute.getMonth());
@@ -51,7 +52,7 @@ export default function ExportePage() {
   };
 
   return (
-    <Layout title="Exporte & Abschluss" subtitle="Für Lohnbüro, Steuerberater und Prüfungen. Alle Dateien öffnen sich in Excel (Semikolon-getrennt).">
+    <Layout title={firma?.art === 'auftraggeber' ? 'Archiv & Berichte' : 'Exporte & Abschluss'} subtitle="Für Lohnbüro, Steuerberater, Auftraggeber und Prüfungen. Projektarchive als ZIP, Tabellen öffnen sich in Excel (Semikolon-getrennt).">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card className="p-5 space-y-4">
           <h2 className="text-[17px] flex items-center gap-2"><Table2 size={18} /> Lohn &amp; Monat</h2>
@@ -117,6 +118,7 @@ export default function ExportePage() {
           <Btn variant="ghost" size="sm" onClick={() => holen('prot', '/api/exporte/protokoll.csv')} loading={busy === 'prot'}><FileDown size={15} /> Sicherheitsprotokoll (CSV)</Btn>
         </Card>
 
+        <ProjektarchiveKarte className="lg:col-span-2" />
         {isInhaber && (
           <Card className="p-5 space-y-4">
             <h2 className="text-[17px] flex items-center gap-2"><Smartphone size={18} /> Sicherung &amp; Rückweg</h2>

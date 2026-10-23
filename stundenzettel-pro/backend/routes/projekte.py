@@ -87,6 +87,9 @@ async def lesen(project_id: str, user: dict = Depends(aktueller_nutzer)):
     kunde = await kunde_laden(user["firma_id"], p.get("customer_id"))
     namen = await nutzernamen(user["firma_id"])
     p["employees"] = [{"id": i, "name": namen.get(i, "")} for i in p.get("employee_ids") or [] if i in namen]
+    if p.get("gu_abo"):
+        from abo import abgelaufen
+        p["gu_abo"] = abgelaufen(p["gu_abo"])   # gekündigt und Periodenende vorbei → beendet
     return {"projekt": projekt_fuer_nutzer(user, p), "kunde": kunde if hat_rolle(user, "buero") else None}
 
 
@@ -130,14 +133,14 @@ async def loeschen(project_id: str, erzwingen: bool = False, user: dict = Depend
 @router.post("/api/projekte/{project_id}/gu-abo")
 async def gu_abo(project_id: str, body: GuAboIn, user: dict = Depends(schreibend("inhaber"))):
     """GU-Projektabo von Hand aktivieren oder beenden (nur Inhaber einer Auftraggeber-Firma)."""
-    from abo import gu_abo_aktivieren, gu_abo_beenden, ist_auftraggeber
+    from abo import gu_abo_aktivieren, gu_abo_kuendigen, ist_auftraggeber
     p = await projekt_laden(user, project_id)
     if not ist_auftraggeber(user["_firma"]):
         raise HTTPException(403, "GU-Projekte gibt es nur für Auftraggeber-Konten (Firma → Firmendaten → Firmenart).")
     if body.aktiv:
         abo = await gu_abo_aktivieren(user, p, "von Hand aktiviert")
     else:
-        abo = await gu_abo_beenden(user, p)
+        abo = await gu_abo_kuendigen(user, p)
     return {"gu_abo": abo}
 
 

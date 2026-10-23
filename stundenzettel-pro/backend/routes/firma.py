@@ -7,10 +7,12 @@ from auth import hat_rolle, aktueller_nutzer, api_token_neu, betreiber_pruefen, 
 from datetime import timedelta
 
 from auth import API_RECHTE, jetzt
+from typing import Optional
+
 import config
 from db import db
 from gemeinsam import firma_oeffentlich, neue_id
-from models import ApiTokenIn, FirmaIn, FirmaLoeschenIn, PlanIn, WebhookIn
+from models import ApiTokenIn, FirmaIn, FirmaLoeschenIn, PlanIn, VerifizierungIn, WebhookIn
 from protokoll import protokollieren
 
 router = APIRouter(tags=["Firma"])
@@ -213,3 +215,45 @@ async def firmen_liste():
         f["status"] = plan_status(f)
         aus.append(f)
     return {"firmen": aus}
+
+
+# ---------------------------------------------------------------- E-Mail-Nachweise, Projektleiter, Verifizierung
+@router.get("/api/firma/emails")
+async def emails_lesen(project_id: Optional[str] = None, user: dict = Depends(rolle_noetig("buero"))):
+    """E-Mail-Nachweise der Firma (gesendet, wartend, fehlgeschlagen oder – ohne SMTP – nur gespeichert)."""
+    import mail
+    return {"emails": await mail.nachweise(user["firma_id"], project_id), "eingerichtet": mail.eingerichtet(), "status": mail.STATUS_NAMEN, "arten": mail.ARTEN}
+
+
+@router.get("/api/firma/projektleiter")
+async def projektleiter(user: dict = Depends(rolle_noetig("buero"))):
+    """Projektleiter & Rechte: Büro-/Inhaber-Konten mit den Projekten, die sie leiten (Zuordnung über /api/projekte/{id}/leiter)."""
+    nutzer = [u async for u in db().users.find({"firma_id": user["firma_id"], "active": True, "role": {"$in": ["buero", "inhaber"]}}, {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}).sort("name", 1)]
+    projekte = [p async for p in db().projects.find({"firma_id": user["firma_id"], "archived": False}, {"_id": 0, "id": 1, "name": 1, "leiter_ids": 1, "verknuepft": 1, "gu_abo": 1}).sort("name", 1)]
+    funktionen = {}
+    async for l in db().projekt_leiter.find({"project_id": {"$in": [p["id"] for p in projekte]}}, {"_id": 0}):
+        funktionen[(l["project_id"], l["user_id"])] = l.get("funktion") or ""
+    for u in nutzer:
+        u["rolle_name"] = {"inhaber": "Inhaber", "buero": "Büro / Projektleitung"}.get(u.get("role"), u.get("role"))
+        u["projekte"] = [{"id": p["id"], "name": p["name"], "funktion": funktionen.get((p["id"], u["id"]), "")} for p in projekte if u["id"] in (p.get("leiter_ids") or [])]
+    return {"nutzer": nutzer, "projekte": [{"id": p["id"], "name": p["name"], "leiter_ids": p.get("leiter_ids") or [], "verknuepft": bool(p.get("verknuepft")),
+                                           "gu_abo": (p.get("gu_abo") or {}).get("status")} for p in projekte],
+            "hinweis": "Ein Projekt mit eingetragenen Projektleitern sehen nur diese Leiter und zugewiesene Mitarbeiter; Büro-Konten ohne Eintrag sehen es nicht."}
+
+
+@router.post("/api/admin/verifizieren", dependencies=[Depends(betreiber_pruefen)])
+async def verifizieren(body: VerifizierungIn):
+    """Betreiber bestätigt eine Firma (Handelsregister, Gewerbeanmeldung, Ansprechpartner geprüft) – sichtbar im Verzeichnis und bei Ausschreibungen."""
+    firma = None
+    if body.firma_id:
+        firma = await db().firmen.find_one({"id": body.firma_id}, {"_id": 0})
+    elif body.email:
+        u = await db().users.find_one({"email": body.email.lower()}, {"_id": 0, "firma_id": 1})
+        if u:
+            firma = await db().firmen.find_one({"id": u["firma_id"]}, {"_id": 0})
+    if not firma:
+        raise HTTPException(404, "Firma nicht gefunden.")
+    v = {"status": bool(body.verifiziert), "am": jetzt_iso(), "hinweis": (body.hinweis or "")[:300]}
+    await db().firmen.update_one({"id": firma["id"]}, {"$set": {"verifiziert": v}})
+    await protokollieren(None, "firma.verifiziert" if body.verifiziert else "firma.verifizierung_entzogen", firma.get("name", ""), details=v, firma_id=firma["id"])
+    return {"ok": True, "firma_id": firma["id"], "verifiziert": v}

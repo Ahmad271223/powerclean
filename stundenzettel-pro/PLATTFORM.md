@@ -47,6 +47,53 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
 - Preise an einer Stelle (`preise.py`, `GET /api/preise`), Abrechnungsgrundlage `GET /api/admin/abos` (Betreiber), Lizenzseite zeigt
   Firmenabo, aktive GU-Projekte und Monatssumme. Offen: Zahlungsdienst, automatische Verlängerung/Mahnung, Enterprise-Vertrag.
 
+## 1d. Bauabwicklung, Projektakte, E-Mail-Nachweise, Rechte (23.10.2026)
+
+- **Nachträge** (`routes/abwicklung.py`, Sammlung `nachtraege`, Scope `nachtrag` für Dateien): die beauftragte Firma legt einen Entwurf an
+  (oder der Auftraggeber fragt an → `angefragt`), reicht mit Preis ein (`eingereicht`), die Projektleitung des Auftraggebers gibt frei oder
+  lehnt mit Begründung ab. Erst die Freigabe setzt `auftragswert_vorher/nachher` am Nachtrag und `auftragswert_aktuell`/`nachtraege_summe`
+  an der Beteiligung; der ursprüngliche Auftrag (Vergabe `summe_netto`) bleibt unverändert. PDF `GET /api/nachtraege/{id}/pdf` für beide Seiten.
+- **Abnahmen** (`abnahmen`, Scope `abnahme`): Firma fordert an (`angefordert`) oder die Projektleitung legt einen Entwurf an; Ergebnis
+  (abgenommen, unter Vorbehalt mit Mängeln, verweigert), Teilnehmer, Vorbehalte, Nachbesserungsfrist, Mängel-Snapshot aus `maengel`;
+  `abschliessen` → `erstellt` (unveränderlich); die Firma bestätigt oder widerspricht (`antwort`). PDF `GET /api/abnahmen/{id}/pdf`.
+- **Projektakte (ZIP)** (`projektakte.py`, `routes/archiv.py`, Sammlung `projektakten`, Dateien unter `DATA_DIR/projektakten/<firma>/`):
+  `POST /api/projekte/{id}/projektakte` für jede Firma im Firmenabo (GU-Projekte des Auftraggebers auch ohne Firmenabo, 402 sonst).
+  Inhalt siehe `00_LIESMICH.txt` in der ZIP; eigene Daten immer, Plattformdaten je nach Rolle (Eigentümer: alle sichtbaren Unterlagen der
+  Firmen; beteiligte Firma: nur eigene und für alle freigegebene). Liste `GET /api/projektakten`, Download `GET /api/projektakten/{id}.zip`,
+  Löschen nur Inhaber (vor Ablauf der Aufbewahrung `AUFBEWAHRUNG_JAHRE`, Standard 10, nur mit `erzwingen=true`). Erzeugung läuft synchron;
+  für sehr große Projekte ist ein Hintergrundjob vorgesehen (offen).
+- **E-Mail-Ausgang mit Nachweis** (`mail.py`, Sammlung `email_ausgang`): jede E-Mail wird gespeichert (Empfänger, Betreff, Text, Anlass,
+  Projekt, Absender- und Empfängerfirma) und über SMTP zugestellt (Wiederholungen 1/5/15/60/240 min, Hintergrunddienst). Ohne SMTP bleibt
+  der Nachweis mit Status `nicht_konfiguriert`. Anlässe: Mitarbeiter-/Projekt-/Ausschreibungseinladung, Einreichungsnachweis und Eingang
+  eines Angebots, Zuschlag, Absage, Auftragsannahme, Nachtrag, Abnahme – nie jede Statusänderung. Abschaltbar je Firma
+  (`firmen.email_benachrichtigungen`) und je Nutzer (`users.email_benachrichtigungen`). Liste `GET /api/firma/emails`.
+- **Startseiten-Aufgaben** `GET /api/dashboard/aufgaben`: offene Punkte je Rolle (Vergaben freigeben, Angebote prüfen, Rückfragen,
+  Fristen, Nachträge, Abnahmen, Berichte, Mängel, Anträge, Stempelungen, Abschluss; Mitarbeiter: Aufgaben heute, Anträge, Prüfhinweise).
+- **Projektleiter & Rechte** `GET /api/firma/projektleiter` (Zuordnung weiter über `/api/projekte/{id}/leiter`). Rechtematrix:
+
+| Daten | sehen | nie |
+|---|---|---|
+| Angebote/Preise der Bieter | Projektleitung des Bauprojekts | andere Bieter, Mitarbeiter |
+| Zielpreis, Budget, interne Notizen | Projektleitung der eigenen Firma | beteiligte Firmen |
+| Stundenlöhne, Personal-/Lohndaten, Rechnungen | Büro/Inhaber der jeweiligen Firma | Auftraggeber, Partnerfirmen |
+| Aufgaben, Lieferungen, Mängel, Berichte, Nachträge, Abnahmen | Projektleitung alles; beteiligte Firma nur eigene | Mitarbeiter nur zugeteilte Aufgaben |
+| Namen fremder Mitarbeiter | nur nach Freigabe der Partnerfirma | sonst nur Anzahlen |
+
+- **Firmenverifizierung** `POST /api/admin/verifizieren` (Betreiber, `firmen.verifiziert = {status, am, hinweis}`), sichtbar im
+  Verzeichnis, in `firma_kurz` (Auftraggeber-Info der Ausschreibungen) und bei der Firma („Geprüfte Firma“). Prüfung von Hand
+  (Handelsregister/Gewerbeanmeldung, Ansprechpartner) – kein automatischer Abgleich.
+- **Unteraufträge**: eine beauftragte Firma lädt zu ihrem verknüpften Projekt eigene Subfirmen ein (Kette über `verknuepft`); der
+  Auftraggeber sieht davon nichts, Betriebe zahlen dafür keine Projektgebühr (Test `test_kern_20261023.py::test_07`).
+- **Datenhoheit nach Projektende**: jede Firma behält ihre eigenen Daten (Zeiten, Fotos, Rechnungen, Angebote) im eigenen Mandanten; der
+  Auftraggeber behält die Plattformdaten seines Projekts (Aufgaben, Mängel, Berichte, Nachträge, Abnahmen, freigegebene Nachweise); jede
+  Seite kann jederzeit ihre Projektakte ziehen. Eine beendete Beteiligung entfernt keine Daten (`verknuepft.status = entfernt`).
+- **Fair Use / Großprojektlimits**: 5 GB je Firma (`plan.speicher_gb`), 25 MB je Datei, 120 Uploads je 10 Minuten und Nutzer,
+  sechs Fotos je Bautagesbericht-PDF; ein GU-Projekt ist über die Kontingente der beteiligten Firmen begrenzt.
+- **Zahlungsfehler, Streitfälle**: ohne Zahlungsdienst setzt der Betreiber nach einer Mahnung `plan.hinweis` (sichtbar auf der Lizenzseite)
+  und danach `status: gesperrt` (Lesen bleibt). Streit über Zuschlag, Nachtrag oder Abnahme wird aus `verlauf[]`, Protokoll und
+  E-Mail-Nachweisen belegt; alle Entscheidungen tragen Name und Zeitstempel.
+- Offen: Chat/Nachrichten-Threads, Zahlungsdienst, Hintergrundjob für große Projektakten, Zwei-Faktor-Anmeldung, automatische Verifizierung.
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

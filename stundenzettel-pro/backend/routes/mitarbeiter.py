@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse, Response
 
 import config
+import mail
 from auth import aktueller_nutzer, firmenabo_noetig, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig, schreibend
 from dateien import KATEGORIEN_PERSONAL, KATEGORIEN_PROJEKT, bild_verkleinern, datei_loeschen, datei_speichern
 from db import db
@@ -62,6 +63,10 @@ async def einladen(body: MitarbeiterIn, user: dict = Depends(firmenabo_noetig("b
            "weekly_hours": 0, "vacation_days": 0, "created_at": jetzt_iso(), "invited_by": user["id"]}
     await db().users.insert_one(dict(neu))
     await protokollieren(user, "mitarbeiter.eingeladen", neu["name"], details={"email": email, "rolle": body.role})
+    firmenname = user["_firma"].get("name") or ""
+    await mail.senden(user["firma_id"], email, f"Einladung zu Stundenzettel Pro – {firmenname}",
+                      f"Hallo {neu['name']},\n\n{user.get('name')} ({firmenname}) lädt dich zu Stundenzettel Pro ein. Bitte den Link öffnen und ein Passwort wählen (14 Tage gültig):\n{_link(token)}",
+                      "mitarbeiter_einladung", neu["id"])
     return {"mitarbeiter": nutzer_oeffentlich(neu), "einladung_link": _link(token)}
 
 
@@ -104,7 +109,9 @@ async def aendern(user_id: str, body: MitarbeiterUpdateIn, user: dict = Depends(
     aenderung["updated_at"] = jetzt_iso()
     await db().users.update_one({"id": user_id}, {"$set": aenderung})
     if aenderung.get("active") is False:
-        await db().stempel.delete_many({"firma_id": user["firma_id"], "user_id": user_id})
+        # Laufende Stempelung nicht verwerfen: Eintrag anlegen, Vermerk im Eintrag und Protokoll
+        from routes.zeiten_routes import stempelungen_abschliessen
+        await stempelungen_abschliessen(user["_firma"], user_id, user, "Konto deaktiviert – laufende Stempelung automatisch beendet")
     await protokollieren(user, "mitarbeiter.geaendert", u.get("name", ""), details=aenderung)
     return {"mitarbeiter": nutzer_oeffentlich(await _laden(user, user_id))}
 
@@ -191,6 +198,11 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
         # Ausschreibungsunterlagen, Angebotsanhänge, Vergabedokumente: Rechte über den Eintrag (Bieter sehen nie fremde Angebote)
         from ausschreibung import dokument_zugang as ausschreibung_dokument_zugang
         await ausschreibung_dokument_zugang(user, d["scope"], d["ref_id"])
+        return d
+    if d["scope"] in ("nachtrag", "abnahme"):
+        # Nachträge und Abnahmen: Rechte über den Eintrag (Auftraggeber-Leitung oder beauftragte Firma)
+        from routes.abwicklung import dokument_zugang as abwicklung_dokument_zugang
+        await abwicklung_dokument_zugang(user, d["scope"], d["ref_id"])
         return d
     if d["scope"] in ("aufgabe", "lieferung", "mangel", "tagesbericht", "plattform"):
         # Plattform-Dateien: Rechte kommen aus dem Eintrag/Projekt, nicht aus der firma_id der Datei

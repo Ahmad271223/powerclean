@@ -120,4 +120,10 @@ if r.status_code == 200:
     fr = ok(c.post("/api/ausschreibungen/" + a["id"] + "/fragen", json={"text": "Sind Notlichtleuchten im Leuchtenplan enthalten?", "position_nr": "001"}, headers=HE))["frage"]
     ok(c.post("/api/fragen/" + fr["id"] + "/antwort", json={"antwort": "Ja, sechs Notlichtleuchten sind in Position 001 enthalten.", "oeffentlich": True}, headers=H))
     ok(c.post("/api/projekte/" + p1["id"] + "/ausschreibungen", json={"titel": "Glasreinigung Fassade", "gewerk": "Reinigung", "beschreibung": "Quartalsweise Glasreinigung der Fassade", "sichtbarkeit": "oeffentlich", "angebotsfrist": frist}, headers=H))
+    # Bauabwicklung: eingereichter Nachtrag der Elektrofirma, angeforderte Abnahme; Verifizierung durch den Betreiber (Entwicklungs-Token)
+    n = ok(c.post("/api/projekte/" + p1["id"] + "/nachtraege", json={"titel": "Zusätzliche Datenleitungen Beratung 2. OG", "beschreibung": "6 weitere Doppeldosen Cat.7 inkl. Patchung",
+                                                                       "grund": "Nachträglicher Wunsch der Sparkasse", "betrag_netto": 2480}, headers=HE))["nachtrag"]
+    ok(c.post("/api/nachtraege/" + n["id"] + "/einreichen", headers=HE))
+    ok(c.post("/api/projekte/" + p1["id"] + "/abnahmen", json={"art": "teilabnahme", "gewerk": "Elektro", "datum": meilenstein, "bemerkung": "Foyer ist fertig, bitte Teilabnahme"}, headers=HE))
+    c.post("/api/admin/verifizieren", json={"email": "chef@elektro-mustermann.de", "verifiziert": True, "hinweis": "Handelsregister geprüft (Demo)"}, headers={"X-Admin-Token": "dev-betreiber"})
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

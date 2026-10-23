@@ -210,6 +210,22 @@ Lohnvorbereitung (`test_erechnung_lohn_20261023.py`), Fotos (`test_fotos_2026102
 Baustellenalltag (`test_baustelle_20261023.py`), Ausschreibungen/Vergabe (`test_ausschreibung_20261023.py`, Beispielablauf GOLDBECK),
 Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berechtigungs-Negativtests (`test_rechte_20261023.py`).
 
+## Bauabwicklung, Projektakte und Mitteilungen (23.10.2026)
+
+- **Nachträge und Abnahmen** im Projekt unter „Nachträge & Abnahmen“: die beauftragte Firma reicht zusätzliche Leistungen mit Preis ein, die
+  Projektleitung des Auftraggebers gibt frei oder lehnt begründet ab (Auftragswert ändert sich erst mit der Freigabe); Abnahmeprotokolle
+  mit Ergebnis, Vorbehalten und offenen Mängeln, von der Firma bestätigt oder widersprochen. Beides als PDF.
+- **Vollständige Projektakte (ZIP)** für jede Firma: Projekt → Akte → „Projektakte erstellen“; alle Archive unter Exporte → Projektarchive
+  (Aufbewahrung 10 Jahre). Zeiten mit Stundennachweisen, Fotos nach Mitarbeiter und Tag, Dokumente, Rechnungen, Unterschriften, Angebote
+  und Aufträge, Nachträge, Abnahmen, Bautagesberichte, Protokoll und E-Mail-Nachweise.
+- **E-Mails mit Nachweis**: Einladungen, Einreichungsnachweise, Zuschlag/Absage, Nachträge, Abnahmen (SMTP in der `.env`, siehe BETRIEB.md);
+  jede E-Mail steht unter Protokoll → E-Mail-Nachweise.
+- **Drei Oberflächen, eine Plattform**: Handwerksbetrieb (Übersicht, Projekte, Stempeluhr, Rechnungen + Mehr), Auftraggeber (Startseite,
+  Bauprojekte, Ausschreibungen, Mitteilungen, Aufgaben & Abnahmen, Projektleiter & Rechte, Projektabos, Archiv & Berichte) und Mitarbeiter
+  (Stempeluhr mit „Mein Tag“, Meine Zeiten, Aufgaben, Mitteilungen). Startseiten zeigen zuerst, was zu entscheiden ist.
+- **GU-Projektabo**: Kündigung zum Monatsende, bis dahin voll nutzbar; danach Lesen, Export und Projektakte. Geprüfte Firmen tragen
+  ein Kennzeichen (Betreiber-Verifizierung).
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).

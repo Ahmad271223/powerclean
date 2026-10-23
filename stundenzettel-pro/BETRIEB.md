@@ -63,6 +63,25 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
 - Nach der Testphase fällt eine Firma automatisch auf die kostenlose Projektteilnahme zurück (`TEILNAHME_KOSTENLOS=0` stellt die frühere
   Vollsperre wieder her).
 
+## 4d. E-Mail-Versand (SMTP)
+
+- In der `.env`: `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USER`, `SMTP_PASSWORT`, `SMTP_ABSENDER` (z. B. noreply@…), `SMTP_ABSENDER_NAME`,
+  `SMTP_TLS` (starttls | ssl | none). Ohne `SMTP_HOST`/`SMTP_ABSENDER` werden E-Mails nur gespeichert (Status `nicht_konfiguriert`);
+  der Server meldet das beim Start als Warnung.
+- Zustellung mit Wiederholungen (1, 5, 15, 60, 240 Minuten) über den Hintergrunddienst; Stand je Firma unter Protokoll → E-Mail-Nachweise
+  oder `GET /api/firma/emails`. Endgültig fehlgeschlagene E-Mails (`fehlgeschlagen`) in der Datenbank `email_ausgang` prüfen (SPF/DKIM der
+  Absenderdomain einrichten, sonst landen Einladungen im Spam).
+- Keine Massenmails: nur Einladungen, Einreichungsnachweise, Zuschlag/Absage, Auftragsannahme, Nachträge, Abnahmen.
+
+## 4e. Firmen prüfen, Projektarchive, Mahnlauf
+
+- Verifizierung: `POST /api/admin/verifizieren` mit `X-Admin-Token` und `{"email": "<Inhaber>", "verifiziert": true, "hinweis": "HRB … geprüft"}`
+  (oder `firma_id`). Vorher Handelsregister/Gewerbeanmeldung und Ansprechpartner prüfen; `verifiziert: false` entzieht das Kennzeichen.
+- Projektarchive liegen unter `DATA_DIR/projektakten/<firma_id>/` und gehören in die Sicherung (`backup.sh` sichert `DATA_DIR`).
+  Aufbewahrung `AUFBEWAHRUNG_JAHRE` (Standard 10); Löschen vor Ablauf nur durch den Inhaber mit `erzwingen=true` (Protokoll).
+- Mahnlauf ohne Zahlungsdienst: 1. Rechnung aus `/api/admin/abos`; 2. nach 14 Tagen `POST /api/admin/plan` mit `hinweis` („Rechnung … offen“);
+  3. nach 30 Tagen `status: gesperrt` (Lesen und Export bleiben); nach Zahlung wieder `status: aktiv`.
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

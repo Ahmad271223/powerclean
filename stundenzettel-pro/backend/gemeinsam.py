@@ -48,7 +48,7 @@ PROJEKT_FELDER_VERTRAULICH = {"hourly_rate", "kostenlos", "budget_hours_month", 
 # Mitarbeiter sehen keine Bank-/Steuerdaten; Logo und Stempel brauchen sie für den Stundenzettel beim Kunden
 FIRMA_FELDER_MITARBEITER = {"id", "name", "owner", "street", "zip_code", "city", "phone", "email", "website", "logo",
                             "logo_w", "logo_h", "stamp", "stamp_w", "stamp_h", "stamp_on_sheet", "stamp_scale", "created_at",
-                            "bundesland", "auto_pause", "arbzg_pruefung", "sperre_tage_mitarbeiter", "workdays", "art"}
+                            "bundesland", "auto_pause", "arbzg_pruefung", "sperre_tage_mitarbeiter", "workdays", "art", "verifiziert"}
 
 
 def neue_id() -> str:

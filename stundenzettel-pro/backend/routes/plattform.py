@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
 import config
+import mail
 from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt, jetzt_iso, rolle_noetig, schreibend
 from dateien import datei_speichern
 from db import db
@@ -54,13 +55,13 @@ async def firmen_suchen(q: str = Query("", max_length=80), user: dict = Depends(
     """Suche im gemeinsamen Firmenverzeichnis: nur Firmen, die sich sichtbar geschaltet haben, nur freigegebene Felder."""
     begriff = q.strip().lower()
     aus = []
-    async for f in db().firmen.find({"verzeichnis.sichtbar": True, "id": {"$ne": user["firma_id"]}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "verzeichnis": 1, "art": 1}):
+    async for f in db().firmen.find({"verzeichnis.sichtbar": True, "id": {"$ne": user["firma_id"]}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "verzeichnis": 1, "art": 1, "verifiziert": 1}):
         v = f.get("verzeichnis") or {}
         text = " ".join([f.get("name") or "", f.get("city") or "", v.get("ort") or "", " ".join(v.get("gewerke") or []), v.get("beschreibung") or ""]).lower()
         if begriff and begriff not in text and begriff != f["id"]:
             continue
         aus.append({"id": f["id"], "name": f.get("name"), "ort": v.get("ort") or f.get("city") or "", "gewerke": v.get("gewerke") or [],
-                    "beschreibung": (v.get("beschreibung") or "")[:200], "art": f.get("art") or "betrieb"})
+                    "beschreibung": (v.get("beschreibung") or "")[:200], "art": f.get("art") or "betrieb", "verifiziert": bool((f.get("verifiziert") or {}).get("status"))})
         if len(aus) >= 20:
             break
     aus.sort(key=lambda x: (x["name"] or "").lower())
@@ -161,6 +162,11 @@ async def firma_einladen(project_id: str, body: EinladungFirmaIn, user: dict = D
     await protokollieren(user, "projekt.firma_eingeladen", p["name"], details={"firma": firma_name, "gewerk": b["gewerk"], "per_email": bool(email and not firma_id)})
     aus = await _beteiligung_anreichern(b)
     aus["einladung_link"] = _link(f"/projekteinladung/{token}")
+    text = f"{eigentuemer['name']} lädt euch zum Projekt „{p['name']}“ ein ({b['gewerk'] or b['rolle']}).{(' Nachricht: ' + b['nachricht']) if b.get('nachricht') else ''}"
+    if firma_id:
+        await mail.firma_informieren(firma_id, f"Einladung zum Projekt {p['name']}", text + f"\n\nEinladung annehmen oder ablehnen: {mail.link('/zusammenarbeit')}", "projekt_einladung", b["id"], project_id, absender_firma_id=user["firma_id"])
+    elif email:
+        await mail.senden(user["firma_id"], email, f"Einladung zum Projekt {p['name']}", text + f"\n\nEinladung öffnen (30 Tage gültig): {aus['einladung_link']}", "projekt_einladung", b["id"], project_id)
     return {"beteiligung": aus}
 
 

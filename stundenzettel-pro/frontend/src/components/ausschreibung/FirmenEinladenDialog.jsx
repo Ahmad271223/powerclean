@@ -39,7 +39,7 @@ export default function FirmenEinladenDialog({ open, onOpenChange, ausschreibung
             return (
               <label key={f.id} className={`flex items-center gap-3 py-2.5 ${schon ? 'opacity-50' : 'cursor-pointer'}`}>
                 <input type="checkbox" className="w-4 h-4 accent-[#C41E3A]" checked={schon || auswahl.includes(f.id)} disabled={schon} onChange={() => toggle(f.id)} />
-                <span className="flex-1 min-w-0"><span className="block text-[14px] font-medium truncate">{f.name}</span><span className="block text-[12px] text-[#6E6E73] truncate">{[f.art === 'auftraggeber' ? 'Auftraggeber (vergibt selbst Aufträge)' : null, f.ort || f.city, (f.gewerke || []).join(', '), f.beschreibung].filter(Boolean).join(' · ')}</span></span>
+                <span className="flex-1 min-w-0"><span className="block text-[14px] font-medium truncate">{f.name}{f.verifiziert && <span className="ml-1 text-[11px] font-medium text-[#1B7F3B] bg-[#E8F8EC] rounded-full px-2 py-0.5">Geprüft</span>}</span><span className="block text-[12px] text-[#6E6E73] truncate">{[f.art === 'auftraggeber' ? 'Auftraggeber (vergibt selbst Aufträge)' : null, f.ort || f.city, (f.gewerke || []).join(', '), f.beschreibung].filter(Boolean).join(' · ')}</span></span>
                 {schon && <Chip className="text-[11px]">eingeladen</Chip>}
               </label>
             );

@@ -29,6 +29,7 @@ from plattform import GEWERKE, benachrichtigen, firma_kurz, zugang
 from plattform import leitung_noetig as projekt_leitung_noetig
 from protokoll import protokollieren
 import config
+import mail
 
 router = APIRouter(tags=["Ausschreibungen"])
 
@@ -408,6 +409,8 @@ async def veroeffentlichen(ausschreibung_id: str, user: dict = Depends(schreiben
     async for e in db().ausschreibung_einladungen.find({"ausschreibung_id": ausschreibung_id}, {"_id": 0, "firma_id": 1}):
         eingeladen.add(e["firma_id"])
         await benachrichtigen(e["firma_id"], "ausschreibung_einladung", f"{ag['name']} lädt euch zur Ausschreibung „{a['titel']}“ ein (Angebotsfrist {a['angebotsfrist']}).", _link(ausschreibung_id))
+        await mail.firma_informieren(e["firma_id"], f"Einladung zur Ausschreibung: {a['titel']}", f"{ag['name']} lädt euch zur Ausschreibung „{a['titel']}“ ein (Angebotsfrist {a['angebotsfrist']}).\n\nZur Ausschreibung: {mail.link(_link(ausschreibung_id))}",
+                                     "ausschreibung_einladung", ausschreibung_id, a["project_id"], absender_firma_id=user["firma_id"])
     if a.get("sichtbarkeit") in ("oeffentlich", "kombiniert"):
         p = await db().projects.find_one({"id": a["project_id"]}, {"_id": 0, "address": 1})
         for fid in await interessierte_firmen({**a, "_projekt_adresse": (p or {}).get("address") or ""}):
@@ -461,6 +464,8 @@ async def firmen_einladen(ausschreibung_id: str, body: AusschreibungEinladungIn,
         neu.append(e)
         if a.get("status") in ("veroeffentlicht", "in_vergabe"):
             await benachrichtigen(fid, "ausschreibung_einladung", f"{ag['name']} lädt euch zur Ausschreibung „{a['titel']}“ ein (Angebotsfrist {a.get('angebotsfrist')}).", _link(ausschreibung_id))
+            await mail.firma_informieren(fid, f"Einladung zur Ausschreibung: {a['titel']}", f"{ag['name']} lädt euch zur Ausschreibung „{a['titel']}“ ein (Angebotsfrist {a.get('angebotsfrist')}).{(' Nachricht: ' + e['nachricht']) if e.get('nachricht') else ''}\n\nZur Ausschreibung: {mail.link(_link(ausschreibung_id))}",
+                                         "ausschreibung_einladung", ausschreibung_id, a["project_id"], absender_firma_id=user["firma_id"])
     if neu:
         await db().ausschreibungen.update_one({"id": ausschreibung_id}, {"$push": {"verlauf": schritt(user, "eingeladen", ", ".join(e["firma_name"] for e in neu))}})
         await protokollieren(user, "ausschreibung.eingeladen", a["titel"], details={"firmen": [e["firma_name"] for e in neu]})
@@ -673,6 +678,13 @@ async def angebot_einreichen(angebot_id: str, user: dict = Depends(schreibend("b
     f = await firma_kurz(user["firma_id"])
     await leitung_benachrichtigen(a, "angebot_eingereicht", f"{f['name']} hat ein Angebot zur Ausschreibung „{a['titel']}“ {'überarbeitet ' if status == 'ueberarbeitet' else ''}eingereicht ({snapshot['summe_netto']:.2f} € netto).")
     await benachrichtigen(user["firma_id"], "angebot_bestaetigung", f"Euer Angebot zur Ausschreibung „{a['titel']}“ wurde eingereicht (Version {version}).", _link(a["id"]))
+    summe_text = f"{snapshot['summe_netto']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    await mail.firma_informieren(user["firma_id"], f"Einreichungsnachweis: Angebot zu „{a['titel']}“",
+                                 f"Euer Angebot zur Ausschreibung „{a['titel']}“ von {(await auftraggeber_info(a)).get('name') or 'Auftraggeber'} wurde am {snapshot['eingereicht_at'][:16].replace('T', ' ')} eingereicht.\nVersion {version} · Summe {summe_text} € netto\n\nZum Angebot: {mail.link(_link(a['id']))}",
+                                 "angebot_nachweis", g["id"], a["project_id"])
+    await mail.firma_informieren(a["firma_id"], f"Neues Angebot zu „{a['titel']}“",
+                                 f"{f['name']} hat ein Angebot zur Ausschreibung „{a['titel']}“ {'überarbeitet ' if status == 'ueberarbeitet' else ''}eingereicht ({summe_text} € netto).\n\nZur Ausschreibung: {mail.link(_link(a['id']))}",
+                                 "angebot_eingegangen", g["id"], a["project_id"], absender_firma_id=user["firma_id"])
     await protokollieren(user, "angebot.eingereicht", a["titel"], details={"version": version, "summe_netto": snapshot["summe_netto"]})
     return {"angebot": await angebot_anreichern({**g, **aenderung}, a, False)}
 
@@ -852,6 +864,8 @@ async def vergabe_mitteilen(vergabe_id: str, body: VergabeMitteilungIn, user: di
     await db().vergaben.update_one({"id": vergabe_id}, {"$set": aenderung, "$push": {"verlauf": vergabe_schritt(user, "mitgeteilt", body.nachricht or "")}})
     ag = await firma_kurz(v["owner_firma_id"])
     await benachrichtigen(v["firma_id"], "vergabe_erhalten", f"Vergabe erhalten: {ag['name']} beauftragt euch für „{a['titel']}“. Bitte die Auftragsannahme bestätigen.", _link(a["id"]), mindestens="buero")
+    await mail.firma_informieren(v["firma_id"], f"Zuschlag: {a['titel']} – {ag['name']}", f"{ag['name']} beauftragt euch für „{a['titel']}“.{(' Nachricht: ' + aenderung['nachricht']) if aenderung.get('nachricht') else ''}\n\nBitte die Auftragsannahme in Stundenzettel Pro verbindlich bestätigen (nur Inhaber): {mail.link(_link(a['id']))}",
+                                 "zuschlag", vergabe_id, a["project_id"], absender_firma_id=user["firma_id"])
     await protokollieren(user, "vergabe.mitgeteilt", a["titel"], details={"firma": v.get("firma_name")})
     return {"vergabe": {**v, **aenderung}}
 
@@ -927,7 +941,11 @@ async def vergabe_antwort(vergabe_id: str, body: VergabeAntwortIn, user: dict = 
     async for g in db().angebote.find({"ausschreibung_id": a["id"], "id": {"$ne": v["angebot_id"]}, "status": {"$in": ["eingereicht", "in_pruefung", "rueckfrage", "ueberarbeitet"]}}, {"_id": 0}):
         await db().angebote.update_one({"id": g["id"]}, {"$set": {"status": "abgelehnt", "updated_at": jetzt_iso()}, "$push": {"verlauf": schritt(user, "abgelehnt", "Vergabe an anderen Bieter")}})
         await benachrichtigen(g["firma_id"], "absage", f"Absage: Die Ausschreibung „{a['titel']}“ von {ag['name']} wurde an einen anderen Bieter vergeben.", _link(a["id"]))
+        await mail.firma_informieren(g["firma_id"], f"Absage: {a['titel']}", f"Die Ausschreibung „{a['titel']}“ von {ag['name']} wurde an einen anderen Bieter vergeben. Vielen Dank für euer Angebot.\n\nZur Ausschreibung: {mail.link(_link(a['id']))}",
+                                     "absage", a["id"], a["project_id"], absender_firma_id=v["owner_firma_id"])
     await leitung_benachrichtigen(a, "vergabe_angenommen", f"{v.get('firma_name')} hat die Vergabe für „{a['titel']}“ verbindlich angenommen und ist jetzt am Projekt beteiligt.", f"/projekte/{a['project_id']}")
+    await mail.firma_informieren(a["firma_id"], f"Auftrag angenommen: {a['titel']} – {v.get('firma_name')}", f"{v.get('firma_name')} hat die Vergabe für „{a['titel']}“ verbindlich angenommen ({bestaetigung['name']}, {bestaetigung['at'][:16].replace('T', ' ')}) und ist jetzt am Projekt beteiligt.\n\nZum Projekt: {mail.link('/projekte/' + a['project_id'])}",
+                                 "auftrag_angenommen", vergabe_id, a["project_id"], absender_firma_id=user["firma_id"])
     await protokollieren(user, "vergabe.angenommen", a["titel"], details={"auftraggeber": ag["name"], "bestaetigt_von": bestaetigung["name"]})
     await protokollieren(user, "vergabe.angenommen_durch_firma", a["titel"], details={"firma": v.get("firma_name"), "bestaetigt_von": bestaetigung["name"]}, firma_id=v["owner_firma_id"])
     return {"vergabe": {**v, **aenderung, "status_name": VERGABE_STATUS_NAMEN["angenommen"]}, "lokales_project_id": b.get("lokales_project_id")}
