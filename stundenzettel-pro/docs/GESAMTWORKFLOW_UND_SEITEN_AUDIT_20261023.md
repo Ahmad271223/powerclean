@@ -1,4 +1,13 @@
 # Stundenzettel Pro – kompletter Produkt-Workflow, Informationsarchitektur und Screen-Audit
+
+## Verbindlich: Projektarchiv auch im normalen Handwerksbetrieb
+- **Meine Projekte → Projekt öffnen → Archiv** ist für normale Firmen mit regulärem Firmenabo sichtbar, auch ohne GU oder Ausschreibung.
+- Das Archiv bündelt Fotos/Mitarbeiter/Datum, Stundenzettel, Tätigkeiten/Berichte, Unterschriften/Abnahmen, Rechnungen, eigene Angebote, Unterlagen, freigegebene Nachrichten, PDF-Index und Prüfsummen.
+- Wenn keine Ausschreibung/Zuschlag/Chat existiert, werden diese Bestandteile nicht künstlich generiert. Bei beauftragtem GU-Los werden eigene Vergabeunterlagen ergänzt; kein Export konkurrierender Angebote.
+- Alternative Sammelübersicht: **Berichte & Exporte → Projektarchive**, mit bestehenden Archiven, Fortschrittsstatus, Downloads.
+- Gu-Sicht bleibt getrennt: nur berechtigte Gesamtprojekt-Dokumente. Kein GU-Projektpreis und kein GU-Funktionspaket nötig, um **eigene** Projekte zu archivieren.
+- Wichtig: bestehendes «archived» in ProjektePage blendet das Projekt nur um; es erzeugt **keine ZIP-Datei**. Der neue Archiv-Assistent ist eine andere Aktion.
+
 Stand: 23.10.2026. Quelle: statischer Review aller React-Seiten im Ordner frontend/src/pages und zentraler Komponenten, Layout, Auth, API-Routen; main f487941. **Entwurf, kein implementiertes Redesign und keine echten Browser-/Lasttests.**
 
 ## 0. Verbindliche Leitplanken
