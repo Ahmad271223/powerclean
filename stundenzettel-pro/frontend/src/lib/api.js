@@ -19,6 +19,9 @@ export function setToken(t) {
 }
 export const hasToken = () => !!token;
 
+/** Antwort des Server-Auffangs: die Oberfläche ruft eine Route, die der Server (noch) nicht kennt – meist nach einem Update nur der App. */
+export const SERVER_VERALTET = 'Diese Funktion kennt der Server noch nicht. Bitte den Server auf den neuen Stand bringen (oder die Seite neu laden).';
+
 export class ApiError extends Error {
   constructor(message, status, data) { super(message); this.status = status; this.data = data; }
 }
@@ -39,7 +42,8 @@ async function request(method, path, body, { form = false } = {}) {
   const data = ct.includes('application/json') ? await res.json().catch(() => null) : null;
   if (res.status === 401 && token) { abmeldeListener.forEach((fn) => fn()); }
   if (!res.ok) {
-    const text = (data && (typeof data.detail === 'string' ? data.detail : data.detail?.[0]?.msg)) || `Fehler ${res.status}`;
+    let text = (data && (typeof data.detail === 'string' ? data.detail : data.detail?.[0]?.msg)) || `Fehler ${res.status}`;
+    if (res.status === 404 && text === 'Nicht gefunden.') text = SERVER_VERALTET;
     throw new ApiError(text, res.status, data);
   }
   return data;
@@ -60,6 +64,7 @@ export async function download(path, filename) {
   if (!res.ok) {
     let text = `Fehler ${res.status}`;
     try { text = (await res.json()).detail || text; } catch { /* ignore */ }
+    if (res.status === 404 && text === 'Nicht gefunden.') text = SERVER_VERALTET;
     throw new ApiError(text, res.status, null);
   }
   const blob = await res.blob();

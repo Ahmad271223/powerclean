@@ -7,10 +7,12 @@ import { Personalakte } from './MitarbeiterDetailPage';
 import { Btn, Card, Field, TextInput } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useDialoge } from '../components/Dialoge';
 import { fmtHours, fmtSigned, MONTHS_DE } from '../lib/dates';
 
 /** Eigenes Konto: Daten, Stundenkonto und Resturlaub, Passwort, eigene Personalakte (nur lesen). */
 export default function ProfilPage() {
+  const { fragen, bestaetigen } = useDialoge();
   const { user, firma, logout } = useAuth();
   const navigate = useNavigate();
   const [pw, setPw] = useState({ alt: '', neu: '' });
@@ -23,8 +25,8 @@ export default function ProfilPage() {
     try { await api.put('/api/auth/passwort', pw); toast.success('Passwort geändert'); setPw({ alt: '', neu: '' }); } catch (err) { toast.error(err.message); } finally { setBusy(false); }
   };
   const kontoLoeschen = async () => {
-    if (!window.confirm('Dein Konto wirklich löschen? Du kannst dich danach nicht mehr anmelden.')) return;
-    const pw = window.prompt('Zur Bestätigung dein Passwort eingeben:');
+    if (!(await bestaetigen({ titel: 'Konto löschen?', text: 'Du kannst dich danach nicht mehr anmelden. Deine Zeitaufzeichnungen bleiben wegen der Aufbewahrungspflicht beim Arbeitgeber.', ok: 'Ja, löschen', gefaehrlich: true }))) return;
+    const pw = await fragen({ titel: 'Passwort bestätigen', text: 'Zur Sicherheit dein Passwort eingeben.', feld: 'Passwort', passwort: true, pflicht: true, ok: 'Konto endgültig löschen', gefaehrlich: true });
     if (!pw) return;
     try { await api.del('/api/auth/konto', { password: pw }); toast.success('Konto gelöscht'); logout(); navigate('/login'); }
     catch (err) { toast.error(err.message); }

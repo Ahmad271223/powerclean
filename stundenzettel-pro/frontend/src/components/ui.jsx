@@ -59,9 +59,9 @@ export function Card({ className, children, ...props }) {
 }
 
 /** iOS style segmented control. options: [{value, label, icon?}] */
-export function Segmented({ value, onChange, options, className }) {
+export function Segmented({ value, onChange, options, className, disabled = false }) {
   return (
-    <div className={cn('inline-flex p-1 rounded-full bg-black/[0.06]', className)} role="tablist">
+    <div className={cn('inline-flex p-1 rounded-full bg-black/[0.06]', disabled && 'opacity-50', className)} role="tablist" aria-disabled={disabled || undefined}>
       {options.map((o) => {
         const Icon = o.icon;
         const active = o.value === value;
@@ -70,7 +70,8 @@ export function Segmented({ value, onChange, options, className }) {
             key={o.value}
             role="tab"
             aria-selected={active}
-            onClick={() => onChange(o.value)}
+            disabled={disabled}
+            onClick={() => { if (!disabled) onChange(o.value); }}
             className={cn(
               'flex items-center gap-2 px-4 h-9 rounded-full text-[14px] font-semibold transition-all duration-200',
               active ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : 'text-[#6E6E73] hover:text-[#1D1D1F]',

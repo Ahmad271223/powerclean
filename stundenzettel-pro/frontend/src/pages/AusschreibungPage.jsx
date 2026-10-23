@@ -11,6 +11,7 @@ import AngeboteVergleich from '../components/ausschreibung/AngeboteVergleich';
 import VergabeBereich from '../components/ausschreibung/VergabeBereich';
 import { Btn, Card, Empty, Field, IconBtn, Segmented, Select, TextArea, TextInput, Toggle } from '../components/ui';
 import { api, download, openFile } from '../lib/api';
+import { useDialoge } from '../components/Dialoge';
 import { ANFORDERUNGEN, STATUS_CLS, fmtGeld, fmtTag, fmtZeit, fristText } from '../lib/ausschreibung';
 
 const chip = (d) => <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STATUS_CLS[d.status] || ''}`}>{d.status_name}</span>;
@@ -26,6 +27,7 @@ export default function AusschreibungPage() {
   const [edit, setEdit] = useState(false);
   const [einladen, setEinladen] = useState(false);
   const [busy, setBusy] = useState('');
+  const { fragen } = useDialoge();
   const laden = useCallback(() => api.get(`/api/ausschreibungen/${ausschreibungId}`).then((r) => setD(r.ausschreibung)).catch((err) => { toast.error(err.message); if (err.status === 404) navigate('/ausschreibungen', { replace: true }); }), [ausschreibungId, navigate]);
   useEffect(() => { laden(); }, [laden]);
   if (!d) return <Layout title="Ausschreibung"><Ladeanzeige /></Layout>;
@@ -51,7 +53,7 @@ export default function AusschreibungPage() {
           {leitung && !['vergeben', 'aufgehoben'].includes(d.status) && <Btn size="sm" variant="soft" onClick={() => setEdit(true)}><Pencil size={15} /> Bearbeiten</Btn>}
           {leitung && d.status === 'entwurf' && <Btn size="sm" onClick={() => aktion(`/api/ausschreibungen/${d.id}/veroeffentlichen`, {}, 'Ausschreibung veröffentlicht', `Jetzt veröffentlichen? Eingeladene und passende Firmen werden benachrichtigt.${d.gu_abo?.status === 'aktiv' ? '' : `\n\nMit der Veröffentlichung wird das Projekt zum kostenpflichtigen GU-Projekt (${(d.preise?.projekt_gu ?? 50.99).toLocaleString('de-DE', { minimumFractionDigits: 2 })} € netto je Monat, beliebig viele Gewerke und Ausschreibungen).`}`)} loading={busy.endsWith('veroeffentlichen')}><Megaphone size={15} /> Veröffentlichen</Btn>}
           {leitung && !['vergeben', 'aufgehoben'].includes(d.status) && <Btn size="sm" variant="dark" onClick={() => setEinladen(true)}><Send size={15} /> Firmen einladen</Btn>}
-          {leitung && ['veroeffentlicht', 'in_vergabe'].includes(d.status) && <Btn size="sm" variant="ghost" onClick={() => { const g = window.prompt('Ausschreibung aufheben – Grund (wird den Bietern mitgeteilt):'); if (g !== null) aktion(`/api/ausschreibungen/${d.id}/aufheben`, { nachricht: g }, 'Ausschreibung aufgehoben'); }}><X size={15} /> Aufheben</Btn>}
+          {leitung && ['veroeffentlicht', 'in_vergabe'].includes(d.status) && <Btn size="sm" variant="ghost" onClick={async () => { const g = await fragen({ titel: 'Ausschreibung aufheben', text: 'Alle Bieter werden benachrichtigt; laufende Angebote werden abgelehnt.', feld: 'Grund (wird den Bietern mitgeteilt)', pflicht: true, ok: 'Aufheben', gefaehrlich: true }); if (g !== null) aktion(`/api/ausschreibungen/${d.id}/aufheben`, { nachricht: g }, 'Ausschreibung aufgehoben'); }}><X size={15} /> Aufheben</Btn>}
           {leitung && d.status === 'entwurf' && <IconBtn variant="danger" onClick={loeschen} title="Entwurf löschen"><Trash2 size={16} /></IconBtn>}
           {!leitung && d.kann_bieten && tab !== 'angebot' && <Btn size="sm" onClick={() => setTab('angebot')}><Send size={15} /> {d.angebot ? 'Mein Angebot' : 'Angebot abgeben'}</Btn>}
         </div>

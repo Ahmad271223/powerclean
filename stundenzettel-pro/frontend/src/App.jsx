@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { AuthProvider, useAuth } from './lib/auth';
+import { DialogProvider } from './components/Dialoge';
 import { Btn, Card } from './components/ui';
 import { LoginPage, RegisterPage, EinladungPage } from './pages/LoginPage';
 import ZusammenarbeitPage, { ProjektEinladungPage } from './pages/ZusammenarbeitPage';
@@ -83,6 +84,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <HashRouter>
+          <DialogProvider>
           <Toaster position="top-center" richColors closeButton={false} />
           <Routes>
             <Route path="/login" element={<Oeffentlich><LoginPage /></Oeffentlich>} />
@@ -114,6 +116,7 @@ export default function App() {
             <Route path="/abos" element={<Geschuetzt buero><AbosPage /></Geschuetzt>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </DialogProvider>
         </HashRouter>
       </AuthProvider>
     </ErrorBoundary>

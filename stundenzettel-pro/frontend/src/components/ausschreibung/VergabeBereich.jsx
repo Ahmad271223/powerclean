@@ -3,6 +3,7 @@ import { BadgeCheck, FileSignature, FileText, Paperclip, Send, Undo2 } from 'luc
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Btn, Card, Field, Select, TextArea, TextInput, Toggle } from '../ui';
+import { useDialoge } from '../Dialoge';
 import { api, openFile } from '../../lib/api';
 import { VERGABE_CLS, VERGABE_NAMEN, fmtGeld, fmtZeit } from '../../lib/ausschreibung';
 
@@ -11,6 +12,7 @@ const SCHRITTE = ['vorgeschlagen', 'freigegeben', 'mitgeteilt', 'angenommen'];
 
 /** Mehrstufige Vergabe: Vorschlag → interne Freigabe (zweite Person) → Mitteilung mit Vertragsunterlagen → verbindliche Annahme durch den Inhaber der Firma. */
 export default function VergabeBereich({ ausschreibung: a, rolle, onChanged, kategorien = [] }) {
+  const { fragen } = useDialoge();
   const v = a.vergabe;
   const [busy, setBusy] = useState('');
   const [nachricht, setNachricht] = useState('');
@@ -43,7 +45,7 @@ export default function VergabeBereich({ ausschreibung: a, rolle, onChanged, kat
         {rolle === 'leitung' && v.status === 'freigegeben' && (
           <div className="rounded-2xl bg-[#E8F0FE] px-4 py-3 text-[13px] space-y-2"><p>Vertrags- oder Auftragsdokumente hochladen und der Firma die Vergabe mitteilen. Die Firma bestätigt danach die Annahme ausdrücklich.</p><Field label="Nachricht an die Firma"><TextArea rows={2} value={nachricht} onChange={(e) => setNachricht(e.target.value)} /></Field><Btn size="sm" onClick={() => aktion(`/api/vergaben/${v.id}/mitteilen`, { nachricht }, 'Vergabemitteilung gesendet')} loading={busy === `/api/vergaben/${v.id}/mitteilen`}><Send size={14} /> Vergabe mitteilen</Btn></div>
         )}
-        {rolle === 'leitung' && ['vorgeschlagen', 'freigegeben', 'mitgeteilt'].includes(v.status) && <div className="flex justify-end"><Btn size="sm" variant="ghost" onClick={() => { const g = window.prompt('Vergabe zurückziehen – Grund:'); if (g !== null) aktion(`/api/vergaben/${v.id}/zurueckziehen`, { nachricht: g }, 'Vergabe zurückgezogen'); }}><Undo2 size={14} /> Zurückziehen</Btn></div>}
+        {rolle === 'leitung' && ['vorgeschlagen', 'freigegeben', 'mitgeteilt'].includes(v.status) && <div className="flex justify-end"><Btn size="sm" variant="ghost" onClick={async () => { const g = await fragen({ titel: 'Vergabe zurückziehen', text: 'Die Firma wird benachrichtigt; die Ausschreibung geht zurück in die Vergabe.', feld: 'Grund', pflicht: true, ok: 'Zurückziehen', gefaehrlich: true }); if (g !== null) aktion(`/api/vergaben/${v.id}/zurueckziehen`, { nachricht: g }, 'Vergabe zurückgezogen'); }}><Undo2 size={14} /> Zurückziehen</Btn></div>}
         {rolle === 'bieter' && v.status === 'mitgeteilt' && (
           <div className="rounded-2xl border-2 border-[#1B7F3B]/40 bg-[#E8F8EC]/50 px-4 py-4 space-y-3">
             <p className="text-[14px] font-semibold">Verbindliche Auftragsannahme</p>

@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDate } from '../lib/dates';
 import AbosKarte, { PreisListe } from '../components/AbosKarte';
+import { useDialoge } from '../components/Dialoge';
 
 const fmtZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–');
 
@@ -127,12 +128,13 @@ function Leistungen() {
 
 function Lizenz() {
   const { firma, isInhaber, logout } = useAuth();
+  const { fragen } = useDialoge();
   const [plan, setPlan] = useState(null);
   useEffect(() => { api.get('/api/firma/plan').then(setPlan).catch((err) => toast.error(err.message)); }, []);
   const firmaLoeschen = async () => {
-    const name = window.prompt(`Firma „${firma?.name}“ mit ALLEN Daten (Mitarbeiter, Zeiten, Rechnungen, Akten) unwiderruflich löschen?\nZur Bestätigung den Firmennamen eingeben:`);
+    const name = await fragen({ titel: 'Firma löschen', text: `Firma „${firma?.name}“ mit ALLEN Daten (Mitarbeiter, Zeiten, Rechnungen, Akten) unwiderruflich löschen? Vorher unter „Exporte“ die Komplettsicherung herunterladen.`, feld: 'Zur Bestätigung den Firmennamen eingeben', pflicht: true, ok: 'Weiter', gefaehrlich: true });
     if (name === null) return;
-    const pw = window.prompt('Dein Passwort:');
+    const pw = await fragen({ titel: 'Passwort bestätigen', text: 'Zur Sicherheit dein Passwort eingeben.', feld: 'Passwort', passwort: true, pflicht: true, ok: 'Endgültig löschen', gefaehrlich: true });
     if (!pw) return;
     try { await api.del('/api/firma', { name, password: pw }); toast.success('Firma gelöscht'); logout(); window.location.hash = '#/login'; }
     catch (err) { toast.error(err.message); }

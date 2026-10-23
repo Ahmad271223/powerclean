@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FileText, Paperclip, Send, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Btn, Card, Field, Segmented, Select, TextArea, TextInput, Toggle } from '../ui';
+import { useDialoge } from '../Dialoge';
 import { api, download, openFile } from '../../lib/api';
 import { ANGEBOT_CLS, ANGEBOT_NAMEN, fmtGeld, fmtTag, fmtZeit } from '../../lib/ausschreibung';
 
@@ -16,6 +17,7 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
   const [busy, setBusy] = useState('');
   const [kat, setKat] = useState('Angebot (PDF)');
   const eingabe = useRef(null);
+  const { fragen } = useDialoge();
   useEffect(() => {
     const preise = Object.fromEntries((g?.positionen || []).map((p) => [p.nr, p]));
     setF({ ...LEER, ...(g ? Object.fromEntries(Object.keys(LEER).map((k) => [k, g[k] ?? LEER[k]])) : {}), preisart: g?.preisart || (a.kaufmaennisch?.abrechnungsart === 'einheitspreise' && a.positionen?.length ? 'einheitspreise' : a.kaufmaennisch?.abrechnungsart === 'stunden' ? 'stunden' : 'pauschal'),
@@ -35,7 +37,12 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
     try { let id = g?.id; if (!g) id = (await api.post(`/api/ausschreibungen/${a.id}/angebot`, body())).angebot.id; else await api.put(`/api/angebote/${g.id}`, body()); await api.post(`/api/angebote/${id}/einreichen`); toast.success('Angebot eingereicht'); onChanged?.(); }
     catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
-  const zurueck = async () => { const grund = window.prompt('Angebot zurückziehen – Grund (optional):'); if (grund === null) return; setBusy('zurueck'); try { await api.post(`/api/angebote/${g.id}/zurueckziehen`, { nachricht: grund }); toast.success('Angebot zurückgezogen'); onChanged?.(); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
+  const zurueck = async () => {
+    const grund = await fragen({ titel: 'Angebot zurückziehen', text: 'Das Angebot wird aus der Wertung genommen; danach lässt es sich überarbeiten und erneut einreichen, solange die Frist läuft.', feld: 'Grund (optional, der Auftraggeber sieht ihn)', platzhalter: 'z. B. Kapazität nicht mehr frei', ok: 'Zurückziehen', gefaehrlich: true });
+    if (grund === null) return;
+    setBusy('zurueck');
+    try { await api.post(`/api/angebote/${g.id}/zurueckziehen`, { nachricht: grund }); toast.success('Angebot zurückgezogen'); onChanged?.(); } catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
   const upload = async (file) => { if (!file) return; setBusy('upload'); try { let id = g?.id; if (!g) id = (await api.post(`/api/ausschreibungen/${a.id}/angebot`, body())).angebot.id; const fd = new FormData(); fd.append('datei', file); fd.append('kategorie', kat); await api.upload(`/api/angebote/${id}/dokumente`, fd); toast.success('Anhang gespeichert'); onChanged?.(); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
   const summe = (() => {
     if (f.preisart === 'einheitspreise') { const m = Object.fromEntries((a.positionen || []).map((p) => [p.nr, p.menge])); return f.positionen.reduce((s, p) => s + (num(p.einzelpreis) || 0) * (m[p.nr] || 0), 0); }
@@ -52,6 +59,7 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
           {['eingereicht', 'in_pruefung', 'rueckfrage', 'ueberarbeitet'].includes(g.status) && <Btn size="sm" variant="soft" onClick={zurueck} loading={busy === 'zurueck'}><Undo2 size={14} /> Zurückziehen</Btn>}
         </Card>
       )}
+      {g && !bearbeitbar && ['eingereicht', 'in_pruefung', 'ueberarbeitet'].includes(g.status) && <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3 text-[13px] text-[#6E6E73]">Das Angebot ist eingereicht und für den Auftraggeber sichtbar – die Felder sind deshalb gesperrt. Zum Ändern zuerst „Zurückziehen“, dann überarbeiten und erneut einreichen{a.kann_bieten ? '' : ' (nur solange die Angebotsfrist läuft)'}.</div>}
       {g?.status === 'rueckfrage' && <div className="rounded-2xl bg-[#FDE8E8] text-[#C41E3A] px-4 py-3 text-[13px]">Der Auftraggeber hat eine Rückfrage oder Nachforderung gestellt – siehe Benachrichtigungen. Bitte das Angebot ergänzen und erneut einreichen{g.nachreichen_bis ? ` (bis ${fmtTag(g.nachreichen_bis)})` : ''}.</div>}
       {!a.kann_bieten && !g && <div className="rounded-2xl bg-black/[0.05] px-4 py-3 text-[13px] text-[#6E6E73]">Diese Ausschreibung nimmt derzeit keine Angebote an (Frist abgelaufen oder Vergabe läuft).</div>}
       <Card className="p-5 space-y-4">
@@ -62,7 +70,7 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
         </div>
         <div>
           <span className="block text-[13px] font-medium text-[#6E6E73] mb-1.5">Preisart</span>
-          <Segmented value={f.preisart} onChange={(v) => bearbeitbar && setF((x) => ({ ...x, preisart: v }))} options={[{ value: 'pauschal', label: 'Pauschal' }, { value: 'einheitspreise', label: 'Einheitspreise' }, { value: 'stunden', label: 'Stunden' }]} />
+          <Segmented value={f.preisart} disabled={!bearbeitbar} onChange={(v) => bearbeitbar && setF((x) => ({ ...x, preisart: v }))} options={[{ value: 'pauschal', label: 'Pauschal' }, { value: 'einheitspreise', label: 'Einheitspreise' }, { value: 'stunden', label: 'Stunden' }]} />
         </div>
         {f.preisart === 'pauschal' && <Field label="Angebotspreis (€ netto)"><TextInput type="number" step="0.01" min="0" inputMode="decimal" value={f.preis_netto} onChange={set('preis_netto')} disabled={!bearbeitbar} /></Field>}
         {f.preisart === 'stunden' && <div className="grid grid-cols-2 gap-3"><Field label="Stundensatz (€ netto)"><TextInput type="number" step="0.01" min="0" inputMode="decimal" value={f.stundensatz} onChange={set('stundensatz')} disabled={!bearbeitbar} /></Field><Field label="Geschätzte Stunden"><TextInput type="number" step="0.5" min="0" inputMode="decimal" value={f.stunden_geschaetzt} onChange={set('stunden_geschaetzt')} disabled={!bearbeitbar} /></Field></div>}
