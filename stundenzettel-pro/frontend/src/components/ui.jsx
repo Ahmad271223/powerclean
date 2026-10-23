@@ -21,7 +21,7 @@ const btnSizes = { sm: 'h-9 px-3.5 text-[13px]', md: 'h-11 px-5 text-[15px]', lg
 
 export function Btn({ variant = 'primary', size = 'md', loading = false, className, children, ...props }) {
   return (
-    <button
+    <button type="button"
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-full font-semibold whitespace-nowrap select-none',
         'transition-all duration-150 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none',
@@ -37,7 +37,7 @@ export function Btn({ variant = 'primary', size = 'md', loading = false, classNa
 
 export function IconBtn({ className, variant = 'ghost', size = 36, children, ...props }) {
   return (
-    <button
+    <button type="button"
       className={cn(
         'inline-flex items-center justify-center rounded-full transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
         btnVariants[variant], className,
@@ -59,7 +59,7 @@ export function Card({ className, children, ...props }) {
 }
 
 /** iOS style segmented control. options: [{value, label, icon?}] */
-export function Segmented({ value, onChange, options, className }) {
+export function Segmented({ value, onChange, options, className, disabled = false }) {
   return (
     <div className={cn('inline-flex p-1 rounded-full bg-black/[0.06]', className)} role="tablist">
       {options.map((o) => {
@@ -67,12 +67,14 @@ export function Segmented({ value, onChange, options, className }) {
         const active = o.value === value;
         return (
           <button
+            type="button"
             key={o.value}
+            disabled={disabled || !!o.disabled}
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'flex items-center gap-2 px-4 h-9 rounded-full text-[14px] font-semibold transition-all duration-200',
+              'flex items-center gap-2 px-4 h-9 rounded-full text-[14px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
               active ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : 'text-[#6E6E73] hover:text-[#1D1D1F]',
             )}
             data-testid={o.testId}
