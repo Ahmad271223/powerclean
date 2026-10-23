@@ -268,8 +268,13 @@ async def auswertung(von: str, bis: str, project_id: Optional[str] = None,
         g["lohnkosten_schaetzung"] += (gilt / 60) * stundensatz
     aus = []
     for pid, w in result.items():
-        p = await db().projects.find_one({"id": pid, "firma_id": user["firma_id"]}, {"_id": 0, "name": 1})
+        p = await db().projects.find_one({"id": pid, "firma_id": user["firma_id"]}, {"_id": 0, "name": 1, "abrechnungsart_projekt": 1, "pauschale_netto": 1})
         w["projekt"] = (p or {}).get("name") or ""
         w["lohnkosten_schaetzung"] = round(w["lohnkosten_schaetzung"], 2)
+        if (p or {}).get("abrechnungsart_projekt") == "pauschal":
+            pauschale = float(p.get("pauschale_netto") or 0)
+            w["pauschale_netto"] = pauschale
+            w["deckung_vor_nebenkosten"] = round(pauschale - w["lohnkosten_schaetzung"], 2)
+            w["kalkulationshinweis"] = "Noch ohne Material, Gemeinkosten, AG-Nebenkosten, Steuern und nicht erfasste Einsätze; kein vollständiger Gewinn."
         aus.append(w)
     return {"projekte": aus, "hinweis": "Planung, Stempelung und Freigabe sind getrennt. Die Kostenschätzung ist kein Lohnlauf und enthält keine Arbeitgebernebenkosten."}
