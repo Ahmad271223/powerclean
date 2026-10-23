@@ -215,6 +215,17 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
 @router.get("/api/dokumente/{dokument_id}/datei")
 async def dokument_datei(dokument_id: str, user: dict = Depends(aktueller_nutzer)):
     d = await _dokument_zugriff(user, dokument_id)
+    # Teamfotos sind im Projekt sichtbar, der ursprüngliche Dateiname/EXIF
+    # könnte aber die Identität des Fotografen verraten. Kollegen erhalten
+    # daher nur die serverseitig neu erzeugte, EXIF-freie JPEG-Ansicht.
+    fremdes_teamfoto = (d.get("scope") == "project" and (d.get("mime") or "").startswith("image/")
+                        and user.get("role") != "inhaber" and d.get("uploaded_by") != user["id"])
+    if fremdes_teamfoto:
+        try:
+            daten = bild_verkleinern(d["path"], 3000)
+        except Exception as exc:
+            raise HTTPException(415, "Foto kann nicht angezeigt werden.") from exc
+        return Response(content=daten, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
     return FileResponse(d["path"], media_type=d.get("mime") or "application/octet-stream", filename=d.get("filename") or "datei")
 
 
