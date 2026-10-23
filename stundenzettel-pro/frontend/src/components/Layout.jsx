@@ -75,7 +75,7 @@ export default function Layout({ children, title, subtitle, action, wide = false
 
   return (
     <div className="ts-app lg:grid lg:grid-cols-[248px_1fr] lg:min-h-screen">
-      <aside className="hidden lg:flex flex-col gap-1 p-4 border-r border-black/[0.06] sticky top-0 h-screen overflow-y-auto">
+      <aside className="hidden lg:flex flex-col gap-1 p-4 safe-top border-r border-black/[0.06] sticky top-0 h-screen overflow-y-auto">
         <div className="flex items-center gap-3 px-2 py-3 mb-3">
           <AppIcon logo={firma?.logo} text={initials(firma?.name)} size={40} className="rounded-xl" />
           <div className="min-w-0">
@@ -90,7 +90,7 @@ export default function Layout({ children, title, subtitle, action, wide = false
       </aside>
 
       <div className="min-w-0">
-        <header className="lg:hidden sticky top-0 z-40 backdrop-blur-xl bg-[#F5F5F7]/80 border-b border-black/[0.06]">
+        <header className="lg:hidden sticky top-0 z-40 safe-top backdrop-blur-xl bg-[#F5F5F7]/80 border-b border-black/[0.06]">
           <div className="px-4 h-14 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <AppIcon logo={firma?.logo} text={initials(firma?.name)} size={32} className="rounded-lg" />

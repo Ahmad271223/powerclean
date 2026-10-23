@@ -1,9 +1,12 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional
@@ -11,6 +14,8 @@ import uuid
 from datetime import datetime, timezone
 import bcrypt
 import jwt
+
+from timesheets import create_router as create_timesheet_router, ensure_indexes as ensure_timesheet_indexes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -22,6 +27,14 @@ db = client[os.environ['DB_NAME']]
 
 # JWT Secret
 JWT_SECRET = os.environ.get('JWT_SECRET', 'powerclean-secret-key-2024')
+
+# SMTP / inquiry notification settings
+SMTP_HOST = os.environ.get('SMTP_HOST')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+SMTP_USER = os.environ.get('SMTP_USER')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
+SMTP_FROM = os.environ.get('SMTP_FROM', SMTP_USER)
+INQUIRY_NOTIFY_EMAIL = os.environ.get('INQUIRY_NOTIFY_EMAIL', 'batutta@msn.com')
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -76,6 +89,40 @@ class TokenResponse(BaseModel):
 
 # ============= AUTH HELPERS =============
 
+def send_inquiry_notification(inquiry: "Inquiry"):
+    """Send an email notification for a newly submitted inquiry.
+    Runs as a background task so a mail failure never breaks the form submission."""
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
+        logger.warning("SMTP is not configured (SMTP_HOST/SMTP_USER/SMTP_PASSWORD) - skipping inquiry notification email")
+        return
+
+    try:
+        msg = MIMEMultipart()
+        msg['Subject'] = f"Neue Anfrage: {inquiry.name}"
+        msg['From'] = SMTP_FROM
+        msg['To'] = INQUIRY_NOTIFY_EMAIL
+
+        body = (
+            "Es ist eine neue Anfrage über das Formular eingegangen:\n\n"
+            f"Name: {inquiry.name}\n"
+            f"E-Mail: {inquiry.email}\n"
+            f"Telefon: {inquiry.phone or '-'}\n"
+            f"Adresse: {inquiry.address or '-'}\n"
+            f"Leistungen: {', '.join(inquiry.services) if inquiry.services else '-'}\n"
+            f"Wunschtermin: {inquiry.preferred_date or '-'} {inquiry.preferred_time or ''}\n"
+            f"Beschreibung: {inquiry.description or '-'}\n"
+        )
+        msg.attach(MIMEText(body, 'plain'))
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        logger.info(f"Inquiry notification email sent for inquiry {inquiry.id}")
+    except Exception as e:
+        logger.error(f"Failed to send inquiry notification email for inquiry {inquiry.id}: {e}")
+
+
 async def get_admin_user(token: str = None):
     if not token:
         raise HTTPException(status_code=401, detail="Token required")
@@ -94,15 +141,16 @@ async def root():
     return {"message": "PowerCleanService API"}
 
 @api_router.post("/inquiries", response_model=Inquiry)
-async def create_inquiry(input: InquiryCreate):
+async def create_inquiry(input: InquiryCreate, background_tasks: BackgroundTasks):
     if not input.consent:
         raise HTTPException(status_code=400, detail="Consent is required")
-    
+
     inquiry_obj = Inquiry(**input.model_dump())
     doc = inquiry_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
-    
+
     await db.inquiries.insert_one(doc)
+    background_tasks.add_task(send_inquiry_notification, inquiry_obj)
     return inquiry_obj
 
 @api_router.get("/services")
@@ -217,6 +265,9 @@ async def get_stats(authorization: str = Header(None)):
         "erledigt": erledigt
     }
 
+# Stundenzettel / Rechnungen (projects, calendar entries, PDFs)
+api_router.include_router(create_timesheet_router(db, get_admin_user))
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -249,6 +300,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def create_db_indexes():
+    try:
+        await ensure_timesheet_indexes(db)
+    except Exception as exc:  # never block startup because of index creation
+        logger.warning(f"Could not create timesheet indexes: {exc}")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

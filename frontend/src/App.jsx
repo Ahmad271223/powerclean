@@ -14,6 +14,9 @@ import AdminPage from "./pages/AdminPage";
 import ImpressumPage from "./pages/ImpressumPage";
 import DatenschutzPage from "./pages/DatenschutzPage";
 import AGBPage from "./pages/AGBPage";
+import StundenzettelPage from "./pages/StundenzettelPage";
+import ProjektKalenderPage from "./pages/ProjektKalenderPage";
+import FirmaPage from "./pages/FirmaPage";
 
 function App() {
   return (
@@ -27,6 +30,9 @@ function App() {
           <Route path="/anfrage" element={<InquiryPage />} />
           <Route path="/kontakt" element={<ContactPage />} />
           <Route path="/pcs-verwaltung-2024" element={<AdminPage />} />
+          <Route path="/stundenzettel" element={<StundenzettelPage />} />
+          <Route path="/stundenzettel/firma/:companyId" element={<FirmaPage />} />
+          <Route path="/stundenzettel/projekt/:projectId" element={<ProjektKalenderPage />} />
           <Route path="/impressum" element={<ImpressumPage />} />
           <Route path="/datenschutz" element={<DatenschutzPage />} />
           <Route path="/agb" element={<AGBPage />} />

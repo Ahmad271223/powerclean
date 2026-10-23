@@ -178,8 +178,8 @@ export function Sheet({ open, onOpenChange, title, subtitle, width = 'sm:max-w-l
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/35 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
         <DialogPrimitive.Content
           className={cn(
-            'ts-app fixed z-50 left-1/2 -translate-x-1/2 bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2',
-            'w-full sm:w-[calc(100%-2rem)] max-h-[94vh] sm:max-h-[88vh] flex flex-col outline-none',
+            'ts-app ts-sheet fixed z-50 left-1/2 -translate-x-1/2 bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2',
+            'w-full sm:w-[calc(100%-2rem)] flex flex-col outline-none',
             'bg-white rounded-t-[28px] sm:rounded-[28px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.35)]',
             'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
             'data-[state=open]:slide-in-from-bottom-6 data-[state=closed]:slide-out-to-bottom-6 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95',
@@ -209,7 +209,7 @@ export function Sheet({ open, onOpenChange, title, subtitle, width = 'sm:max-w-l
 /** Frosted-glass sticky header. */
 export function AppHeader({ left, right, className }) {
   return (
-    <header className={cn('sticky top-0 z-40 backdrop-blur-xl bg-[#F5F5F7]/80 border-b border-black/[0.06]', className)}>
+    <header className={cn('sticky top-0 z-40 safe-top backdrop-blur-xl bg-[#F5F5F7]/80 border-b border-black/[0.06]', className)}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">{left}</div>
         <div className="flex items-center gap-1.5 sm:gap-2">{right}</div>

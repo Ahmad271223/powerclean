@@ -62,3 +62,11 @@ Redesign einer professionellen Reinigungsunternehmen-Website für PowerCleanServ
 - Google Maps Integration für Einsatzgebiet
 - Live-Chat Widget
 - Preisrechner für Standard-Leistungen
+
+### Stundenzettel-App (Okt 2026)
+- [x] Projekte als Kacheln (`/stundenzettel`), je Projekt eigener Kalender 2025–2030
+- [x] Tag anklicken → Anfang/Ende/Pause/Tätigkeit, Netto-Zeit automatisch
+- [x] Wochen-Stundenzettel PDF (Datum, Tätigkeit, Anfang, Arbeitsende, Netto Arbeitszeit, Unterschrift)
+- [x] Monats-PDF: alle Wochen-Stundenzettel + Monatsübersicht + Rechnung, fortlaufende Rechnungsnummern
+- [x] Firmenverwaltung: Einrichtung beim ersten Start, Logo-Upload, mehrere Firmen mit eigener Rechnungsnummernfolge, Rechnungsübersicht; Logo + Firmendaten auf allen PDFs
+- Backend: `backend/timesheets.py` (`/api/ts/*`, reportlab)

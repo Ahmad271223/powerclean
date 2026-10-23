@@ -23,7 +23,7 @@ import AuswertungPage from './pages/AuswertungPage';
 
 function CrashScreen({ error }) {
   return (
-    <div className="ts-app min-h-screen flex items-center justify-center p-6">
+    <div className="ts-app safe-top min-h-screen flex items-center justify-center p-6">
       <Card className="max-w-md w-full p-8 text-center">
         <span className="mx-auto w-14 h-14 rounded-2xl bg-[#C41E3A]/10 text-[#C41E3A] flex items-center justify-center"><AlertTriangle size={26} /></span>
         <h1 className="text-[24px] mt-5">Da ist etwas schiefgelaufen</h1>

@@ -8,7 +8,7 @@ import { Btn, Card, Field, TextInput } from '../components/ui';
 
 function Rahmen({ title, text, children }) {
   return (
-    <div className="ts-app min-h-screen flex items-center justify-center p-5">
+    <div className="ts-app safe-top min-h-screen flex items-center justify-center p-5">
       <Card className="w-full max-w-md p-7 sm:p-9">
         <div className="flex items-center gap-3 mb-6">
           <span className="w-11 h-11 rounded-2xl bg-[#C41E3A] text-white flex items-center justify-center"><CalendarDays size={22} /></span>

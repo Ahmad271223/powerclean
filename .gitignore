@@ -84,11 +84,13 @@ frontend/node_modules/.cache/default-development/5.pack
 frontend/node_modules/.cache/default-development/6.pack
 frontend/node_modules/.cache/default-development/7.pack
 frontend/node_modules/.cache/default-development/9.pack
--e 
+-e
 # Environment files
 *.env
 *.env.*
--e 
+-e
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example

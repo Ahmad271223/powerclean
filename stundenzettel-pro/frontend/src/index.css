@@ -21,7 +21,14 @@ body {
 
 h1, h2, h3, h4 { letter-spacing: -0.025em; font-weight: 700; margin: 0; }
 
-.ts-app { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom); }
+.ts-app { padding-bottom: env(safe-area-inset-bottom); }
+/* Seitenwurzeln füllen den Bildschirm. Dialoge (ts-sheet) nicht: sonst ist jedes Bottom-Sheet 100vh hoch und ragt
+   auf Handys (100vh = Höhe bei ausgeblendeter Adressleiste) mit Titel und ersten Eingabezeilen unter die Adressleiste. */
+.ts-app:not(.ts-sheet) { min-height: 100vh; }
+/* Bottom-Sheet: nie höher als der sichtbare Bereich (svh = kleinster Viewport bei eingeblendeter Adressleiste),
+   Statusleiste/Notch oben frei lassen. Ältere Browser ohne svh nehmen die vh-Zeile. */
+.ts-sheet { max-height: 94vh; max-height: calc(94svh - env(safe-area-inset-top)); }
+@media (min-width: 640px) { .ts-sheet { max-height: 88vh; max-height: 88svh; } }
 .safe-top { padding-top: env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 

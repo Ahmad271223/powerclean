@@ -182,3 +182,45 @@ code {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
 }
+
+/* ===== Stundenzettel app (Apple-like look) ===== */
+.ts-app {
+  background-color: #F5F5F7;
+  color: #1D1D1F;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+/* Bottom-Sheet: nie höher als der sichtbare Bereich (svh), Statusleiste oben frei lassen. */
+.ts-sheet { max-height: 94vh; max-height: calc(94svh - env(safe-area-inset-top)); }
+@media (min-width: 640px) { .ts-sheet { max-height: 88vh; max-height: 88svh; } }
+.ts-app h1, .ts-app h2, .ts-app h3, .ts-app h4 {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  text-transform: none;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+.ts-app *:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(196, 30, 58, 0.18);
+  border-radius: 9999px;
+}
+.ts-app input:focus-visible, .ts-app textarea:focus-visible, .ts-app select:focus-visible {
+  box-shadow: none;
+}
+.shadow-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -16px rgba(0, 0, 0, 0.14);
+}
+.shadow-card-hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 20px 40px -16px rgba(0, 0, 0, 0.22);
+}
+.ts-app input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.45;
+}
+.ts-app ::-webkit-scrollbar { width: 8px; height: 8px; }
+.ts-app ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 8px; }
+.ts-app ::-webkit-scrollbar-track { background: transparent; }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
