@@ -59,7 +59,7 @@ function AuftraggeberBlock({ gu }) {
 }
 
 export default function DashboardPage() {
-  const { firma } = useAuth();
+  const { firma, isInhaber } = useAuth();
   const navigate = useNavigate();
   const [d, setD] = useState(null);
   const [projektDialog, setProjektDialog] = useState(false);
@@ -79,6 +79,16 @@ export default function DashboardPage() {
     if (!window.confirm(`Stempelung von ${s.user_name} jetzt beenden?`)) return;
     try { await api.post(`/api/stempel/${s.id}/beenden`, { activity: 'vom Büro beendet' }); toast.success('Beendet'); laden(); } catch (err) { toast.error(err.message); }
   };
+
+  if (!isInhaber) {
+    return <Layout title="Übersicht" subtitle="Deine Aufgaben und Projekte – Arbeitszeiten anderer Mitarbeiter sind nur für den Firmeninhaber sichtbar.">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Kachel icon={FolderKanban} label="Projekte" value="Öffnen" to="/projekte" />
+        <Kachel icon={CalendarOff} label="Meine Einsätze" value="Ansehen" to="/einsatzplan" />
+        <Kachel icon={Users} label="Team" value="Verwalten" to="/mitarbeiter" />
+      </div>
+    </Layout>;
+  }
 
   return (
     <Layout title={`Hallo, ${firma?.owner?.split(' ')[0] || firma?.name || ''}`} subtitle={`${fmtDate(heute)} · ${MONTHS_DE[heute.getMonth()]} ${heute.getFullYear()}`}
