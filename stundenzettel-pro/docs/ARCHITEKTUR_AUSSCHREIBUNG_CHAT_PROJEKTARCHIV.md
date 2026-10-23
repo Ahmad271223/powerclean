@@ -1,5 +1,8 @@
 # Stundenzettel Pro: Ausschreibung, Kommunikation, Vergabe und vollständige ZIP-Projektakte
 
+> **Produktentscheidung 23.10.2026:** Normale Handwerksunternehmen dürfen keine formalen Ausschreibungen veröffentlichen; nur verifizierte GU-/Großunternehmensorganisationen mit Projektberechtigung dürfen das. Handwerksfirmen können Subunternehmen finden, direkt kontaktieren, GU-Einladungen beantworten und Angebote einreichen. GU-Projekte kosten geplant 50,99 € netto/Monat und haben individuelle Projektleiter-Logins. Details: [PRODUKTMODELL_GU_FIRMEN_PROJEKTPREIS.md](./PRODUKTMODELL_GU_FIRMEN_PROJEKTPREIS.md). Diese spätere Entscheidung hat bei abweichenden Beispielen Vorrang.
+
+
 Stand 23.10.2026. Architektur- und Implementierungsspezifikation, **noch keine produktiv implementierte Funktion**. Grundlage: main f487941c15c2daafd6c34318b8fdb581ff18488c.
 
 ## 1. Produktziel
