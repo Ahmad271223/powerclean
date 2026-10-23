@@ -94,8 +94,11 @@ def projekt_leitung(user: dict, projekt: dict) -> bool:
 
 def projekt_fuer_nutzer(user: dict, projekt: dict) -> dict:
     """Projekt für die Antwort: Büro/Inhaber alles; Mitarbeiter ohne vertrauliche Felder; Projektleitung zusätzlich das Stundenbudget."""
-    if hat_rolle(user, "buero"):
+    if user.get("role") == "inhaber":
         return projekt
+    if hat_rolle(user, "buero"):
+        # Büro kann Projekte verwalten, sieht aber keine aggregierten oder personenbezogenen Teamstunden.
+        return {k: v for k, v in projekt.items() if k not in ("total_minutes", "entry_count", "budget", "budget_hours_month", "budget_warn_percent")}
     aus = {k: v for k, v in projekt.items() if k not in PROJEKT_FELDER_VERTRAULICH}
     # Detail-Zeiten und Stundenbudgets anderer Personen bleiben allein beim Inhaber.
     return aus
