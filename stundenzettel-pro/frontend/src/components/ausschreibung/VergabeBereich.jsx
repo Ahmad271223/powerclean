@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { BadgeCheck, FileSignature, FileText, Paperclip, Send, Undo2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Btn, Card, Field, Select, TextArea, TextInput, Toggle } from '../ui';
+import { Btn, Card, Field, Select, Sheet, TextArea, TextInput, Toggle } from '../ui';
 import { api, openFile } from '../../lib/api';
 import { VERGABE_CLS, VERGABE_NAMEN, fmtGeld, fmtZeit } from '../../lib/ausschreibung';
 
@@ -17,10 +17,22 @@ export default function VergabeBereich({ ausschreibung: a, rolle, onChanged, kat
   const [kat, setKat] = useState('Auftragsschreiben');
   const [annahme, setAnnahme] = useState({ name: '', text: '', gelesen: false });
   const [grund, setGrund] = useState('');
+  const [rueckzugOffen, setRueckzugOffen] = useState(false);
+  const [rueckzugGrund, setRueckzugGrund] = useState('');
   const eingabe = useRef(null);
   if (!v) return null;
   const aktion = async (pfad, body, erfolg) => { setBusy(pfad); try { const r = await api.post(pfad, body); toast.success(erfolg); onChanged?.(r); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
   const upload = async (file) => { if (!file) return; setBusy('upload'); try { const fd = new FormData(); fd.append('datei', file); fd.append('kategorie', kat); await api.upload(`/api/vergaben/${v.id}/dokumente`, fd); toast.success('Dokument bereitgestellt'); onChanged?.(); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
+  const rueckzug = async () => {
+    setBusy('rueckzug');
+    try {
+      const r = await api.post(`/api/vergaben/${v.id}/zurueckziehen`, { nachricht: rueckzugGrund.trim() });
+      setRueckzugOffen(false);
+      setRueckzugGrund('');
+      toast.success('Vergabe zurückgezogen');
+      onChanged?.(r);
+    } catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
   const stufe = SCHRITTE.indexOf(v.status);
   const dokumente = v.dokumente || [];
   return (
@@ -43,7 +55,7 @@ export default function VergabeBereich({ ausschreibung: a, rolle, onChanged, kat
         {rolle === 'leitung' && v.status === 'freigegeben' && (
           <div className="rounded-2xl bg-[#E8F0FE] px-4 py-3 text-[13px] space-y-2"><p>Vertrags- oder Auftragsdokumente hochladen und der Firma die Vergabe mitteilen. Die Firma bestätigt danach die Annahme ausdrücklich.</p><Field label="Nachricht an die Firma"><TextArea rows={2} value={nachricht} onChange={(e) => setNachricht(e.target.value)} /></Field><Btn size="sm" onClick={() => aktion(`/api/vergaben/${v.id}/mitteilen`, { nachricht }, 'Vergabemitteilung gesendet')} loading={busy === `/api/vergaben/${v.id}/mitteilen`}><Send size={14} /> Vergabe mitteilen</Btn></div>
         )}
-        {rolle === 'leitung' && ['vorgeschlagen', 'freigegeben', 'mitgeteilt'].includes(v.status) && <div className="flex justify-end"><Btn size="sm" variant="ghost" onClick={() => { const g = window.prompt('Vergabe zurückziehen – Grund:'); if (g !== null) aktion(`/api/vergaben/${v.id}/zurueckziehen`, { nachricht: g }, 'Vergabe zurückgezogen'); }}><Undo2 size={14} /> Zurückziehen</Btn></div>}
+        {rolle === 'leitung' && ['vorgeschlagen', 'freigegeben', 'mitgeteilt'].includes(v.status) && <div className="flex justify-end"><Btn size="sm" variant="ghost" onClick={() => setRueckzugOffen(true)}><Undo2 size={14} /> Zurückziehen</Btn></div>}
         {rolle === 'bieter' && v.status === 'mitgeteilt' && (
           <div className="rounded-2xl border-2 border-[#1B7F3B]/40 bg-[#E8F8EC]/50 px-4 py-4 space-y-3">
             <p className="text-[14px] font-semibold">Verbindliche Auftragsannahme</p>
@@ -58,6 +70,12 @@ export default function VergabeBereich({ ausschreibung: a, rolle, onChanged, kat
         {v.status === 'angenommen' && v.lokales_project_id && rolle === 'bieter' && <Link to={`/projekte/${v.lokales_project_id}`} className="inline-flex items-center gap-2 text-[14px] font-semibold text-[#1B7F3B]"><BadgeCheck size={16} /> Zum Projekt (Mitarbeiter zuordnen, Aufgaben, Zeiten)</Link>}
         {v.status === 'angenommen' && rolle === 'leitung' && <Link to={`/projekte/${a.project_id}`} className="inline-flex items-center gap-2 text-[14px] font-semibold text-[#1B7F3B]"><BadgeCheck size={16} /> Firma ist beteiligt – zum Projekt (Aufgaben planen)</Link>}
       </Card>
+      <Sheet open={rueckzugOffen} onOpenChange={setRueckzugOffen} title="Vergabe zurückziehen" subtitle="Die Rücknahme wird protokolliert und die betroffene Firma gegebenenfalls benachrichtigt.">
+        <div className="space-y-4">
+          <Field label="Begründung"><TextArea rows={3} value={rueckzugGrund} onChange={(e) => setRueckzugGrund(e.target.value)} placeholder="Warum wird die Vergabe zurückgezogen?" /></Field>
+          <div className="flex justify-end gap-2"><Btn variant="soft" onClick={() => setRueckzugOffen(false)}>Abbrechen</Btn><Btn variant="danger" onClick={rueckzug} loading={busy === 'rueckzug'} disabled={!rueckzugGrund.trim()}>Vergabe zurückziehen</Btn></div>
+        </div>
+      </Sheet>
       {(v.verlauf || []).length > 0 && <Card className="p-4"><span className="block text-[13px] font-medium text-[#6E6E73] mb-1">Vergabehistorie</span><ul className="text-[12px] text-[#6E6E73] space-y-0.5">{v.verlauf.slice().reverse().map((s, i) => <li key={i}>{fmtZeit(s.at)} · {VERGABE_NAMEN[s.status] || s.status} · {s.user_name}{s.text ? ` · ${s.text}` : ''}</li>)}</ul></Card>}
     </div>
   );
