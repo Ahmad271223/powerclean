@@ -66,7 +66,7 @@ def _monatsbereich(jahr: int, monat: int) -> tuple[str, str]:
 
 
 @router.get("/lohn.csv")
-async def lohn(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def lohn(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("inhaber"))):
     von, bis = _monatsbereich(jahr, monat)
     projekte = await _projekte(user["firma_id"])
     nutzer = await _nutzer(user["firma_id"])
@@ -83,7 +83,7 @@ async def lohn(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(...,
 
 
 @router.get("/lohn-summen.csv")
-async def lohn_summen(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def lohn_summen(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("inhaber"))):
     von, bis = _monatsbereich(jahr, monat)
     nutzer = await _nutzer(user["firma_id"])
     summen = {uid: {"minuten": 0, "tage": set()} for uid in nutzer}
@@ -118,7 +118,7 @@ async def lohn_summen(jahr: int = Query(..., ge=2025, le=2100), monat: int = Que
 
 
 @router.get("/zeiten.csv")
-async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user: dict = Depends(rolle_noetig("buero"))):
+async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user: dict = Depends(rolle_noetig("inhaber"))):
     try:
         datum_pruefen(von)
         datum_pruefen(bis)
@@ -139,7 +139,7 @@ async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user: dic
 
 
 @router.get("/abwesenheiten.csv")
-async def abwesenheiten(jahr: int = Query(..., ge=2025, le=2100), user: dict = Depends(rolle_noetig("buero"))):
+async def abwesenheiten(jahr: int = Query(..., ge=2025, le=2100), user: dict = Depends(rolle_noetig("inhaber"))):
     namen = await nutzernamen(user["firma_id"])
     zeilen = [["Mitarbeiter", "Art", "Von", "Bis", "Tage", "Status", "Notiz", "Entschieden von"]]
     async for a in db().absences.find({"firma_id": user["firma_id"], "from_date": {"$lte": f"{jahr}-12-31"}, "to_date": {"$gte": f"{jahr}-01-01"}}, {"_id": 0}).sort("from_date", 1):
@@ -148,7 +148,7 @@ async def abwesenheiten(jahr: int = Query(..., ge=2025, le=2100), user: dict = D
 
 
 @router.get("/protokoll.csv")
-async def protokoll_export(user: dict = Depends(rolle_noetig("buero"))):
+async def protokoll_export(user: dict = Depends(rolle_noetig("inhaber"))):
     zeilen = [["Zeitpunkt", "Nutzer", "Aktion", "Ziel", "Details"]]
     async for p in db().protokoll.find({"firma_id": user["firma_id"]}, {"_id": 0}).sort("created_at", -1).limit(20000):
         zeilen.append([p.get("created_at"), p.get("user_name"), p.get("aktion"), p.get("ziel"), str(p.get("details") or "")])
