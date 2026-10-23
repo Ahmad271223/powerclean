@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from auth import aktueller_nutzer, api_token_neu, betreiber_pruefen, firma_laden, jetzt_iso, plan_status, rolle_noetig, schreibend
 from db import db
 from gemeinsam import firma_oeffentlich, neue_id
-from models import ApiTokenIn, FirmaIn, PlanIn, WebhookIn
+from models import ApiTokenIn, FirmaIn, FirmaLoeschenIn, PlanIn, WebhookIn
 from protokoll import protokollieren
 
 router = APIRouter(tags=["Firma"])
@@ -41,6 +41,26 @@ async def plan_lesen(user: dict = Depends(rolle_noetig("buero"))):
     st["nutzer_aktiv"] = nutzer
     st["hinweis_betreiber"] = (firma.get("plan") or {}).get("hinweis") or ""
     return st
+
+
+@router.delete("/api/firma")
+async def firma_loeschen(body: FirmaLoeschenIn, user: dict = Depends(rolle_noetig("inhaber"))):
+    """Firma mit ALLEN Daten unwiderruflich löschen (Store-Pflicht „Konto löschen“ für den Inhaber)."""
+    from auth import passwort_pruefen
+    from dateien import datei_loeschen
+    firma = await firma_laden(user["firma_id"])
+    if not passwort_pruefen(body.password, user.get("pw_hash")):
+        raise HTTPException(400, "Das Passwort stimmt nicht.")
+    if body.name.strip() != (firma.get("name") or "").strip():
+        raise HTTPException(400, "Der Firmenname stimmt nicht überein – nichts gelöscht.")
+    f = user["firma_id"]
+    async for d in db().documents.find({"firma_id": f}, {"_id": 0, "path": 1}):
+        datei_loeschen(d)
+    for sammlung in ("entries", "projects", "customers", "absences", "invoices", "comments", "checklists", "signatures", "documents",
+                     "stempel", "services", "zeitkonto", "webhooks", "abschluesse", "api_tokens", "protokoll", "users"):
+        await db()[sammlung].delete_many({"firma_id": f})
+    await db().firmen.delete_one({"id": f})
+    return {"ok": True, "hinweis": "Die Firma und alle Daten wurden gelöscht."}
 
 
 # ---------------------------------------------------------------- API-Schlüssel (nur Inhaber)

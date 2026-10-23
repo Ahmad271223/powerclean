@@ -11,7 +11,7 @@ from auth import (aktueller_nutzer, firma_laden, jetzt, jetzt_iso, nutzer_oeffen
                   passwort_pruefen, passwort_regel, plan_status, token_erzeugen)
 from db import db
 from gemeinsam import FIRMA_DEFAULTS, firma_oeffentlich, neue_id
-from models import EinladungAnnehmenIn, LoginIn, PasswortIn, RegistrierungIn
+from models import EinladungAnnehmenIn, KontoLoeschenIn, LoginIn, PasswortIn, RegistrierungIn
 from protokoll import protokollieren
 
 router = APIRouter(prefix="/api/auth", tags=["Anmeldung"])
@@ -98,6 +98,24 @@ async def passwort_aendern(body: PasswortIn, user: dict = Depends(aktueller_nutz
     await db().users.update_one({"id": user["id"]}, {"$set": {"pw_hash": passwort_hash(body.neu)}})
     await protokollieren(user, "passwort.geaendert")
     return {"ok": True}
+
+
+@router.delete("/konto")
+async def konto_loeschen(body: KontoLoeschenIn, user: dict = Depends(aktueller_nutzer)):
+    """Eigenes Konto löschen (Pflicht für App Store und Play Store): Anmeldung, E-Mail, Telefon und Notizen werden entfernt.
+    Zeitaufzeichnungen bleiben mit dem Namen beim Arbeitgeber (Aufbewahrung nach § 17 MiLoG, § 16 ArbZG)."""
+    if not passwort_pruefen(body.password, user.get("pw_hash")):
+        raise HTTPException(400, "Das Passwort stimmt nicht.")
+    if user.get("role") == "inhaber":
+        andere = await db().users.count_documents({"firma_id": user["firma_id"], "role": "inhaber", "active": True, "id": {"$ne": user["id"]}})
+        if not andere:
+            raise HTTPException(400, "Du bist der einzige Inhaber. Entweder einen anderen Inhaber ernennen oder unter „Firma“ die ganze Firma löschen.")
+    await protokollieren(user, "konto.geloescht", user.get("name", ""))
+    await db().stempel.delete_many({"firma_id": user["firma_id"], "user_id": user["id"]})
+    await db().users.update_one({"id": user["id"]}, {"$set": {"active": False, "email": f"geloescht-{user['id'][:8]}@konto.geloescht", "phone": "", "notes": "",
+                                                              "pw_hash": None, "deleted_at": jetzt_iso()},
+                                                     "$unset": {"einladung_token": "", "einladung_bis": "", "pin_hash": ""}})
+    return {"ok": True, "hinweis": "Konto gelöscht. Zeitaufzeichnungen bleiben wegen der gesetzlichen Aufbewahrungspflicht beim Arbeitgeber."}
 
 
 def einladungs_token() -> tuple[str, str]:

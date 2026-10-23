@@ -75,8 +75,17 @@ function Leistungen() {
 }
 
 function Lizenz() {
+  const { firma, isInhaber, logout } = useAuth();
   const [plan, setPlan] = useState(null);
   useEffect(() => { api.get('/api/firma/plan').then(setPlan).catch((err) => toast.error(err.message)); }, []);
+  const firmaLoeschen = async () => {
+    const name = window.prompt(`Firma „${firma?.name}“ mit ALLEN Daten (Mitarbeiter, Zeiten, Rechnungen, Akten) unwiderruflich löschen?\nZur Bestätigung den Firmennamen eingeben:`);
+    if (name === null) return;
+    const pw = window.prompt('Dein Passwort:');
+    if (!pw) return;
+    try { await api.del('/api/firma', { name, password: pw }); toast.success('Firma gelöscht'); logout(); window.location.hash = '#/login'; }
+    catch (err) { toast.error(err.message); }
+  };
   if (!plan) return <Ladeanzeige />;
   const farbe = plan.status === 'aktiv' ? 'text-[#1B7F3B]' : plan.status === 'test' ? 'text-[#B25E00]' : 'text-[#C41E3A]';
   return (
@@ -94,6 +103,13 @@ function Lizenz() {
         <div><strong>Pro Plus</strong> – 4,99 € je Nutzer und Monat (mindestens 14,99 €): dazu Stundenkonten mit Soll/Ist, Urlaubskonten, Feiertage, ArbZG-Prüfung, Leistungen mit Sätzen, Zusatzpositionen, Budgets, Auswertungen, Monatsabschluss, Vorarbeiter-Rolle, Objekt-QR mit Offline-Stempeln, Webhooks und API.</div>
         <div className="text-[#6E6E73]">Jahreszahlung: zwei Monate geschenkt. In der Testphase ist alles freigeschaltet. Freischalten oder erweitern: kurze Nachricht an den Anbieter. Lesen und Exportieren geht auch nach Ablauf immer weiter.</div>
       </div>
+      <div className="text-[13px] text-[#6E6E73]"><a href="/datenschutz" target="_blank" rel="noreferrer" className="text-[#C41E3A] font-medium">Datenschutzerklärung</a> · <a href="/impressum" target="_blank" rel="noreferrer" className="text-[#C41E3A] font-medium">Impressum</a></div>
+      {isInhaber && (
+        <div className="pt-4 border-t border-black/[0.06]">
+          <Btn variant="danger" size="sm" onClick={firmaLoeschen}><Trash2 size={14} /> Firma und alle Daten löschen</Btn>
+          <p className="text-[12px] text-[#86868B] mt-1.5">Unwiderruflich. Vorher unter „Exporte“ die Komplettsicherung herunterladen.</p>
+        </div>
+      )}
     </Card>
   );
 }

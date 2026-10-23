@@ -126,6 +126,13 @@ curl -X POST https://pro.deine-domain.de/api/admin/plan -H "X-Admin-Token: $ADMI
 curl https://pro.deine-domain.de/api/admin/firmen -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
+## Play Store und App Store
+
+Native Hülle mit Capacitor 8 in `frontend/android` und `frontend/ios`, Workflow `.github/workflows/stundenzettel-pro-mobile.yml`
+baut signierte Store-Pakete (Android AAB, iOS IPA/TestFlight) ohne eigenen Mac. Kontolöschung, Datenschutz-/Impressumsseite,
+Berechtigungstexte, Deep Links und Icons sind eingebaut. Schritt-für-Schritt-Anleitung, Store-Texte und Secrets: **`STORE.md`**.
+Lokal: `npm run cap:sync` (baut mit `.env.app`), `npm run assets`, `npm run cap:android`.
+
 ## Tests
 
 `cd stundenzettel-pro/backend && python -m pytest -q` – 22 Tests ohne Datenbank (mongomock): Grundlagen

@@ -6,9 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:app": "vite build --mode app",
+    "cap:sync": "npm run build:app && npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios",
+    "assets": "node scripts/assets.mjs && npx capacitor-assets generate --android --ios --iconBackgroundColor \"#F5F5F7\" --iconBackgroundColorDark \"#1D1D1F\" --splashBackgroundColor \"#F5F5F7\" --splashBackgroundColorDark \"#1D1D1F\""
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@radix-ui/react-dialog": "^1.1.2",
     "clsx": "^2.1.1",
     "jspdf": "^2.5.2",
@@ -22,6 +31,10 @@
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",

@@ -36,6 +36,15 @@ class PasswortIn(BaseModel):
     neu: str = Field(min_length=8, max_length=200)
 
 
+class KontoLoeschenIn(BaseModel):
+    password: str = Field(max_length=200)
+
+
+class FirmaLoeschenIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)   # Firmenname zur Bestätigung
+    password: str = Field(max_length=200)
+
+
 class FirmaIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
     owner: Optional[str] = Field(default=None, max_length=120)

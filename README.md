@@ -41,7 +41,8 @@ Sicherheitsprotokoll, lesende API mit Schlüssel, Import aus der kostenlosen App
 Stundenkonten, Urlaubskonten, Arbeitszeitgesetz-Prüfung mit Pausenabzug, Monatsabschluss, Leistungen mit Sätzen,
 Zusatzpositionen, Budgets, Auswertung, Vorarbeiter-Rolle, Objekt-QR mit Offline-Stempeln, Webhooks. FastAPI + MongoDB im Docker,
 Oberfläche mit dem Baukasten der kostenlosen App. Entwicklung ohne MongoDB: `python stundenzettel-pro/backend/dev.py`
-(Port 8010). Alles Weitere in `stundenzettel-pro/README.md`.
+(Port 8010). Alles Weitere in `stundenzettel-pro/README.md`. Als Play-Store-/App-Store-App (Capacitor, Build per GitHub
+Actions): `stundenzettel-pro/STORE.md`.
 
 ## Lokal starten
 

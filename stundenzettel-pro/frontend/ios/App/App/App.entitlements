@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal Links: QR-Codes und Einladungslinks des eigenen Servers öffnen die App.
+	     In Xcode unter Signing & Capabilities → "Associated Domains" hinzufügen; Domain anpassen.
+	     Der Server liefert /.well-known/apple-app-site-association (APPLE_TEAM_ID setzen). -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:pro.deine-domain.de</string>
+	</array>
+</dict>
+</plist>

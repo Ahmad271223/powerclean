@@ -1,0 +1,178 @@
+# Store-Builds für Stundenzettel Pro: Android App Bundle (Play Store) und iOS-Archiv (TestFlight/App Store).
+# Start: Actions → "Stundenzettel Pro – Store-Builds" → Run workflow, oder ein Tag "pro-v1.2.3" pushen.
+# Ohne Secrets baut der Workflow nur unsignierte Testpakete (Android AAB, iOS Simulator-Build).
+# Benötigte Secrets (Repository → Settings → Secrets and variables → Actions), Anleitung in stundenzettel-pro/STORE.md:
+#   PRO_API_URL                   öffentliche Adresse des Servers, z. B. https://pro.deine-domain.de
+#   PRO_APP_HOST                  nur der Host, z. B. pro.deine-domain.de (App Links / Universal Links)
+#   ANDROID_KEYSTORE_BASE64       Upload-Keystore (.jks) als Base64
+#   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON  (optional) Dienstkonto für den Upload in den internen Play-Test-Track
+#   APPLE_TEAM_ID, IOS_BUNDLE_ID (optional, Standard de.stundenzettelpro.app)
+#   APPSTORE_ISSUER_ID, APPSTORE_KEY_ID, APPSTORE_PRIVATE_KEY   App-Store-Connect-API-Schlüssel (Inhalt der .p8-Datei)
+#   IOS_CERTIFICATE_BASE64, IOS_CERTIFICATE_PASSWORD           (optional) Apple-Distribution-Zertifikat (.p12) als Base64
+name: Stundenzettel Pro – Store-Builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "In die Stores hochladen (Play internal / TestFlight)?"
+        type: boolean
+        default: false
+  push:
+    tags: ["pro-v*"]
+
+env:
+  NODE_VERSION: "20"
+  FRONTEND_DIR: stundenzettel-pro/frontend
+
+jobs:
+  android:
+    name: Android (AAB)
+    runs-on: ubuntu-latest
+    env:
+      MIT_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      MIT_PLAY_UPLOAD: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+      APP_HOST: ${{ secrets.PRO_APP_HOST || 'pro.deine-domain.de' }}
+      RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Version bestimmen (Tag pro-vX.Y.Z oder 1.0.<Lauf>)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/pro-v* ]]; then
+            echo "VERSION_NAME=${GITHUB_REF_NAME#pro-v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_NAME=1.0.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          fi
+          echo "VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+      - name: Oberfläche für die native App bauen
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          npm ci
+          echo "VITE_API_URL=${{ secrets.PRO_API_URL }}" > .env.app
+          npm run build:app
+          npx cap sync android
+      - name: Upload-Keystore bereitstellen
+        if: env.MIT_KEYSTORE == 'true'
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "RELEASE_KEYSTORE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+      - name: App Bundle bauen
+        working-directory: ${{ env.FRONTEND_DIR }}/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
+          ls -la app/build/outputs/bundle/release/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stundenzettel-pro-android-aab
+          path: ${{ env.FRONTEND_DIR }}/android/app/build/outputs/bundle/release/*.aab
+      - name: In den Play Store hochladen (interner Test)
+        if: ${{ inputs.upload && env.MIT_PLAY_UPLOAD == 'true' && env.MIT_KEYSTORE == 'true' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: de.stundenzettelpro.app
+          releaseFiles: ${{ env.FRONTEND_DIR }}/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+
+  ios:
+    name: iOS (IPA / TestFlight)
+    runs-on: macos-15
+    env:
+      MIT_SIGNIERUNG: ${{ secrets.APPSTORE_PRIVATE_KEY != '' }}
+      MIT_ZERTIFIKAT: ${{ secrets.IOS_CERTIFICATE_BASE64 != '' }}
+      MIT_HOST: ${{ secrets.PRO_APP_HOST != '' }}
+      BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID || 'de.stundenzettelpro.app' }}
+      ZIEL: ${{ inputs.upload && 'upload' || 'export' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      - name: Version bestimmen (Tag pro-vX.Y.Z oder 1.0.<Lauf>)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/pro-v* ]]; then
+            echo "VERSION_NAME=${GITHUB_REF_NAME#pro-v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_NAME=1.0.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          fi
+          echo "VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+      - name: Oberfläche für die native App bauen
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          npm ci
+          echo "VITE_API_URL=${{ secrets.PRO_API_URL }}" > .env.app
+          npm run build:app
+          npx cap sync ios
+      - name: Universal-Link-Domain eintragen
+        if: env.MIT_HOST == 'true'
+        working-directory: ${{ env.FRONTEND_DIR }}/ios/App/App
+        run: sed -i '' "s/pro.deine-domain.de/${{ secrets.PRO_APP_HOST }}/" App.entitlements
+      - name: Distribution-Zertifikat importieren
+        if: env.MIT_ZERTIFIKAT == 'true'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      - name: App-Store-Connect-Schlüssel ablegen
+        if: env.MIT_SIGNIERUNG == 'true'
+        run: |
+          mkdir -p ~/private_keys
+          echo "${{ secrets.APPSTORE_PRIVATE_KEY }}" > ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8
+      - name: Archiv bauen und exportieren (automatische Signierung über den API-Schlüssel)
+        if: env.MIT_SIGNIERUNG == 'true'
+        working-directory: ${{ env.FRONTEND_DIR }}/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
+            -archivePath build/App.xcarchive archive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }} \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            CODE_SIGN_ENTITLEMENTS=App/App.entitlements \
+            CURRENT_PROJECT_VERSION="$VERSION_CODE" MARKETING_VERSION="$VERSION_NAME"
+          cat > ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>$ZIEL</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/App.xcarchive -exportPath build/export \
+            -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}
+      - name: Nur prüfen, ob das Xcode-Projekt baut (ohne Secrets, ohne Signierung)
+        if: env.MIT_SIGNIERUNG != 'true'
+        working-directory: ${{ env.FRONTEND_DIR }}/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - uses: actions/upload-artifact@v4
+        if: env.MIT_SIGNIERUNG == 'true'
+        with:
+          name: stundenzettel-pro-ios
+          path: ${{ env.FRONTEND_DIR }}/ios/App/build/export/*.ipa
+          if-no-files-found: ignore

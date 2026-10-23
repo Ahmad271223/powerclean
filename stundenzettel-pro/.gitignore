@@ -8,3 +8,23 @@ frontend/node_modules/
 frontend/dist/
 __pycache__/
 .pytest_cache/
+
+# Vorlage für den nativen Build bleibt im Repo
+!frontend/.env.app.example
+# Native Build-Ausgaben
+frontend/android/app/build/
+frontend/android/build/
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/ios/App/Pods/
+frontend/ios/App/App.xcworkspace/xcuserdata/
+frontend/ios/App/build/
+frontend/assets/
+
+# Signierschlüssel und Zertifikate nie einchecken (Store-Builds laufen über GitHub-Secrets, siehe STORE.md)
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+frontend/android/upload.jks

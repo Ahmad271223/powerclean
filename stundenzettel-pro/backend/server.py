@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import config
@@ -53,6 +53,38 @@ async def eingabefehler(_: Request, exc: RequestValidationError):
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": VERSION, "db": config.DB_MODE}
+
+
+# ---------------------------------------------------------------- Pflichtseiten und Deep Links (Stores)
+@app.get("/datenschutz", include_in_schema=False)
+async def datenschutz():
+    import rechtstexte
+    return HTMLResponse(rechtstexte.datenschutz())
+
+
+@app.get("/impressum", include_in_schema=False)
+async def impressum():
+    import rechtstexte
+    return HTMLResponse(rechtstexte.impressum())
+
+
+@app.get("/.well-known/assetlinks.json", include_in_schema=False)
+async def assetlinks():
+    """Android App Links: QR-Codes und Einladungslinks öffnen die installierte App (Signatur-Fingerabdrücke aus ANDROID_SHA256)."""
+    if not config.ANDROID_SHA256:
+        return JSONResponse(status_code=404, content={"detail": "ANDROID_SHA256 nicht gesetzt."})
+    return JSONResponse([{"relation": ["delegate_permission/common.handle_all_urls"],
+                          "target": {"namespace": "android_app", "package_name": config.ANDROID_PACKAGE, "sha256_cert_fingerprints": config.ANDROID_SHA256}}])
+
+
+@app.get("/.well-known/apple-app-site-association", include_in_schema=False)
+async def apple_app_site_association():
+    """iOS Universal Links (APPLE_TEAM_ID + IOS_BUNDLE_ID)."""
+    if not config.APPLE_TEAM_ID:
+        return JSONResponse(status_code=404, content={"detail": "APPLE_TEAM_ID nicht gesetzt."})
+    app_id = f"{config.APPLE_TEAM_ID}.{config.IOS_BUNDLE_ID}"
+    return JSONResponse({"applinks": {"apps": [], "details": [{"appID": app_id, "paths": ["/", "/#*"]}]},
+                         "webcredentials": {"apps": [app_id]}}, media_type="application/json")
 
 
 # ---------------------------------------------------------------- Oberfläche (gebautes Frontend)

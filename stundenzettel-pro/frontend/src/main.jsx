@@ -1,10 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { registerSW } from 'virtual:pwa-register';
 import App from './App';
+import { istNativ, nativStarten } from './lib/native';
 import './index.css';
 
-registerSW({ immediate: true });
+// Service Worker nur im Browser (PWA); in der nativen App liegt die Oberfläche schon im Paket.
+if (!istNativ()) {
+  import('virtual:pwa-register').then(({ registerSW }) => registerSW({ immediate: true })).catch(() => {});
+} else {
+  nativStarten();
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

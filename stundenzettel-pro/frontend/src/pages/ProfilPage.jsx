@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { KeyRound, LogOut, Clock, Palmtree } from 'lucide-react';
+import { KeyRound, LogOut, Clock, Palmtree, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import Layout from '../components/Layout';
@@ -22,6 +22,13 @@ export default function ProfilPage() {
     setBusy(true);
     try { await api.put('/api/auth/passwort', pw); toast.success('Passwort geändert'); setPw({ alt: '', neu: '' }); } catch (err) { toast.error(err.message); } finally { setBusy(false); }
   };
+  const kontoLoeschen = async () => {
+    if (!window.confirm('Dein Konto wirklich löschen? Du kannst dich danach nicht mehr anmelden.')) return;
+    const pw = window.prompt('Zur Bestätigung dein Passwort eingeben:');
+    if (!pw) return;
+    try { await api.del('/api/auth/konto', { password: pw }); toast.success('Konto gelöscht'); logout(); navigate('/login'); }
+    catch (err) { toast.error(err.message); }
+  };
   const m = konto?.monat;
   return (
     <Layout title="Profil" subtitle={`${user?.name} · ${user?.rolle_name} bei ${firma?.name}`}>
@@ -43,6 +50,10 @@ export default function ProfilPage() {
             <Field label="Neues Passwort (mindestens 8 Zeichen)"><TextInput type="password" value={pw.neu} onChange={(e) => setPw({ ...pw, neu: e.target.value })} required minLength={8} autoComplete="new-password" /></Field>
             <div className="flex justify-between"><Btn type="button" variant="ghost" size="sm" onClick={() => { logout(); navigate('/login'); }}><LogOut size={15} /> Abmelden</Btn><Btn type="submit" size="sm" loading={busy}>Speichern</Btn></div>
           </form>
+          <div className="pt-3 border-t border-black/[0.06]">
+            <Btn type="button" variant="danger" size="sm" onClick={kontoLoeschen}><Trash2 size={14} /> Konto löschen</Btn>
+            <p className="text-[12px] text-[#86868B] mt-1.5">Entfernt Anmeldung, E-Mail, Telefon und Notizen. Zeitaufzeichnungen bleiben wegen der gesetzlichen Aufbewahrung beim Arbeitgeber.</p>
+          </div>
         </Card>
         <div><h2 className="text-[16px] mb-2">Meine Personalakte</h2>{user && <Personalakte userId={user.id} readOnly />}</div>
       </div>

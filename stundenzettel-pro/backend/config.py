@@ -24,8 +24,21 @@ MAX_DATEI_MB = int(env("MAX_DATEI_MB", "15"))
 
 # Oberfläche
 FRONTEND_DIST = Path(env("FRONTEND_DIST", str(BASIS.parent / "frontend" / "dist")))
-CORS_ORIGINS = [o.strip() for o in env("CORS_ORIGINS", "http://localhost:5175,http://127.0.0.1:5175").split(",") if o.strip()]
+# Browser-Herkünfte: Entwicklung plus die nativen Apps (Capacitor: iOS capacitor://localhost, Android https://localhost)
+CORS_ORIGINS = [o.strip() for o in env("CORS_ORIGINS", "http://localhost:5175,http://127.0.0.1:5175,capacitor://localhost,https://localhost,http://localhost").split(",") if o.strip()]
 BASE_URL = env("BASE_URL", "").rstrip("/")  # öffentliche Adresse, z. B. https://pro.stundenzettel.app (für Einladungslinks)
+
+# Impressum / Datenschutz (Pflichtseiten für die Stores: /impressum und /datenschutz)
+ANBIETER_NAME = env("ANBIETER_NAME", "")
+ANBIETER_ANSCHRIFT = env("ANBIETER_ANSCHRIFT", "")
+ANBIETER_EMAIL = env("ANBIETER_EMAIL", "")
+ANBIETER_TELEFON = env("ANBIETER_TELEFON", "")
+
+# Native Apps (Deep Links für QR-Codes: /.well-known/assetlinks.json und apple-app-site-association)
+ANDROID_PACKAGE = env("ANDROID_PACKAGE", "de.stundenzettelpro.app")
+ANDROID_SHA256 = [s.strip().upper() for s in env("ANDROID_SHA256", "").split(",") if s.strip()]  # Signatur-Fingerabdrücke
+IOS_BUNDLE_ID = env("IOS_BUNDLE_ID", "de.stundenzettelpro.app")
+APPLE_TEAM_ID = env("APPLE_TEAM_ID", "")
 
 # Lizenz
 TEST_TAGE = int(env("TEST_TAGE", "14"))

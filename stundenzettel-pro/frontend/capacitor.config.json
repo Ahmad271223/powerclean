@@ -1,0 +1,31 @@
+{
+  "appId": "de.stundenzettelpro.app",
+  "appName": "Stundenzettel Pro",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#F5F5F7"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#F5F5F7",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "launchAutoHide": true,
+      "backgroundColor": "#F5F5F7",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#F5F5F7"
+    }
+  }
+}
