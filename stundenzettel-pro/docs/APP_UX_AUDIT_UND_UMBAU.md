@@ -1,5 +1,8 @@
 # Stundenzettel Pro — Gesamtaudit der Oberflächen, Rollen, API und Vereinfachungen
 
+> **Produktentscheidung 23.10.2026:** Oberfläche und Navigation sind strikt nach GU-/Großunternehmen und normalem Handwerksbetrieb zu trennen. Nur GU dürfen formale Ausschreibungen erstellen. Projektleiter haben eigene Logins, aber keine neuen Firmenkonten; GU zahlt pro aktivem Projekt 50,99 € netto monatlich. Details: [PRODUKTMODELL_GU_FIRMEN_PROJEKTPREIS.md](./PRODUKTMODELL_GU_FIRMEN_PROJEKTPREIS.md).
+
+
 Stand 23.10.2026, statischer Review des GitHub-Codes auf main f487941. **Keine Browser-/Lasttests durchgeführt.** Die Hinweise unterscheiden bestätigte Codepfade von nicht verifizierten Risiken.
 
 ## 1. Navigation nach Nutzer statt nach technischen Modulen
