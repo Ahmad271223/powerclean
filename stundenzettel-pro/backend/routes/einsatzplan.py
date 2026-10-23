@@ -211,8 +211,15 @@ async def freigeben(einsatz_id: str, body: EinsatzFreigabeIn, user: dict = Depen
     plan = await db().einsatzplaene.find_one({"id": einsatz_id, "firma_id": user["firma_id"]}, {"_id": 0})
     if not plan:
         raise HTTPException(404, "Einsatz nicht gefunden.")
-    if plan["date"] > lokal_jetzt().date().isoformat():
+    aktuelle_zeit = lokal_jetzt()
+    if plan["date"] > aktuelle_zeit.date().isoformat():
         raise HTTPException(409, "Zukünftige Arbeitszeiten können nicht als geleistet freigegeben werden.")
+    laufend = await db().stempel.find_one({"firma_id": user["firma_id"], "user_id": plan["user_id"],
+                                         "project_id": plan["project_id"]}, {"_id": 0, "id": 1})
+    if laufend:
+        raise HTTPException(409, "Die Mitarbeiterin oder der Mitarbeiter ist noch eingestempelt. Bitte zuerst den Arbeitstag beenden.")
+    if plan["date"] == aktuelle_zeit.date().isoformat() and aktuelle_zeit.strftime("%H:%M") < body.end_time:
+        raise HTTPException(409, "Die angegebene Arbeitszeit liegt noch in der Zukunft.")
     if plan.get("status") == "freigegeben":
         raise HTTPException(409, "Einsatz ist bereits freigegeben. Eine Korrektur braucht einen eigenen versionierten Vorgang.")
     dauer = _dauer(body.start_time, body.end_time, body.pause_minutes)
@@ -227,8 +234,11 @@ async def freigeben(einsatz_id: str, body: EinsatzFreigabeIn, user: dict = Depen
                 "stempel_minuten_zum_zeitpunkt": stempel_min, "hat_stempel": bool(stempel),
                 "freigegeben_von": user["id"], "freigegeben_von_name": user.get("name"),
                 "freigegeben_at": jetzt_iso()}
-    await db().einsatzplaene.update_one({"id": einsatz_id, "firma_id": user["firma_id"], "status": {"$ne": "freigegeben"}},
-                                      {"$set": {"freigabe": freigabe, "status": "freigegeben", "updated_at": jetzt_iso()}})
+    update = await db().einsatzplaene.update_one(
+        {"id": einsatz_id, "firma_id": user["firma_id"], "status": {"$ne": "freigegeben"}},
+        {"$set": {"freigabe": freigabe, "status": "freigegeben", "updated_at": jetzt_iso()}})
+    if not update.modified_count:
+        raise HTTPException(409, "Dieser Einsatz wurde bereits freigegeben.")
     await protokollieren(user, "einsatzplan.freigabe", plan["project_id"],
                          details={"einsatz_id": einsatz_id, "mitarbeiter_id": plan["user_id"],
                                   "abweichung": abweichung, "freigegebene_minuten": dauer})
