@@ -21,7 +21,12 @@ FIRMA_DEFAULTS = {
     "stamp_config": None, "pdf_footer": False,
     # Pro Plus: Arbeitszeitregeln
     "bundesland": "", "auto_pause": False, "arbzg_pruefung": True, "sperre_tage_mitarbeiter": 7, "workdays": [0, 1, 2, 3, 4],
+    # Plattform: Firmenart – „betrieb“ führt Aufträge aus (Handwerk, Reinigung, Dienstleistung), „auftraggeber“ vergibt sie (GU, Bauherr,
+    # Projektsteuerung), „beides“ kann beides. Bestimmt Menü, Startseite und die Ansicht unter „Ausschreibungen“.
+    "art": "betrieb",
 }
+
+FIRMENARTEN = {"betrieb": "Ausführender Betrieb", "auftraggeber": "Auftraggeber / Generalunternehmer", "beides": "Beides"}
 
 PROJEKT_DEFAULTS = {
     "name": "", "color": "#C41E3A", "customer_id": None, "customer_name": "", "customer_address": "", "address": "",
@@ -42,7 +47,7 @@ PROJEKT_FELDER_VERTRAULICH = {"hourly_rate", "kostenlos", "budget_hours_month", 
 # Mitarbeiter sehen keine Bank-/Steuerdaten; Logo und Stempel brauchen sie für den Stundenzettel beim Kunden
 FIRMA_FELDER_MITARBEITER = {"id", "name", "owner", "street", "zip_code", "city", "phone", "email", "website", "logo",
                             "logo_w", "logo_h", "stamp", "stamp_w", "stamp_h", "stamp_on_sheet", "stamp_scale", "created_at",
-                            "bundesland", "auto_pause", "arbzg_pruefung", "sperre_tage_mitarbeiter", "workdays"}
+                            "bundesland", "auto_pause", "arbzg_pruefung", "sperre_tage_mitarbeiter", "workdays", "art"}
 
 
 def neue_id() -> str:

@@ -28,7 +28,7 @@ async def registrieren(body: RegistrierungIn):
     if await db().users.find_one({"email": email}):
         raise HTTPException(409, "Für diese E-Mail-Adresse gibt es schon ein Konto. Bitte anmelden.")
     passwort_regel(body.password)
-    firma = {**FIRMA_DEFAULTS, "id": neue_id(), "name": body.firma_name.strip(), "owner": body.name.strip(),
+    firma = {**FIRMA_DEFAULTS, "id": neue_id(), "name": body.firma_name.strip(), "owner": body.name.strip(), "art": body.art,
              "email": email, "created_at": jetzt_iso(),
              "plan": {"status": "test", "test_bis": (jetzt() + timedelta(days=config.TEST_TAGE)).isoformat(),
                       "nutzer_max": 0}}
@@ -37,7 +37,7 @@ async def registrieren(body: RegistrierungIn):
             "created_at": jetzt_iso()}
     await db().firmen.insert_one(dict(firma))
     await db().users.insert_one(dict(user))
-    await protokollieren(user, "firma.registriert", firma["name"])
+    await protokollieren(user, "firma.registriert", firma["name"], details={"art": body.art})
     return _antwort(user, firma)
 
 

@@ -142,7 +142,8 @@ Ein Auftraggeber (z. B. Generalunternehmer) führt das Projekt, lädt Subunterne
 trägt mehrere Projektleiter ein und plant Aufgaben je Tag und Firma. Die Partnerfirma nimmt an, bekommt ein verknüpftes eigenes
 Projekt (Stempeluhr, Stundenzettel, Rechnung an den Auftraggeber wie gewohnt), teilt Aufgaben ihren Leuten zu, meldet Status und Fotos
 und gibt Wochen-Nachweise ausdrücklich frei. Lohndaten, Konten, Personalakten und Rechnungen bleiben immer in der eigenen Firma.
-Dazu Baustellenalltag (Phase 5): Lieferungen je Tag (zuständige Firma bestätigt, meldet Verspätung und Eintreffen, Lieferschein-Foto),
+Firmenarten: Auftraggeber (GU/Bauherr) und ausführende Betriebe sind getrennte Kontoarten mit eigenem Menü, eigener Startseite und eigener
+Ausschreibungsansicht (Registrierung oder Firma → Firmendaten; „beides“ möglich). Dazu Baustellenalltag (Phase 5): Lieferungen je Tag (zuständige Firma bestätigt, meldet Verspätung und Eintreffen, Lieferschein-Foto),
 Mängel mit Firma, Frist, Priorität, Kommentaren und Fotos (Behebung melden, Abnahme nur durch die Leitung), Bautagesberichte mit
 Vorbelegung aus Aufgaben/Lieferungen/Anwesenheit, Einreichen, Freigabe und PDF, Meilensteine, geteilte Projektdokumente mit Freigabe
 für alle Firmen, Plattform-Kalender (Markierungen in den Tageszellen, Liste im Tagesdialog).
@@ -193,7 +194,7 @@ Lokal: `npm run cap:sync` (baut mit `.env.app`), `npm run assets`, `npm run cap:
 
 ## Tests
 
-`cd stundenzettel-pro/backend && python -m pytest -q` – 58 Tests ohne Datenbank (mongomock): Grundlagen
+`cd stundenzettel-pro/backend && python -m pytest -q` – 59 Tests ohne Datenbank (mongomock): Grundlagen
 (`test_pro_grundlagen_20261022.py`), Pro Plus (`test_pro_plus_20261022.py`: Feiertage, Konten, ArbZG, Sperren,
 Leistungen/Zusatzpositionen, Budget/Auswertung, Webhooks, Vorarbeiter, Stempelung beenden, Lohnsummen), E-Rechnung und
 Lohnvorbereitung (`test_erechnung_lohn_20261023.py`), Fotos (`test_fotos_20261023.py`), Plattform (`test_plattform_20261023.py`)

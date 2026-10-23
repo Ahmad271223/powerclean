@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Timer, Users, FolderKanban, Receipt, CalendarOff, Plus, UserPlus, ChevronRight, Clock, AlertTriangle, Gauge, Lock } from 'lucide-react';
+import { Timer, Users, FolderKanban, Receipt, CalendarOff, Plus, UserPlus, ChevronRight, Clock, AlertTriangle, Gauge, Lock, Gavel, Megaphone, Inbox, MessageCircleQuestion, BadgeCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
@@ -24,6 +24,40 @@ function Kachel({ icon: Icon, label, value, sub, to, onClick, accent, warn }) {
   return inner;
 }
 
+/** Startseite für Auftraggeber: laufende Ausschreibungen, neue Angebote, Rückfragen, Vergaben und Bauprojekte mit Firmen. */
+function AuftraggeberBlock({ gu }) {
+  const eigene = gu.a.eigene || [];
+  const laufend = eigene.filter((a) => ['veroeffentlicht', 'in_vergabe'].includes(a.status));
+  const fristen = laufend.filter((a) => a.frist_tage !== null && a.frist_tage >= 0 && a.frist_tage <= 3).length;
+  const neu = laufend.reduce((s, a) => s + (a.zaehler?.neu || 0), 0);
+  const inPruefung = laufend.reduce((s, a) => s + (a.zaehler?.in_pruefung || 0), 0);
+  const fragen = laufend.reduce((s, a) => s + (a.zaehler?.fragen_offen || 0), 0);
+  const vergaben = gu.a.vergaben_eigene || [];
+  const projekte = gu.p.projekte || [];
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-3"><h2 className="text-[17px] flex items-center gap-2"><Gavel size={17} /> Ausschreibungen und Bauprojekte</h2><Link to="/ausschreibungen" className="text-[13px] text-[#C41E3A] font-medium">Alle Ausschreibungen</Link></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kachel icon={Megaphone} label="Laufende Ausschreibungen" value={laufend.length} sub={fristen ? `${fristen} mit Frist in den nächsten 3 Tagen` : `${eigene.length - laufend.length} Entwürfe/abgeschlossen`} to="/ausschreibungen" warn={fristen > 0} />
+        <Kachel icon={Inbox} label="Neue Angebote" value={neu} sub={`${inPruefung} in Prüfung`} to="/ausschreibungen" accent={neu > 0} />
+        <Kachel icon={MessageCircleQuestion} label="Offene Rückfragen" value={fragen} sub="von Bietern, noch unbeantwortet" to="/ausschreibungen" warn={fragen > 0} />
+        <Kachel icon={BadgeCheck} label="Laufende Vergaben" value={vergaben.length} sub={vergaben[0] ? `${vergaben[0].firma_name}: ${vergaben[0].status_name}` : 'keine offene Vergabe'} to="/ausschreibungen" accent={vergaben.some((v) => v.status === 'vorgeschlagen')} />
+      </div>
+      {laufend.length > 0 && (
+        <ul className="divide-y divide-black/[0.06] mt-3">
+          {laufend.slice(0, 5).map((a) => (
+            <li key={a.id} className="py-2 flex items-center gap-3 text-[14px]">
+              <Link to={`/ausschreibungen/${a.id}`} className="flex-1 min-w-0"><span className="block font-medium truncate">{a.titel}{a.projekt?.name ? ` – ${a.projekt.name}` : ''}</span><span className="block text-[12px] text-[#6E6E73]">{a.zaehler?.angebote || 0} Angebote{a.zaehler?.neu ? ` (${a.zaehler.neu} neu)` : ''} · {a.zaehler?.einladungen || 0} eingeladen · Frist {a.angebotsfrist ? fmtDate(fromKey(a.angebotsfrist)) : '–'}{a.frist_tage !== null && a.frist_tage >= 0 ? ` (noch ${a.frist_tage} Tage)` : ''}</span></Link>
+              <ChevronRight size={16} className="text-[#C7C7CC]" />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3 text-[13px] text-[#6E6E73]">{projekte.length} Bauprojekt{projekte.length === 1 ? '' : 'e'} mit beteiligten Firmen{gu.p.einladungen?.length ? ` · ${gu.p.einladungen.length} offene Einladungen` : ''} · <Link to="/zusammenarbeit" className="text-[#C41E3A] font-medium">Zusammenarbeit</Link></div>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const { firma } = useAuth();
   const navigate = useNavigate();
@@ -31,6 +65,9 @@ export default function DashboardPage() {
   const [projektDialog, setProjektDialog] = useState(false);
   const [maDialog, setMaDialog] = useState(false);
   const [warnungen, setWarnungen] = useState(null);
+  const auftraggeber = !!firma?.art && firma.art !== 'betrieb';
+  const [gu, setGu] = useState(null);
+  useEffect(() => { if (auftraggeber) Promise.all([api.get('/api/ausschreibungen/uebersicht'), api.get('/api/plattform/uebersicht')]).then(([a, p]) => setGu({ a, p })).catch(() => setGu(null)); }, [auftraggeber]);
   const laden = () => api.get('/api/dashboard').then(setD).catch((err) => toast.error(err.message));
   useEffect(() => { laden(); }, []);
   const heute = new Date();
@@ -45,13 +82,14 @@ export default function DashboardPage() {
 
   return (
     <Layout title={`Hallo, ${firma?.owner?.split(' ')[0] || firma?.name || ''}`} subtitle={`${fmtDate(heute)} · ${MONTHS_DE[heute.getMonth()]} ${heute.getFullYear()}`}
-      action={<div className="flex gap-2"><Btn variant="soft" size="sm" onClick={() => setMaDialog(true)}><UserPlus size={16} /> Einladen</Btn><Btn size="sm" onClick={() => setProjektDialog(true)}><Plus size={16} /> Projekt</Btn></div>}>
+      action={<div className="flex gap-2"><Btn variant="soft" size="sm" onClick={() => setMaDialog(true)}><UserPlus size={16} /> Einladen</Btn><Btn size="sm" onClick={() => setProjektDialog(true)}><Plus size={16} /> {firma?.art === 'auftraggeber' ? 'Bauprojekt' : 'Projekt'}</Btn></div>}>
       {!d ? <Ladeanzeige /> : (
         <div className="space-y-5">
+          {auftraggeber && gu && <AuftraggeberBlock gu={gu} />}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Kachel icon={Timer} label="Gerade im Einsatz" value={d.gestempelt} sub={`${d.heute_eintraege} Einträge heute`} to="/stempeluhr" accent={d.gestempelt > 0} />
             <Kachel icon={Clock} label={`Stunden ${MONTHS_DE[heute.getMonth()]}`} value={fmtDecimalHours(d.monat.minuten)} sub={`≈ ${fmtEur(d.monat.umsatz_netto)} netto`} to="/auswertung" />
-            <Kachel icon={Receipt} label="Offene Rechnungen" value={d.rechnungen_offen.anzahl} sub={fmtEur(d.rechnungen_offen.summe)} to="/rechnungen" />
+            {firma?.art !== 'auftraggeber' && <Kachel icon={Receipt} label="Offene Rechnungen" value={d.rechnungen_offen.anzahl} sub={fmtEur(d.rechnungen_offen.summe)} to="/rechnungen" />}
             <Kachel icon={CalendarOff} label="Offene Anträge" value={d.antraege_offen} sub={d.abwesend_heute.length ? `${d.abwesend_heute.length} heute abwesend` : 'niemand abwesend'} to="/abwesenheiten" accent={d.antraege_offen > 0} />
             <Kachel icon={AlertTriangle} label="ArbZG-Hinweise im Monat" value={d.arbzg_warnungen} sub={d.arbzg_warnungen ? 'Tage mit Verstoß-Hinweis' : 'alles im Rahmen'} onClick={warnungenZeigen} warn={d.arbzg_warnungen > 0} />
             <Kachel icon={Gauge} label="Budget-Warnungen" value={d.budget_warnungen.length} sub={d.budget_warnungen[0] ? `${d.budget_warnungen[0].name}: ${d.budget_warnungen[0].prozent} %` : 'kein Objekt über der Grenze'} to="/projekte" warn={d.budget_warnungen.length > 0} />

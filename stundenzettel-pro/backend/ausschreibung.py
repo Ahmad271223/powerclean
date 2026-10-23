@@ -223,9 +223,9 @@ async def interessierte_firmen(a: dict) -> list[str]:
     gewerk = (a.get("gewerk") or "").strip().lower()
     ort = " ".join(t for t in [a.get("ausfuehrungsort") or "", a.get("_projekt_adresse") or ""] if t).lower()
     aus = []
-    async for f in db().firmen.find({"id": {"$ne": a["firma_id"]}, "verzeichnis.gewerke": {"$exists": True}}, {"_id": 0, "id": 1, "verzeichnis": 1}):
+    async for f in db().firmen.find({"id": {"$ne": a["firma_id"]}, "verzeichnis.gewerke": {"$exists": True}}, {"_id": 0, "id": 1, "verzeichnis": 1, "art": 1}):
         v = f.get("verzeichnis") or {}
-        if v.get("ausschreibungen_benachrichtigen") is False:
+        if v.get("ausschreibungen_benachrichtigen") is False or f.get("art") == "auftraggeber":
             continue
         gewerke = [g.lower() for g in v.get("gewerke") or []]
         if gewerk and gewerk not in gewerke:

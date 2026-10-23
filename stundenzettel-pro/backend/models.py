@@ -22,6 +22,7 @@ class RegistrierungIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     email: EmailStr
     password: str = Field(min_length=8, max_length=200)
+    art: str = Field(default="betrieb", pattern="^(betrieb|auftraggeber|beides)$")   # Firmenart (siehe gemeinsam.FIRMENARTEN)
 
 
 class LoginIn(BaseModel):
@@ -73,6 +74,7 @@ class LohnExportIn(BaseModel):
 
 class FirmaIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
+    art: Optional[str] = Field(default=None, pattern="^(betrieb|auftraggeber|beides)$")
     owner: Optional[str] = Field(default=None, max_length=120)
     street: Optional[str] = Field(default=None, max_length=200)
     zip_code: Optional[str] = Field(default=None, max_length=20)

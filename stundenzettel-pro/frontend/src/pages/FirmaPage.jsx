@@ -24,7 +24,7 @@ export default function FirmaPage() {
   return (
     <Layout title="Firma" subtitle="Logo, Stempel, Rechnungsdaten, Arbeitszeitregeln und Leistungen gelten für alle Stundenzettel und Rechnungen.">
       <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar"><Segmented value={tab} onChange={setTab} options={optionen} /></div>
-      {tab === 'firma' && <Card className="p-5 sm:p-8 max-w-3xl mx-auto">{firma ? <CompanyForm company={firma} onSave={speichern} /> : <Ladeanzeige />}</Card>}
+      {tab === 'firma' && <div className="max-w-3xl mx-auto space-y-5"><FirmenartKarte /><Card className="p-5 sm:p-8">{firma ? <CompanyForm company={firma} onSave={speichern} /> : <Ladeanzeige />}</Card></div>}
       {tab === 'leistungen' && <Leistungen />}
       {tab === 'lizenz' && <Lizenz />}
       {tab === 'api' && <Schnittstelle />}
@@ -35,6 +35,38 @@ export default function FirmaPage() {
 }
 
 /** Leistungen mit eigenem Stundensatz (Unterhaltsreinigung, Grundreinigung, Glasreinigung …). */
+const FIRMENARTEN = [
+  { value: 'betrieb', label: 'Ausführender Betrieb', text: 'Zeiten, Stundenzettel, Rechnungen; Aufträge finden und Angebote abgeben.' },
+  { value: 'auftraggeber', label: 'Auftraggeber / GU', text: 'Bauprojekte führen, Gewerke ausschreiben, Angebote vergleichen und vergeben. Menü ohne Rechnungen und Kunden.' },
+  { value: 'beides', label: 'Beides', text: 'Volles Menü: eigene Leistungen und Vergabe an andere Firmen.' },
+];
+
+/** Firmenart bestimmt Menü, Startseite und die Ansicht unter „Ausschreibungen“ – ändert nur der Inhaber. */
+function FirmenartKarte() {
+  const { firma, isInhaber, refresh } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const art = firma?.art || 'betrieb';
+  const setzen = async (v) => {
+    if (!isInhaber || v === art) return;
+    setBusy(true);
+    try { await api.put('/api/firma', { art: v }); await refresh(); toast.success('Firmenart gespeichert – Menü und Startseite sind angepasst'); } catch (err) { toast.error(err.message); } finally { setBusy(false); }
+  };
+  return (
+    <Card className="p-5 sm:p-8">
+      <h2 className="text-[17px]">Firmenart</h2>
+      <p className="text-[14px] text-[#6E6E73] mt-1 mb-3">Auftraggeber (z. B. Generalunternehmer) und ausführende Betriebe sehen unterschiedliche Menüs und Startseiten. Eine Firma kann auch beides sein.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {FIRMENARTEN.map((a) => (
+          <button key={a.value} type="button" disabled={!isInhaber || busy} onClick={() => setzen(a.value)} className={`text-left rounded-2xl px-4 py-3 transition-all disabled:opacity-60 ${art === a.value ? 'ring-2 ring-[#C41E3A] bg-[#C41E3A]/5' : 'bg-[#F5F5F7] hover:bg-black/[0.06]'}`}>
+            <span className="block text-[14px] font-semibold">{a.label}</span><span className="block text-[12px] text-[#6E6E73]">{a.text}</span>
+          </button>
+        ))}
+      </div>
+      {!isInhaber && <p className="text-[12px] text-[#86868B] mt-2">Ändern kann das nur der Inhaber.</p>}
+    </Card>
+  );
+}
+
 function Leistungen() {
   const [liste, setListe] = useState(null);
   const [form, setForm] = useState({ id: '', name: '', hourly_rate: '', sort: '', active: true });

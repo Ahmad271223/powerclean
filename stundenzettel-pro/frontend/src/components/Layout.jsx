@@ -23,6 +23,21 @@ const NAV_BUERO = [
   { to: '/firma', label: 'Firma', icon: Building2 },
   { to: '/protokoll', label: 'Protokoll', icon: ShieldCheck },
 ];
+/** Auftraggeber (GU, Bauherr): keine Rechnungen/Kunden im Menü, Projekte heißen Bauprojekte; „beides“ bekommt das volle Menü. */
+const NAV_AUFTRAGGEBER = [
+  { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
+  { to: '/projekte', label: 'Bauprojekte', icon: FolderKanban },
+  { to: '/ausschreibungen', label: 'Ausschreibungen', icon: Gavel },
+  { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
+  { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
+  { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
+  { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
+  { to: '/auswertung', label: 'Auswertung', icon: BarChart3 },
+  { to: '/abwesenheiten', label: 'Abwesenheiten', icon: CalendarOff },
+  { to: '/exporte', label: 'Exporte & Abschluss', icon: FileDown },
+  { to: '/firma', label: 'Firma', icon: Building2 },
+  { to: '/protokoll', label: 'Protokoll', icon: ShieldCheck },
+];
 const NAV_MITARBEITER = [
   { to: '/', label: 'Stempeluhr', icon: Timer, end: true },
   { to: '/meine-zeiten', label: 'Meine Zeiten', icon: Clock },
@@ -58,7 +73,7 @@ export default function Layout({ children, title, subtitle, action, wide = false
   const navigate = useNavigate();
   const location = useLocation();
   const [mehr, setMehr] = useState(false);
-  const nav = isBuero ? NAV_BUERO : NAV_MITARBEITER;
+  const nav = isBuero ? (firma?.art === 'auftraggeber' ? NAV_AUFTRAGGEBER : NAV_BUERO) : NAV_MITARBEITER;
   const tabs = nav.slice(0, 4);
   const rest = nav.slice(4);
   const restAktiv = rest.some((n) => location.pathname.startsWith(n.to) && n.to !== '/');

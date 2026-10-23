@@ -37,7 +37,8 @@ async def verzeichnis_lesen(user: dict = Depends(rolle_noetig("buero"))):
     v = firma.get("verzeichnis") or {}
     return {"verzeichnis": {"sichtbar": bool(v.get("sichtbar")), "gewerke": v.get("gewerke") or [], "beschreibung": v.get("beschreibung") or "",
                             "ort": v.get("ort") or firma.get("city") or "", "regionen": v.get("regionen") or [],
-                            "ausschreibungen_benachrichtigen": v.get("ausschreibungen_benachrichtigen", True)}, "gewerke_vorschlaege": GEWERKE}
+                            "ausschreibungen_benachrichtigen": v.get("ausschreibungen_benachrichtigen", True)}, "gewerke_vorschlaege": GEWERKE,
+            "art": firma.get("art") or "betrieb"}
 
 
 @router.put("/api/firma/verzeichnis")
@@ -53,13 +54,13 @@ async def firmen_suchen(q: str = Query("", max_length=80), user: dict = Depends(
     """Suche im gemeinsamen Firmenverzeichnis: nur Firmen, die sich sichtbar geschaltet haben, nur freigegebene Felder."""
     begriff = q.strip().lower()
     aus = []
-    async for f in db().firmen.find({"verzeichnis.sichtbar": True, "id": {"$ne": user["firma_id"]}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "verzeichnis": 1}):
+    async for f in db().firmen.find({"verzeichnis.sichtbar": True, "id": {"$ne": user["firma_id"]}}, {"_id": 0, "id": 1, "name": 1, "city": 1, "verzeichnis": 1, "art": 1}):
         v = f.get("verzeichnis") or {}
         text = " ".join([f.get("name") or "", f.get("city") or "", v.get("ort") or "", " ".join(v.get("gewerke") or []), v.get("beschreibung") or ""]).lower()
         if begriff and begriff not in text and begriff != f["id"]:
             continue
         aus.append({"id": f["id"], "name": f.get("name"), "ort": v.get("ort") or f.get("city") or "", "gewerke": v.get("gewerke") or [],
-                    "beschreibung": (v.get("beschreibung") or "")[:200]})
+                    "beschreibung": (v.get("beschreibung") or "")[:200], "art": f.get("art") or "betrieb"})
         if len(aus) >= 20:
             break
     aus.sort(key=lambda x: (x["name"] or "").lower())

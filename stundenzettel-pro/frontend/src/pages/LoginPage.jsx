@@ -6,6 +6,12 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Btn, Card, Field, TextInput } from '../components/ui';
 
+export const FIRMENARTEN = [
+  { value: 'betrieb', label: 'Ausführender Betrieb', text: 'Handwerk, Reinigung, Dienstleistung: Zeiten erfassen, Stundenzettel, Rechnungen, Aufträge finden und Angebote abgeben.' },
+  { value: 'auftraggeber', label: 'Auftraggeber / Generalunternehmer', text: 'Bauherr, GU, Projektsteuerung: Bauprojekte führen, Gewerke ausschreiben, Angebote vergleichen, Firmen beauftragen.' },
+  { value: 'beides', label: 'Beides', text: 'Eigene Leistungen erbringen und zugleich Aufträge an andere Firmen vergeben.' },
+];
+
 function Rahmen({ title, text, children }) {
   return (
     <div className="ts-app safe-top min-h-screen flex items-center justify-center p-5">
@@ -48,19 +54,27 @@ export function LoginPage() {
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ firma_name: '', name: '', email: '', password: '' });
+  const [form, setForm] = useState({ firma_name: '', name: '', email: '', password: '', art: 'betrieb' });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [k]: v })); };
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    try { await register({ ...form, firma_name: form.firma_name.trim(), name: form.name.trim(), email: form.email.trim() }); toast.success('Willkommen! Deine Firma ist angelegt.'); navigate('/firma', { replace: true }); }
+    try { await register({ ...form, firma_name: form.firma_name.trim(), name: form.name.trim(), email: form.email.trim() }); toast.success(form.art === 'auftraggeber' ? 'Willkommen! Lege dein erstes Bauprojekt an und schreibe Gewerke aus.' : 'Willkommen! Deine Firma ist angelegt.'); navigate(form.art === 'auftraggeber' ? '/projekte' : '/firma', { replace: true }); }
     catch (err) { toast.error(err.message); } finally { setBusy(false); }
   };
   return (
     <Rahmen title="Firma registrieren" text="Du bist Inhaber. Danach lädst du dein Team ein, jeder stempelt am Handy, du bekommst Stundenzettel, Rechnungen und den Lohnexport.">
       <form onSubmit={submit} className="space-y-4">
         <Field label="Firmenname"><TextInput value={form.firma_name} onChange={set('firma_name')} required placeholder="z. B. PowerCleanService" /></Field>
+        <div>
+          <span className="block text-[13px] font-medium text-[#6E6E73] mb-1.5">Was ist eure Firma?</span>
+          <div className="space-y-2">{FIRMENARTEN.map((a) => (
+            <button key={a.value} type="button" onClick={() => setForm((f) => ({ ...f, art: a.value }))} className={`w-full text-left rounded-2xl px-4 py-3 transition-all ${form.art === a.value ? 'ring-2 ring-[#C41E3A] bg-[#C41E3A]/5' : 'bg-[#F5F5F7] hover:bg-black/[0.06]'}`}>
+              <span className="block text-[14px] font-semibold">{a.label}</span><span className="block text-[12px] text-[#6E6E73]">{a.text}</span>
+            </button>
+          ))}</div>
+        </div>
         <Field label="Dein Name"><TextInput value={form.name} onChange={set('name')} required autoComplete="name" /></Field>
         <Field label="E-Mail"><TextInput type="email" value={form.email} onChange={set('email')} required autoComplete="username" /></Field>
         <Field label="Passwort (mindestens 8 Zeichen)"><TextInput type="password" value={form.password} onChange={set('password')} required minLength={8} autoComplete="new-password" /></Field>

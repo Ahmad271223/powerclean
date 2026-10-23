@@ -18,6 +18,20 @@ unverändert; die Erweiterung ist rein additiv (neue Sammlungen, neue optionale 
 | Tests | pytest mit `DB_MODE=memory` (mongomock), vorher 32 Tests, jetzt 42 (Plattform 3, Baustellenalltag 3, Ausschreibungen/Vergabe 4). |
 | Migrationsrisiken | Keine Schemaänderung nötig. Neue Felder sind optional (`projects.leiter_ids`, `projects.verknuepft`, `firmen.verzeichnis`), neue Sammlungen leer. Indizes werden beim Start idempotent angelegt. |
 
+## 1b. Firmenarten (23.10.2026)
+
+Jede Firma hat eine **Firmenart** (`firmen.art`), gewählt bei der Registrierung, änderbar durch den Inhaber unter Firma → Firmendaten:
+
+| Art | Wer | Menü und Startseite | Ausschreibungen |
+|---|---|---|---|
+| `betrieb` (Standard) | Handwerk, Reinigung, Dienstleistung | Volles Menü wie bisher (Zeiten, Stundenzettel, Rechnungen, Kunden) | Entdecken, Einladungen, Meine Angebote, Erhaltene Aufträge; eigene Ausschreibungen möglich (z. B. an Nachunternehmer) |
+| `auftraggeber` | Generalunternehmer, Bauherr, Projektsteuerung | Übersicht mit Ausschreibungen/Angeboten/Vergaben, Bauprojekte, Ausschreibungen, Zusammenarbeit, Aufgaben, Mitarbeiter, Stempeluhr, Auswertung, Abwesenheiten, Exporte, Firma, Protokoll – keine Rechnungen, keine Kunden | Nur „Meine Ausschreibungen“ und Vergaben; keine Benachrichtigung über fremde Ausschreibungen, keine Angebotsabgabe im Menü |
+| `beides` | Firmen, die ausführen und vergeben | Volles Menü plus Auftraggeber-Block auf der Startseite | Alles |
+
+Die Rechteprüfung bleibt datengetrieben (Projektbesitz, Beteiligung, Einladung); die Firmenart steuert Oberfläche, Startseite und Benachrichtigungen.
+Rollen innerhalb der Firma (Inhaber, Büro, Vorarbeiter, Mitarbeiter) gelten unverändert für beide Arten; Mitarbeiter eines Auftraggebers sehen
+weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

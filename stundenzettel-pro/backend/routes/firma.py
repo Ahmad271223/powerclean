@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth import aktueller_nutzer, api_token_neu, betreiber_pruefen, firma_laden, jetzt_iso, plan_status, rolle_noetig, schreibend
+from auth import hat_rolle, aktueller_nutzer, api_token_neu, betreiber_pruefen, firma_laden, jetzt_iso, plan_status, rolle_noetig, schreibend
 from datetime import timedelta
 
 from auth import API_RECHTE, jetzt
@@ -26,6 +26,10 @@ async def firma_aendern(body: FirmaIn, user: dict = Depends(schreibend("buero"))
     aenderung = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     if "name" in aenderung and not (aenderung["name"] or "").strip():
         raise HTTPException(400, "Der Firmenname darf nicht leer sein.")
+    if aenderung.get("art") is None:
+        aenderung.pop("art", None)
+    elif not hat_rolle(user, "inhaber"):
+        raise HTTPException(403, "Die Firmenart ändert nur der Inhaber.")
     if not aenderung:
         return await firma_lesen(user)
     aenderung["updated_at"] = jetzt_iso()

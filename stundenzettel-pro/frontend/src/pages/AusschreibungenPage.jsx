@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import { Btn, Card, Empty, Segmented, Select, TextInput, Toggle } from '../components/ui';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { ANGEBOT_CLS, ANGEBOT_NAMEN, STATUS_CLS, VERGABE_CLS, VERGABE_NAMEN, fmtGeld, fmtTag, fristText } from '../lib/ausschreibung';
 
 const TABS = [{ value: 'entdecken', label: 'Entdecken', icon: Store }, { value: 'einladungen', label: 'Einladungen', icon: Inbox }, { value: 'angebote', label: 'Meine Angebote', icon: Send },
@@ -35,7 +36,9 @@ function Karte({ a, extra }) {
 
 /** Ausschreibungen: Marktplatz mit Filtern, Einladungen, eigene Angebote, erhaltene Aufträge (Vergaben) und eigene Ausschreibungen als Auftraggeber. */
 export default function AusschreibungenPage() {
-  const [tab, setTab] = useState('entdecken');
+  const { firma } = useAuth();
+  const nurAuftraggeber = firma?.art === 'auftraggeber';
+  const [tab, setTab] = useState(() => (nurAuftraggeber ? 'eigene' : 'entdecken'));
   const [ue, setUe] = useState(null);
   const [markt, setMarkt] = useState(null);
   const [filter, setFilter] = useState(FILTER_LEER);
@@ -50,9 +53,9 @@ export default function AusschreibungenPage() {
   const setF = (k) => (e) => { const v = e.target.value; setFilter((f) => ({ ...f, [k]: v })); };
   if (!ue) return <Layout title="Ausschreibungen"><Ladeanzeige /></Layout>;
   const zaehler = { einladungen: ue.einladungen.filter((e) => e.status === 'veroeffentlicht' && !e.angebot).length, auftraege: ue.vergaben.filter((v) => v.status === 'mitgeteilt').length };
-  const tabs = TABS.map((t) => ({ ...t, label: t.value === 'einladungen' && zaehler.einladungen ? `${t.label} (${zaehler.einladungen})` : t.value === 'auftraege' && zaehler.auftraege ? `${t.label} (${zaehler.auftraege})` : t.label }));
+  const tabs = TABS.filter((t) => !nurAuftraggeber || t.value === 'eigene').map((t) => ({ ...t, label: t.value === 'einladungen' && zaehler.einladungen ? `${t.label} (${zaehler.einladungen})` : t.value === 'auftraege' && zaehler.auftraege ? `${t.label} (${zaehler.auftraege})` : t.label }));
   return (
-    <Layout wide title="Ausschreibungen" subtitle="Aufträge finden und Angebote abgeben – oder als Auftraggeber Gewerke ausschreiben, Angebote vergleichen und vergeben.">
+    <Layout wide title="Ausschreibungen" subtitle={nurAuftraggeber ? 'Gewerke ausschreiben, Firmen einladen, Angebote vergleichen und vergeben – Ausschreibungen werden im Bauprojekt angelegt.' : firma?.art === 'beides' ? 'Aufträge finden und Angebote abgeben – und eigene Gewerke ausschreiben, Angebote vergleichen und vergeben.' : 'Aufträge finden, Angebote abgeben, Aufträge annehmen – alles in einem Programm.'}>
       {ue.fristen_bald.length > 0 && <div className="mb-4 rounded-2xl bg-[#FDE8E8] text-[#C41E3A] px-4 py-3 text-[13px] flex items-start gap-2"><AlertTriangle size={15} className="shrink-0 mt-0.5" /><span>Bald endende Angebotsfrist: {ue.fristen_bald.map((a) => <Link key={a.id} to={`/ausschreibungen/${a.id}`} className="underline mr-2">{a.titel} ({fristText(a)})</Link>)}</span></div>}
       {zaehler.auftraege > 0 && <div className="mb-4 rounded-2xl bg-[#E8F8EC] text-[#1B7F3B] px-4 py-3 text-[13px] flex items-start gap-2"><BadgeCheck size={15} className="shrink-0 mt-0.5" /><span>Ihr habt eine Vergabe erhalten – bitte unter „Erhaltene Aufträge“ die Annahme bestätigen.</span></div>}
       <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar"><Segmented value={tab} onChange={setTab} options={tabs} /></div>
