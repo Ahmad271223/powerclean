@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 from db import db, indizes_anlegen
-from routes import (abschluss, api_v1, ausschreibungen, auth_routes, auswertung, baustelle, dashboard, exporte, firma, import_free, konten, kunden,
+from routes import (abschluss, api_v1, ausschreibungen, auth_routes, auswertung, baustelle, dashboard, einsatzplan, exporte, firma, import_free, konten, kunden,
                     leistungen, lohn, mitarbeiter, plattform, projekte, rechnungen, zeiten_routes)
 
 VERSION = "1.1.0"
@@ -52,9 +52,15 @@ async def lebenszyklus(app: FastAPI):
     if config.DB_MODE != "memory" or os.environ.get("WEBHOOK_DIENST") == "1":
         import webhooks
         dienst = asyncio.create_task(webhooks.hintergrunddienst())   # stellt offene Webhook-Lieferungen zu (auch nach Neustart)
+    einsatz_dienst = None
+    if config.DB_MODE != "memory" or os.environ.get("EINSATZ_ERINNERUNGEN") == "1":
+        from einsatzplan_worker import erinnerungsdienst
+        einsatz_dienst = asyncio.create_task(erinnerungsdienst())
     yield
     if dienst:
         dienst.cancel()
+    if einsatz_dienst:
+        einsatz_dienst.cancel()
 
 
 app = FastAPI(title="Stundenzettel Pro", version=VERSION, docs_url="/api/docs", openapi_url="/api/openapi.json",
@@ -62,7 +68,7 @@ app = FastAPI(title="Stundenzettel Pro", version=VERSION, docs_url="/api/docs", 
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 for modul in (auth_routes, firma, mitarbeiter, kunden, projekte, zeiten_routes, rechnungen, exporte, import_free, api_v1, dashboard,
-              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle, ausschreibungen):
+              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle, ausschreibungen, einsatzplan):
     app.include_router(modul.router)
 
 
