@@ -258,10 +258,15 @@ async def dokument_aendern(dokument_id: str, body: DokumentIn, user: dict = Depe
 
 
 @router.delete("/api/dokumente/{dokument_id}")
-async def dokument_loeschen(dokument_id: str, user: dict = Depends(schreibend("buero"))):
+async def dokument_loeschen(dokument_id: str, user: dict = Depends(schreibend("mitarbeiter"))):
     d = await _dokument_zugriff(user, dokument_id)
     if d.get("firma_id") != user["firma_id"]:
-        raise HTTPException(403, "Fotos einer anderen Firma kann nur diese Firma löschen.")
+        raise HTTPException(403, "Dateien einer anderen Firma darf diese Firma nur selbst löschen.")
+    if d.get("scope") == "project" and (d.get("mime") or "").startswith("image/"):
+        if user.get("role") != "inhaber" and d.get("uploaded_by") != user["id"]:
+            raise HTTPException(403, "Nur der Inhaber und die hochladende Person dürfen dieses Projektfoto löschen.")
+    elif not hat_rolle(user, "buero"):
+        raise HTTPException(403, "Nur das Büro oder der Inhaber darf dieses Dokument löschen.")
     await db().documents.delete_one({"id": dokument_id})
     datei_loeschen(d)
     await protokollieren(user, "dokument.geloescht", d.get("filename", ""), details={"scope": d["scope"], "ref": d["ref_id"]})
