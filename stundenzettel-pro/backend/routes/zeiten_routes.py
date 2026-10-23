@@ -131,7 +131,7 @@ async def liste(von: str, bis: str, user_id: Optional[str] = None, project_id: O
 
 
 @router.get("/api/zeiten/warnungen")
-async def warnungen(von: str, bis: str, user: dict = Depends(rolle_noetig("buero"))):
+async def warnungen(von: str, bis: str, user: dict = Depends(rolle_noetig("inhaber"))):
     """ArbZG-Hinweise im Zeitraum, je Person und Tag."""
     von, bis = _bereich(von, bis)
     namen = await nutzernamen(user["firma_id"])
