@@ -235,6 +235,8 @@ class ProjektIn(BaseModel):
     lat: Optional[float] = Field(default=None, ge=-90, le=90)
     lon: Optional[float] = Field(default=None, ge=-180, le=180)
     kostenlos: bool = False   # bewusst ohne Stundensatz: 0 € bleibt 0 € (sonst gilt der Firmenstandard)
+    abrechnungsart_projekt: str = Field(default="stunden", pattern="^(stunden|pauschal)$")
+    pauschale_netto: float = Field(default=0, ge=0, le=1e12)
 
     @field_validator("baubeginn", "bauende")
     @classmethod
