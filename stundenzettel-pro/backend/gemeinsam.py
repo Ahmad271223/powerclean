@@ -187,6 +187,22 @@ def ohne_id(doc: Optional[dict]) -> Optional[dict]:
     return None if doc is None else {k: v for k, v in doc.items() if k != "_id"}
 
 
+def foto_fuer_nutzer(user: dict, doc: dict) -> dict:
+    """Uploaddaten anderer Mitarbeiter in Projektansichten ausblenden.
+
+    Alle im Projekt freigegebenen Fotos bleiben sichtbar. Wer das Foto hochgeladen
+    hat, sieht nur der Firmeninhaber oder die hochladende Person selbst.
+    Die Dateiberechtigung und EXIF-Metadaten müssen separat abgesichert werden.
+    """
+    aus = dict(doc)
+    if user.get("role") != "inhaber" and aus.get("uploaded_by") != user.get("id"):
+        for feld in ("uploaded_by", "uploaded_by_name", "created_by", "created_by_name"):
+            aus.pop(feld, None)
+        if str(aus.get("mime") or "").startswith("image/"):
+            aus["filename"] = "Projektfoto.jpg"
+    return aus
+
+
 async def projekt_fotos(firma_id: str, project_id: str, von: str, bis: str) -> list[dict]:
     """Fotos der Projektakte, deren Arbeitstag (date, sonst Upload-Tag) im Zeitraum liegt – für Kalender und PDF-Anhang."""
     fotos = []
