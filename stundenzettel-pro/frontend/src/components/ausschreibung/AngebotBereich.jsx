@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FileText, Paperclip, Send, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Btn, Card, Field, Segmented, Select, TextArea, TextInput, Toggle } from '../ui';
+import { Btn, Card, Field, Segmented, Select, Sheet, TextArea, TextInput, Toggle } from '../ui';
 import { api, download, openFile } from '../../lib/api';
 import { ANGEBOT_CLS, ANGEBOT_NAMEN, fmtGeld, fmtTag, fmtZeit } from '../../lib/ausschreibung';
 
@@ -15,6 +15,8 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
   const [f, setF] = useState(LEER);
   const [busy, setBusy] = useState('');
   const [kat, setKat] = useState('Angebot (PDF)');
+  const [rueckzugOffen, setRueckzugOffen] = useState(false);
+  const [rueckzugGrund, setRueckzugGrund] = useState('');
   const eingabe = useRef(null);
   useEffect(() => {
     const preise = Object.fromEntries((g?.positionen || []).map((p) => [p.nr, p]));
@@ -23,6 +25,7 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
       positionen: (a.positionen || []).map((p) => ({ nr: p.nr, einzelpreis: preise[p.nr]?.einzelpreis ?? '', bemerkung: preise[p.nr]?.bemerkung || '' })) });
   }, [g, a]);
   const bearbeitbar = a.kann_bieten && (!g || ['entwurf', 'rueckfrage', 'zurueckgezogen'].includes(g.status));
+  const gesperrtText = !a.kann_bieten ? 'Die Angebotsfrist ist abgelaufen oder die Vergabe läuft bereits.' : 'Dieses Angebot ist bereits eingereicht. Änderungen sind erst nach einer Rückfrage des Auftraggebers möglich.';
   const set = (k) => (e) => { const v = e.target.value; setF((x) => ({ ...x, [k]: v })); };
   const setPreis = (nr, k, v) => setF((x) => ({ ...x, positionen: x.positionen.map((p) => (p.nr === nr ? { ...p, [k]: v } : p)) }));
   const body = () => ({ ...f, preis_netto: num(f.preis_netto), stundensatz: num(f.stundensatz), stunden_geschaetzt: num(f.stunden_geschaetzt), ust_satz: num(f.ust_satz) ?? 19,
@@ -35,7 +38,17 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
     try { let id = g?.id; if (!g) id = (await api.post(`/api/ausschreibungen/${a.id}/angebot`, body())).angebot.id; else await api.put(`/api/angebote/${g.id}`, body()); await api.post(`/api/angebote/${id}/einreichen`); toast.success('Angebot eingereicht'); onChanged?.(); }
     catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
-  const zurueck = async () => { const grund = window.prompt('Angebot zurückziehen – Grund (optional):'); if (grund === null) return; setBusy('zurueck'); try { await api.post(`/api/angebote/${g.id}/zurueckziehen`, { nachricht: grund }); toast.success('Angebot zurückgezogen'); onChanged?.(); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
+  const zurueck = async () => {
+    if (!g || busy) return;
+    setBusy('zurueck');
+    try {
+      await api.post(`/api/angebote/${g.id}/zurueckziehen`, { nachricht: rueckzugGrund.trim() });
+      toast.success('Angebot zurückgezogen');
+      setRueckzugOffen(false);
+      setRueckzugGrund('');
+      onChanged?.();
+    } catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
   const upload = async (file) => { if (!file) return; setBusy('upload'); try { let id = g?.id; if (!g) id = (await api.post(`/api/ausschreibungen/${a.id}/angebot`, body())).angebot.id; const fd = new FormData(); fd.append('datei', file); fd.append('kategorie', kat); await api.upload(`/api/angebote/${id}/dokumente`, fd); toast.success('Anhang gespeichert'); onChanged?.(); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
   const summe = (() => {
     if (f.preisart === 'einheitspreise') { const m = Object.fromEntries((a.positionen || []).map((p) => [p.nr, p.menge])); return f.positionen.reduce((s, p) => s + (num(p.einzelpreis) || 0) * (m[p.nr] || 0), 0); }
@@ -49,7 +62,7 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
           {chip(g.status)}
           <span className="text-[13px] text-[#6E6E73]">{g.nummer} · Version {g.version}{g.eingereicht_at ? ` · eingereicht ${fmtZeit(g.eingereicht_at)}` : ''}{g.nachreichen_bis ? ` · Nachreichung bis ${fmtTag(g.nachreichen_bis)}` : ''}</span>
           <span className="ml-auto text-[15px] font-semibold">{fmtGeld(g.summe_netto)} netto</span>
-          {['eingereicht', 'in_pruefung', 'rueckfrage', 'ueberarbeitet'].includes(g.status) && <Btn size="sm" variant="soft" onClick={zurueck} loading={busy === 'zurueck'}><Undo2 size={14} /> Zurückziehen</Btn>}
+          {['eingereicht', 'in_pruefung', 'rueckfrage', 'ueberarbeitet'].includes(g.status) && <Btn size="sm" variant="soft" onClick={() => setRueckzugOffen(true)} disabled={!!busy}><Undo2 size={14} /> Zurückziehen</Btn>}
         </Card>
       )}
       {g?.status === 'rueckfrage' && <div className="rounded-2xl bg-[#FDE8E8] text-[#C41E3A] px-4 py-3 text-[13px]">Der Auftraggeber hat eine Rückfrage oder Nachforderung gestellt – siehe Benachrichtigungen. Bitte das Angebot ergänzen und erneut einreichen{g.nachreichen_bis ? ` (bis ${fmtTag(g.nachreichen_bis)})` : ''}.</div>}
@@ -62,7 +75,8 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
         </div>
         <div>
           <span className="block text-[13px] font-medium text-[#6E6E73] mb-1.5">Preisart</span>
-          <Segmented value={f.preisart} onChange={(v) => bearbeitbar && setF((x) => ({ ...x, preisart: v }))} options={[{ value: 'pauschal', label: 'Pauschal' }, { value: 'einheitspreise', label: 'Einheitspreise' }, { value: 'stunden', label: 'Stunden' }]} />
+          <Segmented value={f.preisart} disabled={!bearbeitbar} onChange={(v) => setF((x) => ({ ...x, preisart: v }))} options={[{ value: 'pauschal', label: 'Pauschal' }, { value: 'einheitspreise', label: 'Einheitspreise' }, { value: 'stunden', label: 'Stunden' }]} />
+          {!bearbeitbar && <p className="text-[12px] text-[#7A4100] mt-2" role="status">{gesperrtText}</p>}
         </div>
         {f.preisart === 'pauschal' && <Field label="Angebotspreis (€ netto)"><TextInput type="number" step="0.01" min="0" inputMode="decimal" value={f.preis_netto} onChange={set('preis_netto')} disabled={!bearbeitbar} /></Field>}
         {f.preisart === 'stunden' && <div className="grid grid-cols-2 gap-3"><Field label="Stundensatz (€ netto)"><TextInput type="number" step="0.01" min="0" inputMode="decimal" value={f.stundensatz} onChange={set('stundensatz')} disabled={!bearbeitbar} /></Field><Field label="Geschätzte Stunden"><TextInput type="number" step="0.5" min="0" inputMode="decimal" value={f.stunden_geschaetzt} onChange={set('stunden_geschaetzt')} disabled={!bearbeitbar} /></Field></div>}
@@ -100,6 +114,12 @@ export default function AngebotBereich({ ausschreibung: a, onChanged }) {
         {bearbeitbar && <div className="flex flex-wrap justify-end gap-2"><Btn variant="soft" onClick={speichern} loading={busy === 'speichern'}>Als Entwurf speichern</Btn><Btn onClick={einreichen} loading={busy === 'einreichen'}><Send size={15} /> {g?.version ? 'Überarbeitet einreichen' : 'Angebot einreichen'}</Btn></div>}
         {g && <div className="flex justify-end"><Btn size="sm" variant="ghost" onClick={() => download(`/api/angebote/${g.id}/positionen.csv`).catch((err) => toast.error(err.message))}>Positionen als CSV</Btn></div>}
       </Card>
+      <Sheet open={rueckzugOffen} onOpenChange={setRueckzugOffen} title="Angebot zurückziehen" subtitle="Der Auftraggeber wird über den Rückzug benachrichtigt. Der ursprüngliche Verlauf bleibt erhalten.">
+        <div className="space-y-4">
+          <Field label="Grund (optional)"><TextArea value={rueckzugGrund} onChange={(e) => setRueckzugGrund(e.target.value)} rows={3} placeholder="Warum zieht ihr das Angebot zurück?" /></Field>
+          <div className="flex justify-end gap-2"><Btn variant="soft" onClick={() => setRueckzugOffen(false)}>Abbrechen</Btn><Btn variant="danger" onClick={zurueck} loading={busy === 'zurueck'}>Verbindlich zurückziehen</Btn></div>
+        </div>
+      </Sheet>
       {(g?.verlauf || []).length > 0 && <Card className="p-4"><span className="block text-[13px] font-medium text-[#6E6E73] mb-1">Verlauf</span><ul className="text-[12px] text-[#6E6E73] space-y-0.5">{g.verlauf.slice().reverse().map((v, i) => <li key={i}>{fmtZeit(v.at)} · {ANGEBOT_NAMEN[v.aktion] || v.aktion} · {v.user_name}{v.text ? ` · ${v.text}` : ''}</li>)}</ul></Card>}
     </div>
   );
