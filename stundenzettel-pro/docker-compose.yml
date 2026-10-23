@@ -1,0 +1,26 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-daten:/data/db
+    command: ["mongod", "--quiet", "--logpath", "/dev/null"]
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_MODE: mongo
+      MONGO_URL: mongodb://mongo:27017
+      DATA_DIR: /daten
+    volumes:
+      - app-dateien:/daten
+    ports:
+      - "127.0.0.1:8010:8000"   # dahinter ein Reverse-Proxy mit HTTPS (Caddy/nginx), siehe README
+    depends_on:
+      - mongo
+
+volumes:
+  mongo-daten:
+  app-dateien:

@@ -1,0 +1,10 @@
+# Laufzeitdaten (Personal-/Projektakten) und Testablage
+backend/daten/
+backend/tests/_daten/
+# Umgebung mit Geheimnissen
+.env
+# Build und Abhängigkeiten
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+.pytest_cache/

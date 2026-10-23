@@ -1,0 +1,196 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { KeyRound, Copy, Trash2, Upload, Building2, BadgeCheck, Plug, Tag, Plus, Webhook, Send, Pencil } from 'lucide-react';
+import { toast } from 'sonner';
+import Layout, { Ladeanzeige } from '../components/Layout';
+import CompanyForm from '../components/CompanyForm';
+import { Btn, Card, Chip, Field, IconBtn, Segmented, TextInput, Toggle } from '../components/ui';
+import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
+import { fmtDate } from '../lib/dates';
+
+const fmtZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–');
+
+export default function FirmaPage() {
+  const { firma, setFirma, isInhaber } = useAuth();
+  const [tab, setTab] = useState('firma');
+  const optionen = [{ value: 'firma', label: 'Firmendaten', icon: Building2 }, { value: 'leistungen', label: 'Leistungen', icon: Tag }, { value: 'lizenz', label: 'Lizenz', icon: BadgeCheck }];
+  if (isInhaber) optionen.push({ value: 'api', label: 'Schnittstelle', icon: Plug }, { value: 'webhooks', label: 'Webhooks', icon: Webhook }, { value: 'import', label: 'Import', icon: Upload });
+
+  const speichern = async (daten) => {
+    const r = await api.put('/api/firma', daten);
+    setFirma(r.firma, r.plan);
+  };
+
+  return (
+    <Layout title="Firma" subtitle="Logo, Stempel, Rechnungsdaten, Arbeitszeitregeln und Leistungen gelten für alle Stundenzettel und Rechnungen.">
+      <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar"><Segmented value={tab} onChange={setTab} options={optionen} /></div>
+      {tab === 'firma' && <Card className="p-5 sm:p-8 max-w-3xl mx-auto">{firma ? <CompanyForm company={firma} onSave={speichern} /> : <Ladeanzeige />}</Card>}
+      {tab === 'leistungen' && <Leistungen />}
+      {tab === 'lizenz' && <Lizenz />}
+      {tab === 'api' && <Schnittstelle />}
+      {tab === 'webhooks' && <Webhooks />}
+      {tab === 'import' && <Import />}
+    </Layout>
+  );
+}
+
+/** Leistungen mit eigenem Stundensatz (Unterhaltsreinigung, Grundreinigung, Glasreinigung …). */
+function Leistungen() {
+  const [liste, setListe] = useState(null);
+  const [form, setForm] = useState({ id: '', name: '', hourly_rate: '', sort: '', active: true });
+  const [busy, setBusy] = useState(false);
+  const laden = useCallback(() => api.get('/api/leistungen?alle=true').then((r) => setListe(r.leistungen)).catch((err) => toast.error(err.message)), []);
+  useEffect(() => { laden(); }, [laden]);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) { toast.error('Bitte einen Namen eingeben'); return; }
+    setBusy(true);
+    try {
+      const body = { name: form.name.trim(), hourly_rate: parseFloat(String(form.hourly_rate).replace(',', '.')) || 0, sort: parseInt(form.sort, 10) || 0, active: form.active };
+      if (form.id) await api.put(`/api/leistungen/${form.id}`, body); else await api.post('/api/leistungen', body);
+      toast.success(form.id ? 'Gespeichert' : 'Leistung angelegt'); setForm({ id: '', name: '', hourly_rate: '', sort: '', active: true }); laden();
+    } catch (err) { toast.error(err.message); } finally { setBusy(false); }
+  };
+  const loeschen = async (l) => {
+    if (!window.confirm(`„${l.name}“ löschen?`)) return;
+    try { const r = await api.del(`/api/leistungen/${l.id}`); toast.success(r.deaktiviert ? r.hinweis : 'Gelöscht'); laden(); } catch (err) { toast.error(err.message); }
+  };
+  return (
+    <div className="max-w-3xl mx-auto space-y-4">
+      <Card className="p-5 sm:p-7 space-y-4">
+        <div><h2 className="text-[17px]">{form.id ? 'Leistung bearbeiten' : 'Neue Leistung'}</h2><p className="text-[14px] text-[#6E6E73] mt-1">Leistungen erscheinen als Auswahl beim Eintragen und Ausstempeln. Mit eigenem Satz werden sie auf der Rechnung getrennt ausgewiesen; ohne Satz gilt der Satz des Projekts.</p></div>
+        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-[1fr_140px_90px_auto] gap-3 items-end">
+          <Field label="Name"><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z. B. Glasreinigung" required /></Field>
+          <Field label="Stundensatz € (0 = Projekt)"><TextInput type="number" step="0.01" min="0" inputMode="decimal" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} placeholder="0" /></Field>
+          <Field label="Reihenfolge"><TextInput type="number" min="0" value={form.sort} onChange={(e) => setForm({ ...form, sort: e.target.value })} placeholder="0" /></Field>
+          <div className="flex gap-2"><Btn type="submit" loading={busy}>{form.id ? <Pencil size={15} /> : <Plus size={15} />} {form.id ? 'Speichern' : 'Anlegen'}</Btn>{form.id && <Btn type="button" variant="soft" onClick={() => setForm({ id: '', name: '', hourly_rate: '', sort: '', active: true })}>Abbrechen</Btn>}</div>
+        </form>
+        {form.id && <div className="rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={form.active} onChange={(v) => setForm({ ...form, active: v })} label="Aktiv (zur Auswahl angeboten)" /></div>}
+        {!liste ? <Ladeanzeige /> : liste.length === 0 ? <p className="text-[14px] text-[#6E6E73]">Noch keine Leistungen. Typisch: Unterhaltsreinigung (Projektsatz), Grundreinigung, Glasreinigung, Treppenhaus, Sonderreinigung.</p> : (
+          <ul className="divide-y divide-black/[0.06]">{liste.map((l) => <li key={l.id} className="py-2.5 flex items-center gap-3 text-[14px]"><Tag size={15} className="text-[#6E6E73]" /><div className="flex-1 min-w-0"><div className="font-medium">{l.name}{!l.active && <span className="ml-2 text-[11px] text-[#86868B] bg-black/[0.06] rounded-full px-2 py-0.5">inaktiv</span>}</div><div className="text-[12px] text-[#86868B]">{l.hourly_rate ? `${String(l.hourly_rate).replace('.', ',')} € je Stunde` : 'Satz des Projekts'}</div></div><IconBtn size={30} onClick={() => setForm({ id: l.id, name: l.name, hourly_rate: l.hourly_rate ? String(l.hourly_rate) : '', sort: String(l.sort || 0), active: l.active !== false })} title="Bearbeiten"><Pencil size={14} /></IconBtn><IconBtn size={30} variant="danger" onClick={() => loeschen(l)} title="Löschen"><Trash2 size={14} /></IconBtn></li>)}</ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function Lizenz() {
+  const [plan, setPlan] = useState(null);
+  useEffect(() => { api.get('/api/firma/plan').then(setPlan).catch((err) => toast.error(err.message)); }, []);
+  if (!plan) return <Ladeanzeige />;
+  const farbe = plan.status === 'aktiv' ? 'text-[#1B7F3B]' : plan.status === 'test' ? 'text-[#B25E00]' : 'text-[#C41E3A]';
+  return (
+    <Card className="p-5 sm:p-8 max-w-3xl mx-auto space-y-5">
+      <div><div className="text-[13px] text-[#6E6E73]">Stand</div><div className={`text-[28px] font-bold tracking-tight ${farbe}`}>{{ test: 'Testphase', aktiv: 'Aktiv', abgelaufen: 'Abgelaufen', gesperrt: 'Gesperrt' }[plan.status] || plan.status}</div><div className="text-[14px] text-[#6E6E73] mt-1">{plan.hinweis}</div></div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-[14px]">
+        <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3"><div className="text-[12px] text-[#6E6E73]">Aktive Nutzer</div><div className="text-[20px] font-bold">{plan.nutzer_aktiv}{plan.nutzer_max ? ` / ${plan.nutzer_max}` : ''}</div></div>
+        {plan.test_bis && plan.status === 'test' && <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3"><div className="text-[12px] text-[#6E6E73]">Test bis</div><div className="text-[20px] font-bold">{fmtDate(new Date(plan.test_bis))}</div></div>}
+        {plan.gueltig_bis && <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3"><div className="text-[12px] text-[#6E6E73]">Gültig bis</div><div className="text-[20px] font-bold">{fmtDate(new Date(plan.gueltig_bis))}</div></div>}
+      </div>
+      {plan.hinweis_betreiber && <p className="text-[14px]">{plan.hinweis_betreiber}</p>}
+      <div className="rounded-2xl bg-[#F5F5F7] px-4 py-4 text-[14px] space-y-2">
+        <div className="font-semibold">Preise</div>
+        <div><strong>Pro</strong> – 2,99 € je Nutzer und Monat (mindestens 9,99 € je Firma, 3 Nutzer inklusive): Stempeluhr, Projekte, Stundenzettel, Rechnungen, Personalakte, Lohnexport, MiLoG-Nachweis.</div>
+        <div><strong>Pro Plus</strong> – 4,99 € je Nutzer und Monat (mindestens 14,99 €): dazu Stundenkonten mit Soll/Ist, Urlaubskonten, Feiertage, ArbZG-Prüfung, Leistungen mit Sätzen, Zusatzpositionen, Budgets, Auswertungen, Monatsabschluss, Vorarbeiter-Rolle, Objekt-QR mit Offline-Stempeln, Webhooks und API.</div>
+        <div className="text-[#6E6E73]">Jahreszahlung: zwei Monate geschenkt. In der Testphase ist alles freigeschaltet. Freischalten oder erweitern: kurze Nachricht an den Anbieter. Lesen und Exportieren geht auch nach Ablauf immer weiter.</div>
+      </div>
+    </Card>
+  );
+}
+
+function Schnittstelle() {
+  const [tokens, setTokens] = useState(null);
+  const [name, setName] = useState('');
+  const [neu, setNeu] = useState('');
+  const laden = () => api.get('/api/firma/api-tokens').then((r) => setTokens(r.tokens)).catch((err) => toast.error(err.message));
+  useEffect(() => { laden(); }, []);
+  const anlegen = async (e) => {
+    e.preventDefault();
+    try { const r = await api.post('/api/firma/api-tokens', { name: name.trim() || 'Schlüssel' }); setNeu(r.token); setName(''); laden(); } catch (err) { toast.error(err.message); }
+  };
+  const loeschen = async (t) => { if (!window.confirm(`Schlüssel „${t.name}“ löschen? Verbundene Programme verlieren den Zugriff.`)) return; try { await api.del(`/api/firma/api-tokens/${t.id}`); laden(); } catch (err) { toast.error(err.message); } };
+  return (
+    <Card className="p-5 sm:p-8 max-w-3xl mx-auto space-y-5">
+      <div><h2 className="text-[17px]">API-Schlüssel</h2><p className="text-[14px] text-[#6E6E73] mt-1">Für Lohnbüro, Steuerberater oder eigene Auswertungen: lesender Zugriff auf Zeiten, Projekte, Mitarbeiter, Abwesenheiten und Rechnungen. Dokumentation unter <a href="/api/docs" target="_blank" rel="noreferrer" className="text-[#C41E3A] font-medium">/api/docs</a> (Bereich „API v1“).</p></div>
+      <form onSubmit={anlegen} className="flex gap-2"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, z. B. Lohnbüro Schmidt" /><Btn type="submit"><KeyRound size={16} /> Erzeugen</Btn></form>
+      {neu && (
+        <div className="rounded-2xl bg-[#FFF4E5] px-4 py-3 text-[14px] text-[#7A4100]">
+          <div className="font-semibold">Neuer Schlüssel – wird nur jetzt angezeigt:</div>
+          <div className="mt-1 break-all select-all font-mono text-[13px]">{neu}</div>
+          <Btn size="sm" variant="dark" className="mt-2" onClick={() => navigator.clipboard?.writeText(neu).then(() => toast.success('Kopiert'))}><Copy size={14} /> Kopieren</Btn>
+        </div>
+      )}
+      {!tokens ? <Ladeanzeige /> : tokens.length === 0 ? <p className="text-[14px] text-[#6E6E73]">Noch keine Schlüssel.</p> : (
+        <ul className="divide-y divide-black/[0.06]">{tokens.map((t) => <li key={t.id} className="py-2.5 flex items-center gap-3 text-[14px]"><div className="flex-1"><div className="font-medium">{t.name}</div><div className="text-[12px] text-[#86868B]">erzeugt {fmtZeit(t.created_at)} · zuletzt benutzt {fmtZeit(t.last_used_at)}</div></div><Btn size="sm" variant="danger" onClick={() => loeschen(t)}><Trash2 size={14} /></Btn></li>)}</ul>
+      )}
+      <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3 text-[13px] font-mono break-all">curl -H "Authorization: Bearer sz_…" {window.location.origin}/api/v1/zeiten?von=2026-10-01&amp;bis=2026-10-31</div>
+    </Card>
+  );
+}
+
+/** Webhooks: Ereignisse an fremde Systeme (Buchhaltung, Zapier/Make, eigene Programme). */
+function Webhooks() {
+  const [daten, setDaten] = useState(null);
+  const [form, setForm] = useState({ name: '', url: '', events: ['*'] });
+  const [geheim, setGeheim] = useState('');
+  const [busy, setBusy] = useState('');
+  const laden = useCallback(() => api.get('/api/firma/webhooks').then(setDaten).catch((err) => toast.error(err.message)), []);
+  useEffect(() => { laden(); }, [laden]);
+  const toggleEvent = (ev) => setForm((f) => {
+    if (ev === '*') return { ...f, events: ['*'] };
+    const ohne = f.events.filter((x) => x !== '*' && x !== ev);
+    return { ...f, events: f.events.includes(ev) ? (ohne.length ? ohne : ['*']) : [...ohne, ev] };
+  });
+  const anlegen = async (e) => {
+    e.preventDefault();
+    setBusy('neu');
+    try { const r = await api.post('/api/firma/webhooks', form); setGeheim(r.secret); setForm({ name: '', url: '', events: ['*'] }); toast.success('Webhook angelegt'); laden(); }
+    catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
+  const testen = async (h) => { setBusy(h.id); try { const r = await api.post(`/api/firma/webhooks/${h.id}/test`); if (r.ok) toast.success(`Test gesendet (HTTP ${r.status})`); else toast.error(`Ziel antwortet mit ${r.status || 'Fehler'}`); laden(); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
+  const loeschen = async (h) => { if (!window.confirm(`Webhook „${h.name}“ löschen?`)) return; try { await api.del(`/api/firma/webhooks/${h.id}`); laden(); } catch (err) { toast.error(err.message); } };
+  return (
+    <Card className="p-5 sm:p-8 max-w-3xl mx-auto space-y-5">
+      <div><h2 className="text-[17px]">Webhooks</h2><p className="text-[14px] text-[#6E6E73] mt-1">Bei Ereignissen schickt der Server eine JSON-Nachricht an deine Adresse (z. B. Zapier, Make, Buchhaltung, eigenes Programm). Signatur im Kopf <code>X-Signatur</code> (HMAC-SHA256 über den Inhalt mit dem Geheimnis).</p></div>
+      <form onSubmit={anlegen} className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-3"><Field label="Name"><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z. B. Buchhaltung" /></Field><Field label="Adresse (https)"><TextInput value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://…" required /></Field></div>
+        <div><span className="block text-[13px] font-medium text-[#6E6E73] mb-2">Ereignisse</span><div className="flex flex-wrap gap-2"><Chip active={form.events.includes('*')} onClick={() => toggleEvent('*')}>Alle</Chip>{(daten?.ereignisse || []).filter((e) => e !== 'test').map((ev) => <Chip key={ev} active={form.events.includes(ev)} onClick={() => toggleEvent(ev)}>{ev}</Chip>)}</div></div>
+        <Btn type="submit" loading={busy === 'neu'}><Plus size={16} /> Webhook anlegen</Btn>
+      </form>
+      {geheim && <div className="rounded-2xl bg-[#FFF4E5] px-4 py-3 text-[14px] text-[#7A4100]"><div className="font-semibold">Geheimnis für die Signatur – wird nur jetzt angezeigt:</div><div className="mt-1 break-all select-all font-mono text-[13px]">{geheim}</div><Btn size="sm" variant="dark" className="mt-2" onClick={() => navigator.clipboard?.writeText(geheim).then(() => toast.success('Kopiert'))}><Copy size={14} /> Kopieren</Btn></div>}
+      {!daten ? <Ladeanzeige /> : daten.webhooks.length === 0 ? <p className="text-[14px] text-[#6E6E73]">Noch keine Webhooks.</p> : (
+        <ul className="divide-y divide-black/[0.06]">{daten.webhooks.map((h) => <li key={h.id} className="py-2.5 flex items-center gap-3 text-[14px]"><div className="flex-1 min-w-0"><div className="font-medium truncate">{h.name} <span className="text-[12px] font-normal text-[#86868B]">{h.url}</span></div><div className="text-[12px] text-[#86868B]">{(h.events || ['*']).join(', ')} · zuletzt {h.last_status ? `HTTP ${h.last_status} (${h.last_event})` : 'nie'} {h.last_at ? fmtZeit(h.last_at) : ''}</div></div><Btn size="sm" variant="soft" onClick={() => testen(h)} loading={busy === h.id}><Send size={14} /> Test</Btn><IconBtn size={30} variant="danger" onClick={() => loeschen(h)} title="Löschen"><Trash2 size={14} /></IconBtn></li>)}</ul>
+      )}
+    </Card>
+  );
+}
+
+function Import() {
+  const ref = useRef(null);
+  const [firmendaten, setFirmendaten] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const datei = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setBusy(true);
+      try {
+        const json = JSON.parse(String(reader.result));
+        const r = await api.post(`/api/import/free-app?firmendaten_uebernehmen=${firmendaten}`, json);
+        toast.success(`Übernommen: ${r.projekte} Projekte, ${r.eintraege} Einträge, ${r.rechnungen} Rechnungen${r.uebersprungen ? ` (${r.uebersprungen} übersprungen)` : ''}`);
+      } catch (err) { toast.error(err.message || 'Datei konnte nicht gelesen werden'); } finally { setBusy(false); }
+    };
+    reader.readAsText(file);
+  };
+  return (
+    <Card className="p-5 sm:p-8 max-w-3xl mx-auto space-y-4">
+      <h2 className="text-[17px]">Aus der kostenlosen App übernehmen</h2>
+      <p className="text-[14px] text-[#6E6E73]">In der kostenlosen Stundenzettel-App unter „Datensicherung“ die Sicherungsdatei erzeugen und hier einspielen. Projekte, Zeiten und Rechnungsnummern werden übernommen, Auftraggeber werden als Kunden angelegt. Mehrfaches Einspielen legt nichts doppelt an.</p>
+      <Field label="Firmendaten (Logo, Stempel, Bankverbindung) aus der Datei übernehmen"><label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={firmendaten} onChange={(e) => setFirmendaten(e.target.checked)} /> ja, überschreiben</label></Field>
+      <input ref={ref} type="file" accept="application/json,.json" className="hidden" onChange={datei} />
+      <Btn onClick={() => ref.current?.click()} loading={busy}><Upload size={16} /> Sicherungsdatei auswählen</Btn>
+    </Card>
+  );
+}
