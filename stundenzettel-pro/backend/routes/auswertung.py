@@ -13,7 +13,7 @@ GRUPPEN = ("kunde", "projekt", "mitarbeiter", "leistung", "monat")
 
 
 @router.get("")
-async def auswertung(von: str, bis: str, gruppe: str = Query("projekt"), user: dict = Depends(rolle_noetig("buero"))):
+async def auswertung(von: str, bis: str, gruppe: str = Query("projekt"), user: dict = Depends(rolle_noetig("inhaber"))):
     try:
         datum_pruefen(von)
         datum_pruefen(bis)
