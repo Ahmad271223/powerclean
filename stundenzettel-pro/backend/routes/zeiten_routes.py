@@ -45,6 +45,10 @@ async def _person_pruefen(user: dict, user_id: Optional[str], projekt: dict) -> 
     u = await db().users.find_one({"id": user_id, "firma_id": user["firma_id"]}, {"_id": 0, "id": 1})
     if not u:
         raise HTTPException(400, "Mitarbeiter nicht gefunden.")
+    if not hat_rolle(user, "buero"):
+        zugewiesen = set(projekt.get("employee_ids") or []) | set(projekt.get("leiter_ids") or [])
+        if zugewiesen and user_id not in zugewiesen:
+            raise HTTPException(403, "Diese Person ist dem Projekt nicht zugewiesen – Zeiten für sie trägt das Büro ein.")
     return user_id
 
 
@@ -160,11 +164,19 @@ async def meine(von: str, bis: str, user: dict = Depends(aktueller_nutzer)):
 @router.post("/api/zeiten")
 async def anlegen(body: ZeitIn, user: dict = Depends(schreibender_nutzer)):
     firma = user["_firma"]
+    if body.offline_id:   # Offline-Eintrag: höchstens einmal anlegen, Wiederholungen liefern den vorhandenen Eintrag
+        vorhanden = await db().entries.find_one({"firma_id": user["firma_id"], "offline_id": body.offline_id}, {"_id": 0, "id": 1})
+        if vorhanden:
+            return {"eintrag": await _frisch(user["firma_id"], vorhanden["id"]), "doppelt": True}
     p = await projekt_laden(user, body.project_id, schreiben=True)
     leitung = projekt_leitung(user, p)
     await sperre_pruefen(user, firma, p["id"], body.date, leitung)
-    e = {**body.model_dump(exclude={"offline", "service_id"}), "id": neue_id(), "firma_id": user["firma_id"],
+    e = {**body.model_dump(exclude={"offline", "service_id", "offline_id", "start_at", "end_at"}), "id": neue_id(), "firma_id": user["firma_id"],
          "source": "stempel_offline" if body.offline else "manuell", "created_by": user["id"], "created_at": jetzt_iso()}
+    if body.offline_id:
+        e["offline_id"] = body.offline_id
+    if body.start_at:
+        e["clock_start_at"], e["clock_end_at"] = body.start_at, body.end_at
     e["user_id"] = await _person_pruefen(user, body.user_id, p)
     await _leistung_setzen(e, user["firma_id"], body.service_id)
     _fertig(e, firma)
@@ -270,6 +282,7 @@ def _stempel_oeffentlich(s: dict, projekte: dict) -> dict:
     if start.tzinfo is None:
         jetzt = jetzt.replace(tzinfo=None)
     pause = 0
+    pause_sek = 0
     offen = False
     for p in s.get("pausen", []):
         von = datetime.fromisoformat(p["von"])
@@ -277,10 +290,14 @@ def _stempel_oeffentlich(s: dict, projekte: dict) -> dict:
         if bis is None:
             offen = True
             bis = jetzt
-        pause += max(0, int((bis - von).total_seconds() // 60))
+        dauer = max(0, (bis - von).total_seconds())
+        pause += int(dauer // 60)
+        pause_sek += int(dauer)
     s["pause_minuten"] = pause
     s["pause_laeuft"] = offen
+    s["sekunden"] = max(0, int((jetzt - start).total_seconds()) - pause_sek)   # sekundengenau aus den Zeitstempeln
     s["minuten"] = max(0, int((jetzt - start).total_seconds() // 60) - pause)
+    s["server_jetzt"] = jetzt.isoformat()
     s["lange"] = s["minuten"] >= LANGE_STEMPELUNG_MINUTEN
     s["project_name"] = projekte.get(s.get("project_id"), {}).get("name", "")
     s["project_color"] = projekte.get(s.get("project_id"), {}).get("color", "")
@@ -289,7 +306,7 @@ def _stempel_oeffentlich(s: dict, projekte: dict) -> dict:
 
 async def _projekte_sichtbar(user: dict) -> dict:
     aus = {}
-    async for p in db().projects.find({"firma_id": user["firma_id"], "archived": False}, {"_id": 0, "id": 1, "name": 1, "color": 1, "employee_ids": 1, "customer_name": 1, "address": 1}):
+    async for p in db().projects.find({"firma_id": user["firma_id"], "archived": False}, {"_id": 0, "id": 1, "name": 1, "color": 1, "employee_ids": 1, "leiter_ids": 1, "customer_name": 1, "address": 1}):
         if projekt_sichtbar(user, p):
             aus[p["id"]] = p
     return aus
@@ -306,20 +323,52 @@ async def stempel_status(user: dict = Depends(aktueller_nutzer)):
     liste = sorted(projekte.values(), key=lambda p: p["name"])
     for p in liste:
         p.pop("employee_ids", None)
+        p.pop("leiter_ids", None)
     leistungen = [{"id": s["id"], "name": s["name"]} async for s in db().services.find({"firma_id": user["firma_id"], "active": True}, {"_id": 0}).sort("sort", 1)]
     return {"aktiv": _stempel_oeffentlich(s, projekte) if s else None, "projekte": liste, "heute": heute, "minuten_heute": minuten_heute,
-            "leistungen": leistungen}
+            "leistungen": leistungen, "jetzt": lokal_jetzt().isoformat()}   # Server-Uhr: die Anzeige rechnet damit, nie mit der Geräteuhr allein
+
+
+def _zeitstempel(text: str, jetzt: datetime, feld: str) -> datetime:
+    """Zeitstempel vom Gerät (ISO, meist UTC mit Z) in die Zeitrechnung des Servers bringen."""
+    try:
+        t = datetime.fromisoformat((text or "").replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(400, f"{feld} ist kein gültiger Zeitstempel.")
+    if jetzt.tzinfo is not None:
+        t = t.astimezone(jetzt.tzinfo) if t.tzinfo is not None else t.replace(tzinfo=jetzt.tzinfo)
+    elif t.tzinfo is not None:
+        t = t.astimezone().replace(tzinfo=None)
+    return t
 
 
 @router.post("/api/stempel/start")
 async def stempel_start(body: StempelStartIn, user: dict = Depends(schreibender_nutzer)):
+    """Einstempeln – oder eine offline gestartete Stempelung mit echter Startzeit und Pausen übernehmen (höchstens 24 Stunden zurück)."""
     p = await projekt_laden(user, body.project_id, schreiben=True)
     if await db().stempel.find_one({"firma_id": user["firma_id"], "user_id": user["id"]}):
         raise HTTPException(409, "Du bist schon eingestempelt. Bitte erst ausstempeln.")
+    jetzt = lokal_jetzt()
+    start_at, pausen, uebernommen = jetzt, [], False
+    if body.start_at:
+        start_at = _zeitstempel(body.start_at, jetzt, "start_at")
+        if start_at > jetzt + timedelta(minutes=2):
+            raise HTTPException(400, "Der Startzeitpunkt liegt in der Zukunft.")
+        if jetzt - start_at > timedelta(hours=24):
+            raise HTTPException(400, "Übernehmen geht nur für Stempelungen der letzten 24 Stunden. Bitte die Zeit von Hand eintragen.")
+        letztes_ende = start_at
+        for pz in body.pausen:
+            von = _zeitstempel(pz.von, jetzt, "Pause von")
+            bis = _zeitstempel(pz.bis, jetzt, "Pause bis") if pz.bis else None
+            if von < letztes_ende or (bis is not None and bis < von) or von > jetzt or (bis is not None and bis > jetzt + timedelta(minutes=2)):
+                raise HTTPException(400, "Die Pausen passen nicht zum Startzeitpunkt.")
+            pausen.append({"von": von.isoformat(), "bis": bis.isoformat() if bis else None})
+            letztes_ende = bis or jetzt
+        uebernommen = True
     s = {"id": neue_id(), "firma_id": user["firma_id"], "user_id": user["id"], "project_id": p["id"],
-         "start_at": lokal_jetzt().isoformat(), "pausen": [], "gps_start": body.gps.model_dump() if body.gps else None}
+         "start_at": start_at.isoformat(), "pausen": pausen, "gps_start": body.gps.model_dump() if body.gps else None, "offline_uebernommen": uebernommen}
     await db().stempel.insert_one(dict(s))
-    await protokollieren(user, "stempel.start", p["name"], details={"gps": bool(body.gps)})
+    await protokollieren(user, "stempel.start", p["name"], details={"gps": bool(body.gps), "offline_uebernommen": uebernommen, "start_at": s["start_at"]})
     return {"aktiv": _stempel_oeffentlich(s, {p["id"]: p})}
 
 
@@ -352,28 +401,34 @@ async def _stempel_beenden(s: dict, firma: dict, handelnder: dict, activity: str
     start = datetime.fromisoformat(s["start_at"])
     if start.tzinfo is None:
         jetzt = jetzt.replace(tzinfo=None)
-    for p in s.get("pausen", []):
+    pausen = [dict(p) for p in s.get("pausen", [])]
+    for p in pausen:
         if not p.get("bis"):
             p["bis"] = jetzt.isoformat()
     gesamt = int((jetzt - start).total_seconds() // 60)
-    pause = sum(max(0, int((datetime.fromisoformat(p["bis"]) - datetime.fromisoformat(p["von"])).total_seconds() // 60)) for p in s.get("pausen", []))
-    await db().stempel.delete_one({"id": s["id"]})
+    pause = sum(max(0, int((datetime.fromisoformat(p["bis"]) - datetime.fromisoformat(p["von"])).total_seconds() // 60)) for p in pausen)
+    ende, hinweise = jetzt, []
     if gesamt > 24 * 60:
-        await protokollieren(handelnder, "stempel.verworfen", s.get("project_id", ""), details={"grund": "laenger als 24 Stunden", "user_id": s["user_id"]})
-        raise HTTPException(400, "Die Stempelung lief länger als 24 Stunden und wurde verworfen. Bitte die Zeit von Hand eintragen.")
+        # Nichts verwerfen: der Eintrag wird auf 24 Stunden begrenzt und zur Prüfung markiert; die echten Zeitstempel bleiben am Eintrag
+        ende = start + timedelta(hours=23, minutes=59)
+        gesamt = 24 * 60 - 1
+        pause = min(pause, gesamt - 1)
+        hinweise.append({"art": "pruefen", "text": "Die Stempelung lief länger als 24 Stunden. Der Eintrag wurde auf 24 Stunden begrenzt – bitte prüfen und korrigieren."})
     if gesamt - pause < 1:
-        await protokollieren(handelnder, "stempel.verworfen", s.get("project_id", ""), details={"grund": "unter einer Minute", "user_id": s["user_id"]})
+        await db().stempel.delete_one({"id": s["id"]})
+        await protokollieren(handelnder, "stempel.verworfen", s.get("project_id", ""), details={"grund": "unter einer Minute", "user_id": s["user_id"], "start_at": s["start_at"]})
         return {"eintrag": None, "verworfen": True, "hinweis": "Weniger als eine Minute, nichts eingetragen."}
     e = {"id": neue_id(), "firma_id": firma["id"], "project_id": s["project_id"], "user_id": s["user_id"],
-         "date": start.date().isoformat(), "start_time": start.strftime("%H:%M"), "end_time": jetzt.strftime("%H:%M"),
+         "date": start.date().isoformat(), "start_time": start.strftime("%H:%M"), "end_time": ende.strftime("%H:%M"),
          "pause_minutes": pause, "activity": (activity or "").strip(), "workers": 1, "source": "stempel",
          "gps_start": s.get("gps_start"), "gps_end": gps, "clock_start_at": s["start_at"], "clock_end_at": jetzt.isoformat(),
-         "beendet_durch": beendet_durch, "created_by": handelnder["id"], "created_at": jetzt_iso()}
+         "beendet_durch": beendet_durch, "pruefen": bool(hinweise), "hinweise": hinweise, "created_by": handelnder["id"], "created_at": jetzt_iso()}
     await _leistung_setzen(e, firma["id"], service_id)
     _fertig(e, firma)
-    await db().entries.insert_one(dict(e))
+    await db().entries.insert_one(dict(e))              # erst der Arbeitszeitnachweis …
+    await db().stempel.delete_one({"id": s["id"]})       # … dann die laufende Stempelung entfernen
     await _nach_aenderung(firma, {e["project_id"]}, e["user_id"], {e["date"]})
-    await protokollieren(handelnder, "stempel.stop", e["project_id"], details={"date": e["date"], "start": e["start_time"], "ende": e["end_time"], "pause": e["pause_minutes"], "netto": e["net_minutes"], "user_id": s["user_id"], "beendet_durch": beendet_durch})
+    await protokollieren(handelnder, "stempel.stop", e["project_id"], details={"date": e["date"], "start": e["start_time"], "ende": e["end_time"], "pause": e["pause_minutes"], "netto": e["net_minutes"], "user_id": s["user_id"], "beendet_durch": beendet_durch, "pruefen": e["pruefen"]})
     return {"eintrag": await _frisch(firma["id"], e["id"]), "verworfen": False}
 
 
@@ -396,9 +451,10 @@ async def stempel_beenden_buero(stempel_id: str, body: StempelStopIn, user: dict
 
 @router.delete("/api/stempel")
 async def stempel_abbrechen(user: dict = Depends(schreibender_nutzer)):
+    s = await db().stempel.find_one({"firma_id": user["firma_id"], "user_id": user["id"]}, {"_id": 0, "start_at": 1, "project_id": 1})
     r = await db().stempel.delete_one({"firma_id": user["firma_id"], "user_id": user["id"]})
     if r.deleted_count:
-        await protokollieren(user, "stempel.abgebrochen")
+        await protokollieren(user, "stempel.abgebrochen", (s or {}).get("project_id", ""), details={"start_at": (s or {}).get("start_at")})
     return {"ok": True}
 
 
@@ -474,7 +530,10 @@ async def abwesenheit_status(abwesenheit_id: str, body: AbwesenheitStatusIn, use
     aenderung = {"status": body.status, "decided_by": user.get("name"), "decided_at": jetzt_iso()}
     if body.note is not None:
         aenderung["decision_note"] = body.note.strip()
-    await db().absences.update_one({"id": abwesenheit_id}, {"$set": aenderung})
+    schritt = {"at": jetzt_iso(), "user_id": user["id"], "user_name": user.get("name"), "aktion": "entschieden", "vorher": {"status": a.get("status")},
+               "nachher": {"status": body.status}, "grund": (body.note or "").strip()}
+    await db().absences.update_one({"id": abwesenheit_id}, {"$set": aenderung, "$push": {"verlauf": schritt}})
+    aenderung["verlauf"] = (a.get("verlauf") or []) + [schritt]
     await protokollieren(user, "abwesenheit.entschieden", a["type"], details={"status": body.status, "user_id": a["user_id"], "von": a["from_date"]})
     return {"abwesenheit": {**a, **aenderung}}
 
@@ -487,13 +546,19 @@ async def abwesenheit_aendern(abwesenheit_id: str, body: AbwesenheitIn, user: di
         raise HTTPException(403, "Nur eigene, noch nicht entschiedene Anträge lassen sich ändern.")
     if body.to_date < body.from_date:
         raise HTTPException(400, "„bis“ liegt vor „von“.")
+    if buero and a.get("status") in ("genehmigt", "abgelehnt") and not (body.grund or "").strip():
+        raise HTTPException(400, "Dieser Antrag ist bereits entschieden. Bitte einen Grund für die Änderung angeben.")
     aenderung = {"type": body.type, "from_date": body.from_date, "to_date": body.to_date, "note": (body.note or "").strip(), "updated_at": jetzt_iso()}
     if buero and body.user_id:
         if not await db().users.find_one({"id": body.user_id, "firma_id": user["firma_id"]}, {"_id": 0, "id": 1}):
             raise HTTPException(400, "Mitarbeiter nicht gefunden.")
         aenderung["user_id"] = body.user_id
-    await db().absences.update_one({"id": abwesenheit_id}, {"$set": aenderung})
-    return {"abwesenheit": {**a, **aenderung}}
+    felder = [k for k in ("type", "from_date", "to_date", "note", "user_id") if k in aenderung and aenderung[k] != a.get(k)]
+    schritt = {"at": jetzt_iso(), "user_id": user["id"], "user_name": user.get("name"), "aktion": "geaendert", "vorher": {k: a.get(k) for k in felder},
+               "nachher": {k: aenderung[k] for k in felder}, "grund": (body.grund or "").strip()}
+    await db().absences.update_one({"id": abwesenheit_id}, {"$set": aenderung, "$push": {"verlauf": schritt}})
+    await protokollieren(user, "abwesenheit.geaendert", a["type"], details={"felder": felder, "grund": schritt["grund"], "user_id": aenderung.get("user_id", a["user_id"]), "status": a.get("status")})
+    return {"abwesenheit": {**a, **aenderung, "verlauf": (a.get("verlauf") or []) + [schritt]}}
 
 
 @router.delete("/api/abwesenheiten/{abwesenheit_id}")

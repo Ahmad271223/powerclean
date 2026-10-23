@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from pymongo.errors import DuplicateKeyError
 
 from auth import firma_laden, jetzt_iso, rolle_noetig, schreibend
+from auth import hat_rolle
 from db import db
 import erechnung
 import pdfbasis
@@ -59,15 +60,47 @@ async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), status: Opt
     return {"rechnungen": aus, "jahre": jahre}
 
 
+async def _naechste_nummer(firma_id: str, jahr: int) -> int:
+    """Laufende Rechnungsnummer je Firma und Jahr aus einem Zähler, der nie zurückgezählt wird – eine zurückgesetzte oder
+    gelöschte Nummer wird nicht noch einmal vergeben (Nachvollziehbarkeit des Nummernkreises)."""
+    letzte = await db().invoices.find_one({"firma_id": firma_id, "year": jahr}, {"_id": 0, "seq": 1}, sort=[("seq", -1)])
+    hoechste = int((letzte or {}).get("seq") or 0)
+    feld = f"rechnungszaehler.{jahr}"
+    for _ in range(10):
+        f = await db().firmen.find_one({"id": firma_id}, {"_id": 0, "rechnungszaehler": 1})
+        stand = int(((f or {}).get("rechnungszaehler") or {}).get(str(jahr)) or 0)
+        neu = max(stand, hoechste) + 1
+        filt = {"id": firma_id, feld: stand} if stand else {"id": firma_id, "$or": [{feld: {"$exists": False}}, {feld: 0}, {feld: None}]}
+        r = await db().firmen.update_one(filt, {"$set": {feld: neu}})
+        if r.matched_count:
+            return neu
+    raise HTTPException(503, "Rechnungsnummer konnte nicht vergeben werden, bitte noch einmal versuchen.")
+
+
+def festgeschrieben(r: dict) -> bool:
+    return bool(r.get("festgeschrieben_at"))
+
+
+async def _festschreiben(user: dict, r: dict, anlass: str) -> dict:
+    """Rechnung ausstellen: ab jetzt werden Summen nicht mehr stillschweigend neu berechnet (erst wieder nach Storno oder ausdrücklich durch den Inhaber)."""
+    if festgeschrieben(r) or r.get("status", "offen") != "offen":
+        return r
+    aenderung = {"festgeschrieben_at": jetzt_iso(), "festgeschrieben_von": user.get("name"), "festgeschrieben_anlass": anlass}
+    await db().invoices.update_one({"id": r["id"]}, {"$set": aenderung})
+    await protokollieren(user, "rechnung.ausgestellt", r["number"], details={"anlass": anlass, "brutto": r.get("gross")})
+    return {**r, **aenderung}
+
+
 @router.post("/anlegen")
 async def anlegen(body: RechnungAnlegenIn, user: dict = Depends(schreibend("buero"))):
-    """Bestehende Rechnung des Monats zurückgeben (offene werden neu berechnet) oder mit nächster Nummer anlegen."""
+    """Bestehende Rechnung des Monats zurückgeben (nur Entwürfe werden neu berechnet, ausgestellte nie) oder mit nächster Nummer anlegen.
+    Mit nur_pruefen wird nichts angelegt und keine Nummer vergeben."""
     p = await projekt_laden(user, body.project_id)
     firma = user["_firma"]
     eintraege = await _monatseintraege(user["firma_id"], p["id"], body.year, body.month)
     vorhanden = await db().invoices.find_one({"firma_id": user["firma_id"], "project_id": p["id"], "year": body.year, "month": body.month}, {"_id": 0})
     if vorhanden:
-        if vorhanden.get("status", "offen") == "offen":
+        if vorhanden.get("status", "offen") == "offen" and not festgeschrieben(vorhanden) and not body.nur_pruefen:
             calc = rechnung_berechnen(p, firma, body.year, body.month, eintraege, vorhanden.get("extras") or [])
             await db().invoices.update_one({"id": vorhanden["id"]}, {"$set": _summen(calc)})
             vorhanden.update(_summen(calc))
@@ -75,9 +108,10 @@ async def anlegen(body: RechnungAnlegenIn, user: dict = Depends(schreibend("buer
     calc = rechnung_berechnen(p, firma, body.year, body.month, eintraege)
     if not calc["total_minutes"]:
         raise HTTPException(400, "In diesem Monat sind keine Arbeitszeiten eingetragen.")
+    if body.nur_pruefen:
+        return {"rechnung": None, "neu": False, "vorschau": {"prefix": firma.get("invoice_prefix") or "RE-", "year": body.year, **_summen(calc)}}
     for _ in range(6):
-        letzte = await db().invoices.find_one({"firma_id": user["firma_id"], "year": body.year}, {"_id": 0, "seq": 1}, sort=[("seq", -1)])
-        seq = int((letzte or {}).get("seq") or 0) + 1
+        seq = await _naechste_nummer(user["firma_id"], body.year)
         r = {"id": neue_id(), "firma_id": user["firma_id"], "project_id": p["id"], "customer_id": p.get("customer_id"),
              "year": body.year, "month": body.month, "seq": seq,
              "number": f"{firma.get('invoice_prefix') or 'RE-'}{body.year}-{seq:04d}",
@@ -105,6 +139,7 @@ async def _laden(user: dict, rechnung_id: str) -> dict:
 async def daten(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
     """Alles für das PDF: Firma, Projekt, Rechnung, Einträge des Wochenrasters, Kunden-Unterschriften."""
     r = await _laden(user, rechnung_id)
+    r = await _festschreiben(user, r, "pdf")
     p = await projekt_laden(user, r["project_id"])
     firma = await firma_laden(user["firma_id"])
     von, bis = rasterbereich(r["year"], r["month"])
@@ -113,7 +148,7 @@ async def daten(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
     async for e in db().entries.find({"firma_id": user["firma_id"], "project_id": p["id"], "date": {"$gte": von, "$lte": bis}}, {"_id": 0}).sort([("date", 1), ("start_time", 1)]):
         eintraege.append(eintrag_anreichern(e, namen))
     unterschriften = []
-    async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": p["id"], "week_monday": {"$gte": von, "$lte": bis}}, {"_id": 0}):
+    async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": p["id"], "week_monday": {"$gte": von, "$lte": bis}, "ersetzt": {"$ne": True}}, {"_id": 0}):
         unterschriften.append(s)
     return {"firma": firma_oeffentlich(firma, user), "projekt": p, "rechnung": r, "eintraege": eintraege, "unterschriften": unterschriften,
             "fotos": await projekt_fotos(user["firma_id"], p["id"], von, bis)}
@@ -125,6 +160,8 @@ async def extras(rechnung_id: str, body: ExtrasIn, user: dict = Depends(schreibe
     r = await _laden(user, rechnung_id)
     if r.get("status", "offen") != "offen":
         raise HTTPException(400, "Positionen lassen sich nur bei offenen Rechnungen ändern.")
+    if festgeschrieben(r):
+        raise HTTPException(400, "Die Rechnung ist ausgestellt. Positionen lassen sich nicht mehr ändern – bitte stornieren und neu anlegen.")
     p = await projekt_laden(user, r["project_id"])
     calc = rechnung_berechnen(p, user["_firma"], r["year"], r["month"], await _monatseintraege(user["firma_id"], p["id"], r["year"], r["month"]),
                               [x.model_dump() for x in body.extras])
@@ -148,6 +185,8 @@ async def status(rechnung_id: str, body: RechnungStatusIn, user: dict = Depends(
     if body.invoice_date:
         if r.get("status", "offen") != "offen":
             raise HTTPException(400, "Das Datum lässt sich nur bei offenen Rechnungen ändern.")
+        if festgeschrieben(r) and body.invoice_date != r.get("invoice_date"):
+            raise HTTPException(400, "Die Rechnung ist ausgestellt – das Rechnungsdatum lässt sich nicht mehr ändern.")
         try:
             datum_pruefen(body.invoice_date)
         except ValueError as exc:
@@ -159,14 +198,33 @@ async def status(rechnung_id: str, body: RechnungStatusIn, user: dict = Depends(
 
 
 @router.post("/{rechnung_id}/neu-berechnen")
-async def neu_berechnen(rechnung_id: str, user: dict = Depends(schreibend("buero"))):
+async def neu_berechnen(rechnung_id: str, erzwingen: bool = False, user: dict = Depends(schreibend("buero"))):
+    """Entwürfe neu berechnen. Ausgestellte Rechnungen nur ausdrücklich durch den Inhaber (erzwingen) – mit Korrekturvermerk und alten Summen."""
     r = await _laden(user, rechnung_id)
     if r.get("status", "offen") != "offen":
         raise HTTPException(400, "Nur offene Rechnungen lassen sich neu berechnen.")
+    if festgeschrieben(r):
+        if not erzwingen:
+            raise HTTPException(400, "Die Rechnung ist ausgestellt und wird nicht stillschweigend neu berechnet. Bitte stornieren und neu anlegen – oder als Inhaber ausdrücklich neu berechnen.")
+        if not hat_rolle(user, "inhaber"):
+            raise HTTPException(403, "Eine ausgestellte Rechnung darf nur der Inhaber neu berechnen.")
     p = await projekt_laden(user, r["project_id"])
     calc = rechnung_berechnen(p, user["_firma"], r["year"], r["month"], await _monatseintraege(user["firma_id"], p["id"], r["year"], r["month"]), r.get("extras") or [])
-    await db().invoices.update_one({"id": rechnung_id}, {"$set": _summen(calc)})
-    return {"rechnung": {**r, **_summen(calc)}}
+    aenderung = _summen(calc)
+    if festgeschrieben(r):
+        korrektur = {"at": jetzt_iso(), "user_name": user.get("name"), "vorher": {k: r.get(k) for k in ("net", "vat", "gross", "total_minutes")}, "nachher": {k: aenderung.get(k) for k in ("net", "vat", "gross", "total_minutes")}}
+        await db().invoices.update_one({"id": rechnung_id}, {"$set": aenderung, "$push": {"korrekturen": korrektur}})
+        await protokollieren(user, "rechnung.neu_berechnet_erzwungen", r["number"], details=korrektur)
+        return {"rechnung": {**r, **aenderung, "korrekturen": (r.get("korrekturen") or []) + [korrektur]}}
+    await db().invoices.update_one({"id": rechnung_id}, {"$set": aenderung})
+    return {"rechnung": {**r, **aenderung}}
+
+
+@router.post("/{rechnung_id}/festschreiben")
+async def festschreiben(rechnung_id: str, user: dict = Depends(schreibend("buero"))):
+    """Rechnung ausdrücklich ausstellen (z. B. nachdem die PDF im Browser erzeugt wurde)."""
+    r = await _laden(user, rechnung_id)
+    return {"rechnung": await _festschreiben(user, r, "ausgestellt")}
 
 
 @router.delete("/{rechnung_id}")
@@ -175,6 +233,8 @@ async def loeschen(rechnung_id: str, user: dict = Depends(schreibend("buero"))):
     r = await _laden(user, rechnung_id)
     if r.get("status", "offen") != "offen":
         raise HTTPException(400, "Bezahlte oder stornierte Rechnungen bleiben als Beleg erhalten.")
+    if festgeschrieben(r):
+        raise HTTPException(400, "Die Rechnung ist ausgestellt und bleibt als Beleg erhalten – bitte stornieren. Die Nummer wird nicht neu vergeben.")
     await db().invoices.delete_one({"id": rechnung_id})
     await protokollieren(user, "rechnung.zurueckgesetzt", r["number"])
     return {"ok": True}
@@ -209,6 +269,7 @@ async def _freigeben(user: dict, rechnung_id: str, profil: str) -> tuple[dict, d
     pr = erechnung.pruefen(daten, profil)
     if not pr["ok"]:
         raise HTTPException(422, f"Für {pr['bezeichnung']} fehlt: " + "; ".join(pr["fehlt"]))
+    r = await _festschreiben(user, r, profil)
     await db().invoices.update_one({"id": r["id"]}, {"$set": {f"erechnung.{profil}_at": jetzt_iso()}})
     await protokollieren(user, "rechnung.erechnung", r["number"], details={"format": profil})
     return daten, firma, r
@@ -230,6 +291,7 @@ async def zugferd_pdf(rechnung_id: str, user: dict = Depends(rolle_noetig("buero
 @router.get("/{rechnung_id}/rechnung.pdf")
 async def rechnung_pdf(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
     """Serverseitige Rechnung ohne XML (PDF/A-3b), gleicher Aufbau wie die ZUGFeRD-Rechnung."""
-    daten, firma, _ = await _erechnung(user, rechnung_id)
+    daten, firma, r = await _erechnung(user, rechnung_id)
+    await _festschreiben(user, r, "pdf")
     pdf = pdfbasis.pdfa3_mit_xml(erechnung.rechnung_pdf(daten), None, f"Rechnung {daten['nummer']}", firma.get("name") or "")
     return _datei(pdf, "Rechnung_" + erechnung.dateiname(daten, "pdf"), "application/pdf")

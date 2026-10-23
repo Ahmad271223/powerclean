@@ -258,6 +258,9 @@ class ZeitIn(BaseModel):
     user_id: Optional[str] = None
     service_id: Optional[str] = None
     offline: bool = False
+    offline_id: Optional[str] = Field(default=None, max_length=64)   # eindeutige Kennung eines Offline-Eintrags – der Server legt ihn höchstens einmal an
+    start_at: Optional[str] = Field(default=None, max_length=40)     # echte Zeitstempel einer Offline-Stempelung (Nachweis)
+    end_at: Optional[str] = Field(default=None, max_length=40)
 
     @field_validator("date")
     @classmethod
@@ -329,9 +332,16 @@ class GpsIn(BaseModel):
     accuracy: Optional[float] = Field(default=None, ge=0)
 
 
+class PauseIn(BaseModel):
+    von: str = Field(max_length=40)
+    bis: Optional[str] = Field(default=None, max_length=40)
+
+
 class StempelStartIn(BaseModel):
     project_id: str
     gps: Optional[GpsIn] = None
+    start_at: Optional[str] = Field(default=None, max_length=40)            # offline gestartete Stempelung übernehmen (höchstens 24 h zurück)
+    pausen: list[PauseIn] = Field(default_factory=list, max_length=50)
 
 
 class StempelStopIn(BaseModel):
@@ -346,6 +356,7 @@ class AbwesenheitIn(BaseModel):
     from_date: str
     to_date: str
     note: Optional[str] = Field(default="", max_length=500)
+    grund: Optional[str] = Field(default="", max_length=500)   # Pflicht, wenn das Büro einen bereits entschiedenen Antrag ändert
 
     @field_validator("from_date", "to_date")
     @classmethod
@@ -384,6 +395,7 @@ class UnterschriftIn(BaseModel):
     week_monday: str
     signer_name: str = Field(min_length=1, max_length=120)
     image: str = Field(min_length=50, max_length=800_000)
+    grund: Optional[str] = Field(default="", max_length=500)   # Pflicht, wenn das Büro eine vorhandene Unterschrift ersetzt
 
     @field_validator("week_monday")
     @classmethod
@@ -403,6 +415,7 @@ class RechnungAnlegenIn(BaseModel):
     project_id: str
     year: int = Field(ge=2025, le=2100)
     month: int = Field(ge=1, le=12)
+    nur_pruefen: bool = False   # nur nachsehen, ob es die Rechnung schon gibt – keine Nummer vergeben
 
 
 class RechnungStatusIn(BaseModel):
@@ -453,6 +466,7 @@ class WebhookIn(BaseModel):
 class AbschlussIn(BaseModel):
     year: int = Field(ge=2025, le=2100)
     month: int = Field(ge=1, le=12)
+    erzwingen: bool = False   # trotz laufender Stempelungen abschließen (wird protokolliert)
 
 
 class PlanIn(BaseModel):

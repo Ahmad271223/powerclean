@@ -10,7 +10,7 @@ import config
 from auth import aktueller_nutzer, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig, schreibend
 from dateien import KATEGORIEN_PERSONAL, KATEGORIEN_PROJEKT, bild_verkleinern, datei_loeschen, datei_speichern
 from db import db
-from gemeinsam import neue_id
+from gemeinsam import neue_id, projekt_sichtbar
 from models import DokumentIn, LohndatenIn, MitarbeiterIn, MitarbeiterUpdateIn
 from protokoll import protokollieren
 from geheim import verschluesseln
@@ -206,9 +206,8 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
     if d["scope"] == "user":
         _selbst_oder_buero(user, d["ref_id"])
     elif d["scope"] == "project" and not hat_rolle(user, "buero"):
-        p = await db().projects.find_one({"id": d["ref_id"], "firma_id": user["firma_id"]}, {"_id": 0, "employee_ids": 1})
-        ids = (p or {}).get("employee_ids") or []
-        if not p or (ids and user["id"] not in ids):
+        p = await db().projects.find_one({"id": d["ref_id"], "firma_id": user["firma_id"]}, {"_id": 0})
+        if not p or not projekt_sichtbar(user, p):
             raise HTTPException(403, "Dafür fehlt die Berechtigung.")
     return d
 

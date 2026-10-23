@@ -79,7 +79,7 @@ export default function RechnungenPage() {
               {liste.map((r) => (
                 <Card key={r.id} className="p-4 sm:p-5 flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-[220px]">
-                    <div className="text-[15px] font-semibold flex items-center gap-2">{r.number} <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STATUS_CLS[r.status] || ''}`}>{r.status}</span></div>
+                    <div className="text-[15px] font-semibold flex items-center gap-2">{r.number} <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STATUS_CLS[r.status] || ''}`}>{r.status}</span>{r.status === 'offen' && <span className="text-[11px] font-medium text-[#86868B]">{r.festgeschrieben_at ? 'ausgestellt' : 'Entwurf'}</span>}</div>
                     <div className="text-[13px] text-[#6E6E73] truncate">{r.project_name}{r.customer_name ? ` · ${r.customer_name}` : ''} · {MONTHS_DE[r.month - 1]} {r.year} · vom {fmtDate(fromKey(r.invoice_date))}{r.paid_at ? ` · bezahlt ${fmtDate(fromKey(r.paid_at))}` : ''}</div>
                     <div className="text-[12px] text-[#86868B] mt-0.5">{fmtDecimalHours(r.total_minutes || 0)} Std. · netto {fmtEur(r.net || 0)}{r.extras_anzahl ? ` · ${r.extras_anzahl} Zusatzposition${r.extras_anzahl > 1 ? 'en' : ''} (${fmtEur(r.extras_net || 0)})` : ''}{r.reverse_charge ? ' · § 13b' : ''}</div>
                   </div>

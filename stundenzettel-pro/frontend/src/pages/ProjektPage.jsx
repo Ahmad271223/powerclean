@@ -123,22 +123,32 @@ export default function ProjektPage() {
     if (f.length) { setFotoWahl({ art: 'week', monday, fotos: f }); return; }
     deliver(`week-${toKey(monday)}`, () => weekMake(monday, []), mode);
   };
-  const rechnungHolen = async () => (await api.post('/api/rechnungen/anlegen', { project_id: project.id, year, month: month + 1 })).rechnung;
+  /** Rechnung des Monats holen. Gibt es noch keine, wird vorher gefragt – eine Rechnungsnummer entsteht nie nebenbei. */
+  const rechnungHolen = async () => {
+    const pruefung = await api.post('/api/rechnungen/anlegen', { project_id: project.id, year, month: month + 1, nur_pruefen: true });
+    if (!pruefung.rechnung) {
+      const v = pruefung.vorschau || {};
+      if (!window.confirm(`Für ${MONTHS_DE[month]} ${year} gibt es noch keine Rechnung. Jetzt anlegen und die nächste Rechnungsnummer (${v.prefix || ''}${year}-…) vergeben?${v.gross ? `\nBrutto ca. ${fmtEur(v.gross)}` : ''}`)) throw Object.assign(new Error('Abgebrochen – keine Rechnung angelegt'), { status: 499 });
+    }
+    return (await api.post('/api/rechnungen/anlegen', { project_id: project.id, year, month: month + 1 })).rechnung;
+  };
+  const festschreiben = async (inv) => { if (inv && !inv.festgeschrieben_at) { try { await api.post(`/api/rechnungen/${inv.id}/festschreiben`); } catch { /* Rechnung bleibt Entwurf, PDF ist trotzdem erzeugt */ } } };
   const monthDoc = async (mode, bilder = null) => {
     if (bilder === null) { const f = fotosImZeitraum(fotos, firstKey, lastKey); if (f.length) { setFotoWahl({ art: 'month', fotos: f }); return; } bilder = []; }
     setBusy('month');
     try {
       let inv = null;
-      try { inv = await rechnungHolen(); } catch (err) { if (err.status !== 400) throw err; toast.info('Keine Zeiten im Monat – Mappe ohne Rechnung'); }
+      try { inv = await rechnungHolen(); } catch (err) { if (err.status === 499) { toast.info(err.message); return; } if (err.status !== 400) throw err; toast.info('Keine Zeiten im Monat – Mappe ohne Rechnung'); }
       await deliverPdf(monthPdf(project, firma, year, month, entries, inv, sigs, bilder), mode);
+      await festschreiben(inv);
       laden();
     } catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
   const invoiceDoc = async (mode, bilder = null) => {
     if (bilder === null) { const f = fotosImZeitraum(fotos, firstKey, lastKey); if (f.length) { setFotoWahl({ art: 'invoice', fotos: f }); return; } bilder = []; }
     setBusy('invoice');
-    try { const inv = await rechnungHolen(); await deliverPdf(invoicePdf(project, firma, year, month, monthEntries, inv, bilder), mode); laden(); }
-    catch (err) { toast.error(err.message); } finally { setBusy(''); }
+    try { const inv = await rechnungHolen(); await deliverPdf(invoicePdf(project, firma, year, month, monthEntries, inv, bilder), mode); await festschreiben(inv); laden(); }
+    catch (err) { if (err.status === 499) toast.info(err.message); else toast.error(err.message); } finally { setBusy(''); }
   };
   const fotoWahlBestaetigt = async (ausgewaehlt, mode) => {
     const wahl = fotoWahl;
@@ -449,7 +459,7 @@ function Akte({ projectId, leitung }) {
           <h2 className="text-[16px] mb-3 flex items-center gap-2"><PenLine size={16} /> Kunden-Unterschriften</h2>
           {akte.unterschriften.length === 0 ? <p className="text-[13px] text-[#6E6E73]">Noch keine. Im Kalender neben der Woche auf den Stift tippen.</p> : (
             <ul className="divide-y divide-black/[0.06] text-[14px]">
-              {akte.unterschriften.map((s) => <li key={s.id} className="py-2 flex items-center justify-between gap-2"><span>KW {isoWeek(fromKey(s.week_monday)).week} · {fmtDate(fromKey(s.week_monday))}</span><span className="text-[#6E6E73] truncate">{s.signer_name} · {fmtZeit(s.signed_at)}</span>{isBuero && <IconBtn size={28} variant="danger" onClick={() => loeschen(s.id, `/api/unterschriften/${s.id}`)} title="Löschen"><Trash2 size={14} /></IconBtn>}</li>)}
+              {akte.unterschriften.map((s) => <li key={s.id} className="py-2 flex items-center justify-between gap-2"><span>KW {isoWeek(fromKey(s.week_monday)).week} · {fmtDate(fromKey(s.week_monday))}</span><span className="text-[#6E6E73] truncate">{s.signer_name} · {fmtZeit(s.signed_at)}{(s.version || 1) > 1 ? ` · Version ${s.version}` : ''}{s.ersetzt ? ` · ersetzt${s.ersetzt_grund ? ` (${s.ersetzt_grund})` : ''}` : ''}</span>{isBuero && !s.ersetzt && <IconBtn size={28} variant="danger" onClick={() => loeschen(s.id, `/api/unterschriften/${s.id}`)} title="Zurückziehen (bleibt nachvollziehbar)"><Trash2 size={14} /></IconBtn>}</li>)}
             </ul>
           )}
         </Card>

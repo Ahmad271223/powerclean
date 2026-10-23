@@ -39,6 +39,7 @@ async def indizes_anlegen(d) -> None:
         ("projects", [("firma_id", 1), ("archived", 1)], {"name": "firma_archiv"}),
         ("entries", [("firma_id", 1), ("project_id", 1), ("date", 1)], {"name": "projekt_datum"}),
         ("entries", [("firma_id", 1), ("user_id", 1), ("date", 1)], {"name": "nutzer_datum"}),
+        ("entries", [("firma_id", 1), ("offline_id", 1)], {"name": "offline_kennung"}),   # Eindeutigkeit prüft die Route (Speicher-DB kennt kein sparse)
         ("stempel", [("firma_id", 1), ("user_id", 1)], {"unique": True, "name": "ein_stempel_je_nutzer"}),
         ("absences", [("firma_id", 1), ("user_id", 1), ("from_date", 1)], {"name": "nutzer_von"}),
         ("documents", [("firma_id", 1), ("scope", 1), ("ref_id", 1)], {"name": "akte"}),

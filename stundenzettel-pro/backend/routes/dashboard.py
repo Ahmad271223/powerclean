@@ -91,7 +91,7 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
         s = await db().stempel.find_one({"firma_id": f, "user_id": user["id"]}, {"_id": 0})
         antraege = await db().absences.count_documents({"firma_id": f, "user_id": user["id"], "status": "beantragt"})
         sichtbar = 0
-        async for p in db().projects.find({"firma_id": f, "archived": False}, {"_id": 0, "employee_ids": 1}):
+        async for p in db().projects.find({"firma_id": f, "archived": False}, {"_id": 0, "employee_ids": 1, "leiter_ids": 1}):
             if projekt_sichtbar(user, p):
                 sichtbar += 1
         konto = await kontoverlauf(firma, user, heute_d.year, heute_d.month) if user.get("weekly_hours") else None

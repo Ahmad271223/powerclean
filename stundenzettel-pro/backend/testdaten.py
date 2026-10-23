@@ -73,6 +73,8 @@ if r.status_code == 200:
     ok(c.put("/api/firma", json={"city": "Musterstadt", "street": "Werkstraße 7", "zip_code": "12345", "sperre_tage_mitarbeiter": 365}, headers=HE))
     ok(c.put("/api/firma/verzeichnis", json={"sichtbar": True, "gewerke": ["Elektro"], "beschreibung": "Elektroinstallation für Gewerbe", "ort": "Musterstadt"}, headers=HE))
     ok(c.post("/api/projekte/" + p1["id"] + "/leiter", json={"user_id": chef["user"]["id"], "funktion": "Hauptprojektleiter"}, headers=H))
+    ok(c.put("/api/projekte/" + p1["id"], json={"name": p1["name"], "customer_id": p1.get("customer_id"), "address": p1.get("address") or "", "schedule": p1.get("schedule") or "",
+                                                 "hourly_rate": 30, "budget_hours_month": 70, "budget_warn_percent": 80, "employee_ids": [mia_id]}, headers=H))
     einladung = ok(c.post("/api/projekte/" + p1["id"] + "/beteiligungen", json={"firma_id": el["firma"]["id"], "gewerk": "Elektro"}, headers=H))["beteiligung"]
     b = ok(c.post("/api/beteiligungen/" + einladung["id"] + "/antwort", json={"annehmen": True}, headers=HE))["beteiligung"]
     heute = __import__("datetime").date.today().isoformat()

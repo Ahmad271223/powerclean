@@ -6,6 +6,7 @@ API-Dokumentation:                 /api/docs
 """
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -23,8 +24,27 @@ from routes import (abschluss, api_v1, ausschreibungen, auth_routes, auswertung,
 VERSION = "1.1.0"
 
 
+def sicherheit_pruefen() -> list[str]:
+    """Im Betrieb (echte Datenbank) darf der Server nicht mit Entwicklungsgeheimnissen starten."""
+    hinweise: list[str] = []
+    if config.DB_MODE == "memory":
+        return hinweise
+    fehler = []
+    if config.JWT_SECRET.startswith("nur-entwicklung") or len(config.JWT_SECRET) < 32:
+        fehler.append("JWT_SECRET fehlt oder ist kürzer als 32 Zeichen")
+    if not config.DATEN_SCHLUESSEL:
+        hinweise.append("DATEN_SCHLUESSEL ist nicht gesetzt – Lohndaten werden mit einem aus JWT_SECRET abgeleiteten Schlüssel verschlüsselt (bitte setzen).")
+    if not config.ADMIN_TOKEN:
+        hinweise.append("ADMIN_TOKEN ist nicht gesetzt – die Betreiber-Route /api/admin/plan ist deaktiviert.")
+    if fehler and os.environ.get("UNSICHER_ERLAUBEN") != "1":
+        raise RuntimeError("Start abgebrochen – " + "; ".join(fehler) + ". Werte in der .env setzen (siehe README); zum bewussten Übergehen UNSICHER_ERLAUBEN=1.")
+    return hinweise
+
+
 @asynccontextmanager
 async def lebenszyklus(app: FastAPI):
+    for h in sicherheit_pruefen():
+        print("WARNUNG:", h)
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     await indizes_anlegen(db())
     yield

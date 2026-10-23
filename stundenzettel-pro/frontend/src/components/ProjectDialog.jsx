@@ -3,6 +3,7 @@ import { Check, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PROJECT_COLORS } from '../lib/utils';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { Sheet, Btn, Field, TextInput, TextArea, SectionLabel, Toggle, Chip, Select } from './ui';
 
 const EMPTY = { name: '', customer_id: '', customer_name: '', customer_address: '', address: '', schedule: '', employee_ids: [], hourly_rate: '', color: PROJECT_COLORS[0], notes: '', archived: false, default_workers: 1, reverse_charge: false, budget_hours_month: '', budget_warn_percent: 80,
@@ -13,6 +14,7 @@ const zahl = (v) => (v === '' || v === null || v === undefined ? null : parseFlo
 
 /** Projekt anlegen / ändern: Kunde aus dem Kundenstamm, zugewiesene Mitarbeiter, § 13b, Einsatzzeiten. */
 export default function ProjectDialog({ open, onOpenChange, project, defaultRate = 0, onSaved, onDeleted }) {
+  const { isInhaber } = useAuth();
   const [form, setForm] = useState(EMPTY);
   const [kunden, setKunden] = useState([]);
   const [mitarbeiter, setMitarbeiter] = useState([]);
@@ -58,9 +60,15 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
   };
 
   const remove = async () => {
-    if (!project || !window.confirm(`Projekt "${project.name}" mit allen Einträgen wirklich löschen? (Archivieren ist meist besser.)`)) return;
+    if (!project || !window.confirm(`Projekt "${project.name}" wirklich löschen? (Archivieren ist meist besser.)`)) return;
     try { await api.del(`/api/projekte/${project.id}`); toast.success('Projekt gelöscht'); onOpenChange(false); onDeleted?.(project); }
-    catch (err) { toast.error(err.message); }
+    catch (err) {
+      // 409: laufende Stempelungen (nie löschbar) oder erfasste Zeiten (nur Inhaber ausdrücklich)
+      if (err.status === 409 && isInhaber && /archivieren/i.test(err.message) && window.confirm(`${err.message}\n\nTrotzdem endgültig löschen? Alle Zeiten, Stundenzettel und offenen Rechnungen dieses Projekts gehen unwiderruflich verloren.`)) {
+        try { await api.del(`/api/projekte/${project.id}?erzwingen=true`); toast.success('Projekt endgültig gelöscht'); onOpenChange(false); onDeleted?.(project); return; } catch (e2) { toast.error(e2.message); return; }
+      }
+      toast.error(err.message);
+    }
   };
 
   return (

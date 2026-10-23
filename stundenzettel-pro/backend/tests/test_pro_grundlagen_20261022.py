@@ -164,10 +164,11 @@ def test_05_stempeluhr(client, monkeypatch):
     client.post("/api/stempel/start", json={"project_id": p["id"]}, headers=ma)
     r = client.post("/api/stempel/stop", json={}, headers=ma)
     assert r.json()["verworfen"] is True
-    # länger als 24 h: Fehler, Stempelung weg
+    # länger als 24 h: kein Verlust mehr (Go-live-Audit) – Eintrag auf 24 h begrenzt und zur Prüfung markiert, Stempelung danach beendet
     client.post("/api/stempel/start", json={"project_id": p["id"]}, headers=ma)
     uhr["jetzt"] = uhr["jetzt"] + timedelta(hours=25)
-    assert client.post("/api/stempel/stop", json={}, headers=ma).status_code == 400
+    r = client.post("/api/stempel/stop", json={}, headers=ma)
+    assert r.status_code == 200 and r.json()["eintrag"]["pruefen"] is True and r.json()["eintrag"]["net_minutes"] == 24 * 60 - 1
     assert client.get("/api/stempel/status", headers=ma).json()["aktiv"] is None
 
 
@@ -228,12 +229,12 @@ def test_07_rechnungen_nummern_status(client):
     assert r.status_code == 423
     r1c = client.post("/api/rechnungen/anlegen", json={"project_id": p["id"], "year": 2026, "month": 10}, headers=kopf).json()["rechnung"]
     assert r1c["total_minutes"] == 540
-    # offene zurücksetzen → Nummer wird neu vergeben (lückenlos: nächste freie)
+    # Entwurf zurücksetzen → die Nummer wird nie wieder vergeben (Go-live-Audit: nachvollziehbarer Nummernkreis)
     assert client.delete(f"/api/rechnungen/{r2['id']}", headers=kopf).status_code == 200
     r3 = client.post("/api/rechnungen/anlegen", json={"project_id": p2["id"], "year": 2026, "month": 10}, headers=kopf).json()["rechnung"]
-    assert r3["number"] == "PC-2026-0002"
+    assert r3["number"] == "PC-2026-0003"
     liste = client.get("/api/rechnungen?jahr=2026", headers=kopf).json()
-    assert [x["number"] for x in liste["rechnungen"]] == ["PC-2026-0002", "PC-2026-0001"] and liste["jahre"] == [2026]
+    assert [x["number"] for x in liste["rechnungen"]] == ["PC-2026-0003", "PC-2026-0001"] and liste["jahre"] == [2026]
     assert liste["rechnungen"][1]["status"] == "bezahlt" and liste["rechnungen"][0]["project_name"] == "Zweites"
 
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Play, Square, Pause, MapPin, MapPinOff, Coffee, Clock, Users, WifiOff, QrCode, AlertTriangle, Tag } from 'lucide-react';
+import { Play, Square, Pause, MapPin, MapPinOff, Coffee, Clock, Users, WifiOff, QrCode, AlertTriangle, Tag, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import MicButton from '../components/MicButton';
@@ -11,13 +11,25 @@ import { addDays, fmtDate, fmtHours, fromKey, toKey } from '../lib/dates';
 import { initials } from '../lib/utils';
 
 const GPS_KEY = 'szpro-gps';
-const OFFLINE_KEY = 'szpro-offline-stempel';
-const QUEUE_KEY = 'szpro-offline-queue';
 const pad = (n) => String(n).padStart(2, '0');
 const fmtClock = (sek) => `${pad(Math.floor(sek / 3600))}:${pad(Math.floor((sek % 3600) / 60))}:${pad(sek % 60)}`;
 const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const lesen = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fallback; } catch { return fallback; } };
 const merken = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
+const neueId = () => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+/** Offline-Daten liegen je Nutzer im Browser (gemeinsam genutzte Geräte); alte Schlüssel ohne Nutzer werden einmalig übernommen. */
+function schluessel(userId) {
+  const k = { stempel: `szpro-offline-stempel:${userId}`, queue: `szpro-offline-queue:${userId}`, status: `szpro-stempel-status:${userId}` };
+  try {
+    for (const [alt, neu] of [['szpro-offline-stempel', k.stempel], ['szpro-offline-queue', k.queue]]) {
+      const v = localStorage.getItem(alt);
+      if (v && !localStorage.getItem(neu)) localStorage.setItem(neu, v);
+      if (v) localStorage.removeItem(alt);
+    }
+  } catch { /* ignore */ }
+  return k;
+}
 
 function standort(aktiv) {
   if (!aktiv || !navigator.geolocation) return Promise.resolve(null);
@@ -29,44 +41,51 @@ function standort(aktiv) {
   });
 }
 
-/** Offline-Sitzung: Minuten und Pausenstand wie der Server berechnen. */
-function offlineStand(s) {
-  const start = new Date(s.start_at);
-  const jetzt = new Date();
-  let pause = 0;
+/** Sekundengenauer Stand einer Stempelung aus Zeitstempeln: Start, Pausen (laufende Pause bis jetzt), optional Server-Uhr. */
+export function stempelStand(s, jetztMs = Date.now()) {
+  const start = new Date(s.start_at).getTime();
+  let pauseSek = 0;
   let laeuft = false;
   for (const p of s.pausen || []) {
-    const bis = p.bis ? new Date(p.bis) : jetzt;
+    const von = new Date(p.von).getTime();
+    const bis = p.bis ? new Date(p.bis).getTime() : jetztMs;
     if (!p.bis) laeuft = true;
-    pause += Math.max(0, Math.floor((bis - new Date(p.von)) / 60000));
+    pauseSek += Math.max(0, Math.floor((bis - von) / 1000));
   }
-  return { minuten: Math.max(0, Math.floor((jetzt - start) / 60000) - pause), pause_minuten: pause, pause_laeuft: laeuft };
+  const brutto = Math.max(0, Math.floor((jetztMs - start) / 1000));
+  const sekunden = Math.max(0, brutto - pauseSek);
+  return { sekunden, minuten: Math.floor(sekunden / 60), pause_minuten: Math.floor(pauseSek / 60), pause_laeuft: laeuft };
 }
 
-/** Wartende Offline-Einträge an den Server schicken (bei Netz). */
-export async function offlineSynchronisieren() {
-  const queue = lesen(QUEUE_KEY, []);
-  if (!queue.length) return 0;
+/** Wartende Offline-Einträge an den Server schicken. Fehlgeschlagene Einträge bleiben mit Fehlergrund erhalten (nie stilles Verwerfen);
+ *  jeder Eintrag trägt eine eindeutige offline_id, der Server legt ihn höchstens einmal an. */
+export async function offlineSynchronisieren(queueKey) {
+  const queue = lesen(queueKey, []);
+  if (!queue.length) return { ok: 0, offen: 0 };
   const rest = [];
   let ok = 0;
-  for (const payload of queue) {
+  for (const eintrag of queue) {
+    const payload = { ...eintrag };
+    delete payload.fehler; delete payload.versuche;
     try { await api.post('/api/zeiten', { ...payload, offline: true }); ok += 1; }
     catch (err) {
-      if (err.status === 0) rest.push(payload);
-      else toast.error(`Offline-Eintrag vom ${fmtDate(fromKey(payload.date))} abgelehnt: ${err.message}`);
+      if (err.status === 0) rest.push(eintrag);                      // kein Netz: unverändert warten
+      else rest.push({ ...eintrag, fehler: err.message, versuche: (eintrag.versuche || 0) + 1, fehler_at: new Date().toISOString() });
     }
   }
-  merken(QUEUE_KEY, rest.length ? rest : null);
+  merken(queueKey, rest.length ? rest : null);
   if (ok) toast.success(`${ok} Offline-Eintrag${ok > 1 ? 'e' : ''} nachgetragen`);
-  return ok;
+  return { ok, offen: rest.length };
 }
 
-/** Stempeluhr: Projekt wählen, Start/Pause/Stop. Optional mit Standort, Leistung und Spracheingabe. Läuft ohne Netz weiter. */
+/** Stempeluhr: Projekt wählen, Start/Pause/Stop. Anzeige aus Zeitstempeln (Server-Uhr), läuft ohne Netz weiter und holt den Stand nach. */
 export default function StempeluhrPage() {
-  const { isBuero } = useAuth();
+  const { isBuero, user } = useAuth();
   const { projectId: qrProjekt } = useParams();
-  const [status, setStatus] = useState(null);
-  const [fetchedAt, setFetchedAt] = useState(Date.now());
+  const K = schluessel(user?.id || 'anonym');
+  const [status, setStatus] = useState(() => lesen(K.status, null));
+  const [serverOffset, setServerOffset] = useState(0);   // Server-Uhr minus Geräte-Uhr in ms
+  const [verbunden, setVerbunden] = useState(true);
   const [projekt, setProjekt] = useState(qrProjekt || '');
   const [gps, setGps] = useState(() => { try { return localStorage.getItem(GPS_KEY) === '1'; } catch { return false; } });
   const [tick, setTick] = useState(0);
@@ -76,42 +95,68 @@ export default function StempeluhrPage() {
   const [busy, setBusy] = useState('');
   const [letzte, setLetzte] = useState([]);
   const [imEinsatz, setImEinsatz] = useState([]);
-  const [offline, setOffline] = useState(() => lesen(OFFLINE_KEY, null));
-  const [queue, setQueue] = useState(() => lesen(QUEUE_KEY, []));
+  const [offline, setOffline] = useState(() => lesen(K.stempel, null));
+  const [queue, setQueue] = useState(() => lesen(K.queue, []));
   const timer = useRef(null);
+  const uebernahme = useRef(false);
+
+  /** Offline gestartete Stempelung bei Netz in eine Server-Stempelung überführen (Startzeit und Pausen bleiben erhalten). */
+  const offlineUebernehmen = useCallback(async () => {
+    const s = lesen(K.stempel, null);
+    if (!s || uebernahme.current) return;
+    uebernahme.current = true;
+    try {
+      await api.post('/api/stempel/start', { project_id: s.project_id, gps: s.gps_start, start_at: s.start_at, pausen: s.pausen || [] });
+      merken(K.stempel, null); setOffline(null);
+      toast.success('Offline-Stempelung an den Server übergeben – die Uhr läuft weiter.');
+    } catch (err) {
+      if (err.status === 0) return;
+      if (err.status === 409) { merken(K.stempel, null); setOffline(null); toast.info('Auf dem Server läuft bereits eine Stempelung – die Offline-Stempelung wurde verworfen.'); }
+      else toast.error(`Offline-Stempelung konnte nicht übernommen werden: ${err.message}`);
+    } finally { uebernahme.current = false; }
+  }, [K.stempel]);
 
   const laden = useCallback(async () => {
     try {
-      await offlineSynchronisieren();
-      setQueue(lesen(QUEUE_KEY, []));
+      await offlineSynchronisieren(K.queue);
+      setQueue(lesen(K.queue, []));
+      await offlineUebernehmen();
+      const vorher = Date.now();
       const s = await api.get('/api/stempel/status');
-      setStatus(s); setFetchedAt(Date.now());
+      const nachher = Date.now();
+      if (s.jetzt) setServerOffset(new Date(s.jetzt).getTime() - Math.round((vorher + nachher) / 2));
+      setStatus(s); setVerbunden(true);
+      merken(K.status, { ...s, gespeichert_at: new Date().toISOString() });
       setProjekt((p) => p || (s.projekte.length === 1 ? s.projekte[0].id : ''));
       const heute = new Date();
       const z = await api.get(`/api/zeiten/meine?von=${toKey(addDays(heute, -6))}&bis=${toKey(heute)}`);
       setLetzte(z.eintraege.slice().reverse().slice(0, 8));
       if (isBuero) setImEinsatz((await api.get('/api/stempel/aktiv')).aktiv);
     } catch (err) {
-      if (err.status === 0) { setStatus((s) => s || { aktiv: null, projekte: lesen('szpro-projekte', []), minuten_heute: 0, leistungen: [] }); }
-      else toast.error(err.message);
+      if (err.status === 0) {
+        setVerbunden(false);
+        // Ohne Netz: zuletzt bekannten Stand zeigen (eine laufende Server-Stempelung bleibt sichtbar, nichts springt auf Null)
+        setStatus((s) => s || lesen(K.status, null) || { aktiv: null, projekte: [], minuten_heute: 0, leistungen: [] });
+      } else toast.error(err.message);
     }
-  }, [isBuero]);
+  }, [isBuero, K.queue, K.status, offlineUebernehmen]);
 
   useEffect(() => { laden(); }, [laden]);
-  useEffect(() => { if (status?.projekte?.length) merken('szpro-projekte', status.projekte); }, [status]);
   useEffect(() => {
     timer.current = setInterval(() => setTick((t) => t + 1), 1000);
     const refresh = setInterval(laden, 60000);
     const online = () => laden();
+    const sichtbar = () => { if (document.visibilityState === 'visible') laden(); };
     window.addEventListener('online', online);
-    return () => { clearInterval(timer.current); clearInterval(refresh); window.removeEventListener('online', online); };
+    document.addEventListener('visibilitychange', sichtbar);
+    return () => { clearInterval(timer.current); clearInterval(refresh); window.removeEventListener('online', online); document.removeEventListener('visibilitychange', sichtbar); };
   }, [laden]);
   useEffect(() => { try { localStorage.setItem(GPS_KEY, gps ? '1' : '0'); } catch { /* ignore */ } }, [gps]);
 
   const aktiv = status?.aktiv;
-  const offlineStandJetzt = offline ? offlineStand(offline) : null;
-  const sekunden = offline ? offlineStandJetzt.minuten * 60 + (offlineStandJetzt.pause_laeuft ? 0 : Math.floor((Date.now() - new Date(offline.start_at)) / 1000) % 60)
-    : aktiv ? aktiv.minuten * 60 + (aktiv.pause_laeuft ? 0 : Math.floor((Date.now() - fetchedAt) / 1000)) : 0;
+  const jetztServer = Date.now() + serverOffset;
+  const stand = offline ? stempelStand(offline) : aktiv ? stempelStand(aktiv, jetztServer) : null;
+  const sekunden = stand ? stand.sekunden : 0;
   void tick;
   const projektObj = (status?.projekte || []).find((p) => p.id === projekt);
 
@@ -126,18 +171,18 @@ export default function StempeluhrPage() {
         await laden();
       } catch (err) {
         if (err.status !== 0) throw err;
-        const s = { project_id: projekt, project_name: projektObj?.name || '', project_color: projektObj?.color || '', start_at: new Date().toISOString(), pausen: [], gps_start: pos };
-        merken(OFFLINE_KEY, s); setOffline(s);
-        toast.info('Kein Netz – offline eingestempelt. Der Eintrag wird nachgetragen, sobald Netz da ist.');
+        const s = { project_id: projekt, project_name: projektObj?.name || '', project_color: projektObj?.color || '', start_at: new Date().toISOString(), pausen: [], gps_start: pos, user_id: user?.id };
+        merken(K.stempel, s); setOffline(s);
+        toast.info('Kein Netz – offline eingestempelt. Sobald Netz da ist, übernimmt der Server die laufende Uhr.');
       }
     } catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
   const pause = async (weiter) => {
     if (offline) {
       const s = { ...offline, pausen: [...(offline.pausen || [])] };
-      if (weiter) { const l = s.pausen[s.pausen.length - 1]; if (l && !l.bis) l.bis = new Date().toISOString(); }
+      if (weiter) { const l = s.pausen[s.pausen.length - 1]; if (l && !l.bis) s.pausen[s.pausen.length - 1] = { ...l, bis: new Date().toISOString() }; }
       else s.pausen.push({ von: new Date().toISOString(), bis: null });
-      merken(OFFLINE_KEY, s); setOffline(s); return;
+      merken(K.stempel, s); setOffline(s); return;
     }
     setBusy('pause');
     try { await api.post(weiter ? '/api/stempel/weiter' : '/api/stempel/pause'); await laden(); }
@@ -150,10 +195,10 @@ export default function StempeluhrPage() {
       if (offline) {
         const startD = new Date(offline.start_at);
         const jetzt = new Date();
-        const st = offlineStand({ ...offline, pausen: (offline.pausen || []).map((p) => ({ ...p, bis: p.bis || jetzt.toISOString() })) });
-        const payload = { project_id: offline.project_id, date: toKey(startD), start_time: hhmm(startD), end_time: hhmm(jetzt), pause_minutes: st.pause_minuten, activity, service_id: service || null, workers: 1 };
-        merken(OFFLINE_KEY, null); setOffline(null);
-        if (st.minuten >= 1) { const q = [...lesen(QUEUE_KEY, []), payload]; merken(QUEUE_KEY, q); setQueue(q); }
+        const st = stempelStand({ ...offline, pausen: (offline.pausen || []).map((p) => ({ ...p, bis: p.bis || jetzt.toISOString() })) }, jetzt.getTime());
+        const payload = { offline_id: neueId(), project_id: offline.project_id, date: toKey(startD), start_time: hhmm(startD), end_time: hhmm(jetzt), pause_minutes: st.pause_minuten, activity, service_id: service || null, workers: 1, start_at: offline.start_at, end_at: jetzt.toISOString() };
+        if (st.minuten >= 1) { const q = [...lesen(K.queue, []), payload]; merken(K.queue, q); setQueue(q); }
+        merken(K.stempel, null); setOffline(null);
         setStopDialog(false); setActivity(''); setService('');
         toast.success(st.minuten >= 1 ? `Ausgestempelt (offline): ${fmtHours(st.minuten)} – wird nachgetragen` : 'Weniger als eine Minute, nichts eingetragen');
         await laden();
@@ -165,6 +210,7 @@ export default function StempeluhrPage() {
       else {
         toast.success(`Ausgestempelt: ${fmtHours(r.eintrag.net_minutes)} eingetragen${r.eintrag.pause_auto ? ` (Pause ${r.eintrag.pause_minutes} Min. abgezogen)` : ''}`);
         if (r.eintrag.warnungen?.length) toast.warning(r.eintrag.warnungen.map((w) => w.text).join(' · '));
+        if (r.eintrag.hinweise?.length) toast.warning(r.eintrag.hinweise.map((w) => w.text).join(' · '), { duration: 10000 });
       }
       await laden();
     } catch (err) { toast.error(err.message); } finally { setBusy(''); }
@@ -173,12 +219,28 @@ export default function StempeluhrPage() {
     if (!window.confirm(`Stempelung von ${s.user_name} jetzt beenden? Der Eintrag endet mit der aktuellen Uhrzeit.`)) return;
     try { await api.post(`/api/stempel/${s.id}/beenden`, { activity: 'vom Büro beendet' }); toast.success('Beendet'); laden(); } catch (err) { toast.error(err.message); }
   };
+  const queueVerwerfen = (eintrag) => {
+    if (!window.confirm(`Offline-Eintrag vom ${fmtDate(fromKey(eintrag.date))} (${eintrag.start_time}–${eintrag.end_time}) endgültig verwerfen? Die Zeit müsste dann von Hand eingetragen werden.`)) return;
+    const q = lesen(K.queue, []).filter((x) => x.offline_id !== eintrag.offline_id);
+    merken(K.queue, q.length ? q : null); setQueue(q);
+  };
 
-  const laufend = offline ? { ...offlineStandJetzt, project_name: offline.project_name, project_color: offline.project_color, start_at: offline.start_at, gps_start: offline.gps_start, lange: offlineStandJetzt.minuten >= 600 } : aktiv;
+  const laufend = offline ? { ...stand, project_name: offline.project_name, project_color: offline.project_color, start_at: offline.start_at, gps_start: offline.gps_start, lange: stand.minuten >= 600 } : aktiv ? { ...aktiv, ...stand, lange: stand.minuten >= 600 } : null;
+  const fehlerhaft = queue.filter((e) => e.fehler);
 
   return (
     <Layout title="Stempeluhr" subtitle={status ? `Heute ${fmtHours(status.minuten_heute)} erfasst` : undefined}>
-      {queue.length > 0 && <div className="mb-4 rounded-2xl bg-[#FFF4E5] px-4 py-3 text-[14px] text-[#7A4100] flex items-center gap-3"><WifiOff size={18} /> {queue.length} Offline-Eintrag{queue.length > 1 ? 'e warten' : ' wartet'} auf Netz. <Btn size="sm" variant="dark" onClick={laden}>Jetzt senden</Btn></div>}
+      {!verbunden && <div className="mb-4 rounded-2xl bg-black/[0.06] px-4 py-3 text-[13px] text-[#6E6E73] flex items-center gap-2"><WifiOff size={16} /> Kein Netz – angezeigt wird der zuletzt bekannte Stand{status?.gespeichert_at ? ` (${new Date(status.gespeichert_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr)` : ''}. Stempeln geht offline weiter.</div>}
+      {queue.length > 0 && (
+        <div className="mb-4 rounded-2xl bg-[#FFF4E5] px-4 py-3 text-[14px] text-[#7A4100] space-y-2">
+          <div className="flex items-center gap-3 flex-wrap"><WifiOff size={18} /> {queue.length} Offline-Eintrag{queue.length > 1 ? 'e warten' : ' wartet'} auf Übertragung. <Btn size="sm" variant="dark" onClick={laden}><RefreshCw size={14} /> Jetzt senden</Btn></div>
+          {fehlerhaft.length > 0 && (
+            <ul className="text-[13px] space-y-1">
+              {fehlerhaft.map((e) => <li key={e.offline_id} className="flex items-start gap-2 flex-wrap"><AlertTriangle size={14} className="mt-0.5 shrink-0" /><span className="flex-1 min-w-[200px]">{fmtDate(fromKey(e.date))} {e.start_time}–{e.end_time}: vom Server abgelehnt – {e.fehler} (Versuch {e.versuche}). Der Eintrag bleibt gespeichert; bitte im Büro klären oder erneut senden.</span><Btn size="sm" variant="ghost" onClick={() => queueVerwerfen(e)}><Trash2 size={13} /> Verwerfen</Btn></li>)}
+            </ul>
+          )}
+        </div>
+      )}
       {!status ? <Ladeanzeige /> : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
           <Card className="p-5 sm:p-7">
@@ -204,8 +266,8 @@ export default function StempeluhrPage() {
               </>
             ) : (
               <div className="flex flex-col items-center gap-5">
-                <div className="text-[13px] text-[#6E6E73] flex items-center gap-2"><AppIcon color={laufend.project_color || '#C41E3A'} text={initials(laufend.project_name)} size={28} className="rounded-lg" /> {laufend.project_name} · seit {new Date(laufend.start_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr{offline && <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-[#FFF4E5] text-[#B25E00] rounded-full px-2 py-0.5"><WifiOff size={11} /> offline</span>}</div>
-                <div className={`text-[56px] font-bold tracking-tight tabular-nums leading-none ${laufend.pause_laeuft ? 'text-[#B25E00]' : ''}`}>{fmtClock(sekunden)}</div>
+                <div className="text-[13px] text-[#6E6E73] flex items-center gap-2 flex-wrap justify-center"><AppIcon color={laufend.project_color || '#C41E3A'} text={initials(laufend.project_name)} size={28} className="rounded-lg" /> {laufend.project_name} · seit {new Date(laufend.start_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr{offline && <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-[#FFF4E5] text-[#B25E00] rounded-full px-2 py-0.5"><WifiOff size={11} /> offline</span>}{!offline && laufend.offline_uebernommen && <span className="text-[11px] text-[#86868B]">offline gestartet</span>}</div>
+                <div className={`text-[56px] font-bold tracking-tight tabular-nums leading-none ${laufend.pause_laeuft ? 'text-[#B25E00]' : ''}`} data-testid="stempel-uhr">{fmtClock(sekunden)}</div>
                 <div className="text-[13px] text-[#6E6E73] flex items-center gap-1.5">{laufend.pause_laeuft ? <><Coffee size={14} /> Pause läuft</> : `Pause bisher ${laufend.pause_minuten} Min.`}{laufend.gps_start ? <span className="inline-flex items-center gap-1 ml-2"><MapPin size={13} /> Standort</span> : null}</div>
                 {laufend.lange && <div className="rounded-2xl bg-[#FFF4E5] px-4 py-2 text-[13px] text-[#7A4100] flex items-center gap-2"><AlertTriangle size={15} /> Schon über 10 Stunden eingestempelt – vergessen auszustempeln?</div>}
                 <div className="flex gap-3">
@@ -229,7 +291,7 @@ export default function StempeluhrPage() {
               <h2 className="text-[16px] mb-2 flex items-center gap-2"><Clock size={16} /> Meine letzten Zeiten</h2>
               {letzte.length === 0 ? <p className="text-[13px] text-[#6E6E73]">Noch nichts erfasst.</p> : (
                 <ul className="divide-y divide-black/[0.06] text-[14px]">
-                  {letzte.map((e) => <li key={e.id} className="py-2"><div className="flex justify-between gap-2"><span className="font-medium">{fmtDate(fromKey(e.date))} · {e.start_time}–{e.end_time}</span><span className="text-[#C41E3A] font-semibold">{fmtHours(e.net_minutes)}</span></div><div className="text-[12px] text-[#6E6E73] truncate">{e.project_name}{e.service_name ? ` · ${e.service_name}` : ''}{e.activity ? ` · ${e.activity}` : ''}{e.warnungen?.length ? ' · ⚠ ArbZG' : ''}</div></li>)}
+                  {letzte.map((e) => <li key={e.id} className="py-2"><div className="flex justify-between gap-2"><span className="font-medium">{fmtDate(fromKey(e.date))} · {e.start_time}–{e.end_time}</span><span className="text-[#C41E3A] font-semibold">{fmtHours(e.net_minutes)}</span></div><div className="text-[12px] text-[#6E6E73] truncate">{e.project_name}{e.service_name ? ` · ${e.service_name}` : ''}{e.activity ? ` · ${e.activity}` : ''}{e.warnungen?.length ? ' · ⚠ ArbZG' : ''}{e.pruefen ? ' · ⚠ bitte prüfen' : ''}</div></li>)}
                 </ul>
               )}
             </Card>

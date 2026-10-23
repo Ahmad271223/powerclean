@@ -97,13 +97,21 @@ async def aendern(project_id: str, body: ProjektIn, user: dict = Depends(schreib
 
 
 @router.delete("/api/projekte/{project_id}")
-async def loeschen(project_id: str, user: dict = Depends(schreibend("buero"))):
+async def loeschen(project_id: str, erzwingen: bool = False, user: dict = Depends(schreibend("buero"))):
+    """Projekt endgültig löschen. Nie mit laufenden Stempelungen; mit erfassten Zeiten nur durch den Inhaber mit ?erzwingen=true (sonst archivieren)."""
     p = await projekt_laden(user, project_id)
+    filt = {"firma_id": user["firma_id"], "project_id": project_id}
+    laufend = await db().stempel.count_documents(filt)
+    if laufend:
+        raise HTTPException(409, f"Auf diesem Projekt {'ist' if laufend == 1 else 'sind'} noch {laufend} Mitarbeiter eingestempelt. Bitte erst ausstempeln (oder vom Büro beenden).")
     bezahlt = await db().invoices.count_documents({"firma_id": user["firma_id"], "project_id": project_id, "status": "bezahlt"})
     if bezahlt:
         raise HTTPException(400, "Zu diesem Projekt gibt es bezahlte Rechnungen. Bitte archivieren statt löschen.")
-    filt = {"firma_id": user["firma_id"], "project_id": project_id}
     n = await db().entries.count_documents(filt)
+    if n and not erzwingen:
+        raise HTTPException(409, f"Zu diesem Projekt gibt es {n} erfasste Arbeitszeiten. Bitte archivieren. Endgültig löschen kann nur der Inhaber ausdrücklich (erzwingen).")
+    if n and not hat_rolle(user, "inhaber"):
+        raise HTTPException(403, "Projekte mit erfassten Arbeitszeiten darf nur der Inhaber endgültig löschen.")
     for sammlung in ("entries", "invoices", "comments", "checklists", "signatures"):
         await db()[sammlung].delete_many(filt)
     async for d in db().documents.find({"firma_id": user["firma_id"], "scope": "project", "ref_id": project_id}, {"_id": 0}):
@@ -111,7 +119,7 @@ async def loeschen(project_id: str, user: dict = Depends(schreibend("buero"))):
     await db().documents.delete_many({"firma_id": user["firma_id"], "scope": "project", "ref_id": project_id})
     await db().stempel.delete_many(filt)
     await db().projects.delete_one({"id": project_id, "firma_id": user["firma_id"]})
-    await protokollieren(user, "projekt.geloescht", p["name"], details={"eintraege": n})
+    await protokollieren(user, "projekt.geloescht", p["name"], details={"eintraege": n, "erzwungen": bool(n)})
     return {"ok": True}
 
 
@@ -138,7 +146,7 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
             monatsminuten += eintrag_minuten(e)
     rechnung = await db().invoices.find_one({"firma_id": user["firma_id"], "project_id": project_id, "year": jahr, "month": monat}, {"_id": 0}) if leitung else None
     unterschriften = []
-    async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": project_id,
+    async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": project_id, "ersetzt": {"$ne": True},
                                          "week_monday": {"$gte": von, "$lte": bis}}, {"_id": 0}):
         unterschriften.append(s)
     ids = p.get("employee_ids") or []
@@ -215,12 +223,12 @@ async def kommentar_loeschen(kommentar_id: str, user: dict = Depends(schreibend(
 async def datei_hochladen(project_id: str, datei: UploadFile = File(...), kategorie: str = Form("Fotos"), note: str = Form(""),
                           date: str = Form(""), ordner: str = Form(""), ersetzt_id: str = Form(""), user: dict = Depends(schreibend("mitarbeiter"))):
     p = await projekt_laden(user, project_id)
-    meta = await datei_speichern(user["firma_id"], datei, user["id"])
-    if date:
+    if date:   # erst prüfen, dann speichern – sonst bleibt bei ungültigen Angaben eine verwaiste Datei liegen
         try:
             datum_pruefen(date)
         except ValueError as exc:
             raise HTTPException(400, str(exc))
+    meta = await datei_speichern(user["firma_id"], datei, user["id"])
     doc = {**meta, "firma_id": user["firma_id"], "scope": "project", "ref_id": project_id,
            "category": kategorie if kategorie in KATEGORIEN_PROJEKT else "Sonstiges", "note": note[:500], "date": date or None, "ordner": ordner.strip()[:120],
            "uploaded_by": user["id"], "uploaded_by_name": user.get("name"), "created_at": jetzt_iso()}
@@ -264,17 +272,25 @@ async def checkliste_aendern(checkliste_id: str, body: ChecklisteUpdateIn, user:
     if body.items is not None:
         alt = {i["id"]: i for i in c.get("items", [])}
         neu = []
-        for i in body.items:
-            vorher = alt.get(i.id or "")
-            if not leitung and vorher is None:
-                continue  # Mitarbeiter haken ab, legen aber keine Punkte an
-            done_by, done_at = (vorher or {}).get("done_by"), (vorher or {}).get("done_at")
-            if i.done and not (vorher or {}).get("done"):
-                done_by, done_at = user.get("name"), jetzt_iso()
-            if not i.done:
-                done_by, done_at = None, None
-            neu.append({"id": i.id or neue_id(), "text": i.text.strip() if leitung else (vorher or {}).get("text", i.text),
-                        "done": bool(i.done), "done_by": done_by, "done_at": done_at})
+        if leitung:
+            for i in body.items:
+                vorher = alt.get(i.id or "")
+                done_by, done_at = (vorher or {}).get("done_by"), (vorher or {}).get("done_at")
+                if i.done and not (vorher or {}).get("done"):
+                    done_by, done_at = user.get("name"), jetzt_iso()
+                if not i.done:
+                    done_by, done_at = None, None
+                neu.append({"id": i.id or neue_id(), "text": i.text.strip(), "done": bool(i.done), "done_by": done_by, "done_at": done_at})
+        else:
+            # Mitarbeiter ändern nur den Erledigt-Status vorhandener Punkte; Punkte, die sie weglassen oder neu schicken, bleiben unverändert bzw. unberücksichtigt
+            gesendet = {i.id: i for i in body.items if i.id}
+            for vorher in c.get("items", []):
+                punkt = dict(vorher)
+                i = gesendet.get(vorher["id"])
+                if i is not None and bool(i.done) != bool(vorher.get("done")):
+                    punkt["done"] = bool(i.done)
+                    punkt["done_by"], punkt["done_at"] = (user.get("name"), jetzt_iso()) if i.done else (None, None)
+                neu.append(punkt)
         aenderung["items"] = neu
     await db().checklists.update_one({"id": checkliste_id}, {"$set": aenderung})
     return {"checkliste": await db().checklists.find_one({"id": checkliste_id}, {"_id": 0})}
@@ -296,10 +312,21 @@ async def unterschrift(project_id: str, body: UnterschriftIn, user: dict = Depen
         raise HTTPException(400, "week_monday muss ein Montag sein.")
     s = {"id": neue_id(), "firma_id": user["firma_id"], "project_id": project_id, "week_monday": body.week_monday,
          "signer_name": body.signer_name.strip(), "image": body.image, "signed_at": jetzt_iso(),
-         "by_user_id": user["id"], "by_user_name": user.get("name")}
-    await db().signatures.delete_many({"firma_id": user["firma_id"], "project_id": project_id, "week_monday": body.week_monday})
+         "by_user_id": user["id"], "by_user_name": user.get("name"), "version": 1}
+    # Vorhandene Unterschrift wird nie überschrieben: Mitarbeiter dürfen nicht ersetzen, das Büro nur mit Begründung – die alte bleibt als Version erhalten
+    aktiv = await db().signatures.find_one({"firma_id": user["firma_id"], "project_id": project_id, "week_monday": body.week_monday, "ersetzt": {"$ne": True}}, {"_id": 0, "image": 0})
+    if aktiv:
+        if not hat_rolle(user, "buero"):
+            raise HTTPException(409, f"Diese Woche ist bereits unterschrieben ({aktiv.get('signer_name')}). Ersetzen kann nur das Büro mit Begründung.")
+        if not (body.grund or "").strip():
+            raise HTTPException(400, "Bitte eine Begründung angeben, warum die vorhandene Unterschrift ersetzt wird.")
+        await db().signatures.update_one({"id": aktiv["id"]}, {"$set": {"ersetzt": True, "ersetzt_at": jetzt_iso(), "ersetzt_von": user.get("name"), "ersetzt_grund": body.grund.strip()}})
+        s["version"] = int(aktiv.get("version") or 1) + 1
+        s["ersetzt_id"] = aktiv["id"]
+        s["grund"] = body.grund.strip()
     await db().signatures.insert_one(dict(s))
-    await protokollieren(user, "unterschrift.erfasst", p["name"], details={"woche": body.week_monday, "unterzeichner": s["signer_name"]})
+    await protokollieren(user, "unterschrift.erfasst" if not aktiv else "unterschrift.ersetzt", p["name"],
+                         details={"woche": body.week_monday, "unterzeichner": s["signer_name"], "version": s["version"], "grund": s.get("grund", ""), "vorher": (aktiv or {}).get("signer_name")})
     return {"unterschrift": s}
 
 
@@ -307,7 +334,7 @@ async def unterschrift(project_id: str, body: UnterschriftIn, user: dict = Depen
 async def unterschriften(project_id: str, von: str, bis: str, user: dict = Depends(aktueller_nutzer)):
     await projekt_laden(user, project_id)
     aus = []
-    async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": project_id,
+    async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": project_id, "ersetzt": {"$ne": True},
                                          "week_monday": {"$gte": von, "$lte": bis}}, {"_id": 0}):
         aus.append(s)
     return {"unterschriften": aus}
@@ -315,11 +342,12 @@ async def unterschriften(project_id: str, von: str, bis: str, user: dict = Depen
 
 @router.delete("/api/unterschriften/{unterschrift_id}")
 async def unterschrift_loeschen(unterschrift_id: str, user: dict = Depends(schreibend("buero"))):
-    s = await db().signatures.find_one({"id": unterschrift_id, "firma_id": user["firma_id"]}, {"_id": 0, "image": 0})
+    s = await db().signatures.find_one({"id": unterschrift_id, "firma_id": user["firma_id"], "ersetzt": {"$ne": True}}, {"_id": 0, "image": 0})
     if not s:
         raise HTTPException(404, "Unterschrift nicht gefunden.")
-    await db().signatures.delete_one({"id": unterschrift_id})
-    await protokollieren(user, "unterschrift.geloescht", s.get("project_id", ""), details={"woche": s.get("week_monday")})
+    # Kein endgültiges Löschen: die Unterschrift bleibt als zurückgezogene Version nachvollziehbar
+    await db().signatures.update_one({"id": unterschrift_id}, {"$set": {"ersetzt": True, "ersetzt_at": jetzt_iso(), "ersetzt_von": user.get("name"), "ersetzt_grund": "zurückgezogen"}})
+    await protokollieren(user, "unterschrift.zurueckgezogen", s.get("project_id", ""), details={"woche": s.get("week_monday"), "unterzeichner": s.get("signer_name")})
     return {"ok": True}
 
 

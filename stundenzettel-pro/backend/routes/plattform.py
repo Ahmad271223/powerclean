@@ -553,7 +553,7 @@ async def nachweise(project_id: str, user: dict = Depends(aktueller_nutzer)):
         async for e in db().entries.find({"firma_id": f["firma_id"], "project_id": f["lokales_project_id"], "date": {"$gte": von, "$lte": bis}},
                                           {"_id": 0, "date": 1, "start_time": 1, "end_time": 1, "pause_minutes": 1, "net_minutes": 1, "user_id": 1, "activity": 1, "workers": 1}).sort([("date", 1), ("start_time", 1)]):
             zeiten.append({**{k: v for k, v in e.items() if k != "user_id"}, "user_name": namen.get(e.get("user_id"), "")})
-        u = await db().signatures.find_one({"firma_id": f["firma_id"], "project_id": f["lokales_project_id"], "week_monday": von}, {"_id": 0, "signer_name": 1, "signed_at": 1})
+        u = await db().signatures.find_one({"firma_id": f["firma_id"], "project_id": f["lokales_project_id"], "week_monday": von, "ersetzt": {"$ne": True}}, {"_id": 0, "signer_name": 1, "signed_at": 1})
         aus.append({**f, "firma_name": (await firma_kurz(f["firma_id"]))["name"], "bis": bis, "zeiten": zeiten, "minuten": sum(int(x.get("net_minutes") or 0) * max(1, int(x.get("workers") or 1)) for x in zeiten),
                     "unterschrift": u})
     return {"nachweise": aus}
