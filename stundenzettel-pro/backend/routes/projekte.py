@@ -150,16 +150,17 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     von, bis = rasterbereich(jahr, monat)
     namen = await nutzernamen(user["firma_id"])
     leitung = projekt_leitung(user, p)
+    # Nur der Firmeninhaber sieht die individuellen Stunden aller Personen.
+    personalzeiten_alle = user.get("role") == "inhaber"
     filt = {"firma_id": user["firma_id"], "project_id": project_id, "date": {"$gte": von, "$lte": bis}}
-    if not leitung:
-        # Mitarbeiter sehen im Kalender nur eigene Zeiten und die "Anzahl"-Einträge des Büros
-        filt["$or"] = [{"user_id": user["id"]}, {"user_id": None}]
+    if not personalzeiten_alle:
+        filt["user_id"] = user["id"]
     eintraege = []
     monatsminuten = 0
     erster, letzter = f"{jahr:04d}-{monat:02d}-01", monatsletzter(jahr, monat).isoformat()
     async for e in db().entries.find(filt, {"_id": 0}).sort([("date", 1), ("start_time", 1)]):
         eintraege.append(eintrag_anreichern(e, namen))
-    if leitung:
+    if personalzeiten_alle:
         async for e in db().entries.find({"firma_id": user["firma_id"], "project_id": project_id, "date": {"$gte": erster, "$lte": letzter}}, {"_id": 0, "net_minutes": 1, "workers": 1}):
             monatsminuten += eintrag_minuten(e)
     rechnung = await db().invoices.find_one({"firma_id": user["firma_id"], "project_id": project_id, "year": jahr, "month": monat}, {"_id": 0}) if hat_rolle(user, "buero") else None
@@ -177,7 +178,7 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     fotos = [foto_fuer_nutzer(user, f) for f in await projekt_fotos(user["firma_id"], project_id, von, bis)]
     return {"firma": firma_oeffentlich(firma, user), "projekt": projekt_fuer_nutzer(user, p), "eintraege": eintraege, "rechnung": rechnung, "fotos": fotos,
             "unterschriften": unterschriften, "mitarbeiter": mitarbeiter, "raster": {"von": von, "bis": bis},
-            "leitung": leitung, "budget": budget_info(p, monatsminuten) if leitung else None,
+            "leitung": leitung, "budget": budget_info(p, monatsminuten) if personalzeiten_alle else None,
             "feiertage": {k: v for k, v in frei.items() if von <= k <= bis}, "leistungen": leistungen,
             "abgeschlossen": await monat_abgeschlossen(user["firma_id"], jahr, monat)}
 
@@ -192,8 +193,8 @@ async def zeiten(project_id: str, von: str, bis: str, user: dict = Depends(aktue
         raise HTTPException(400, str(exc))
     namen = await nutzernamen(user["firma_id"])
     filt = {"firma_id": user["firma_id"], "project_id": project_id, "date": {"$gte": von, "$lte": bis}}
-    if not projekt_leitung(user, await projekt_laden(user, project_id)):
-        filt["$or"] = [{"user_id": user["id"]}, {"user_id": None}]
+    if user.get("role") != "inhaber":
+        filt["user_id"] = user["id"]
     aus = []
     async for e in db().entries.find(filt, {"_id": 0}).sort([("date", 1), ("start_time", 1)]):
         aus.append(eintrag_anreichern(e, namen))
