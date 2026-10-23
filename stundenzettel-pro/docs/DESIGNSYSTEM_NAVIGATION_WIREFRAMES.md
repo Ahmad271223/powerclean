@@ -1,4 +1,13 @@
 # Stundenzettel Pro – Designsystem, vollständige Anordnung und Wireframes
+
+## Zusätzlich erforderlicher Normalfirma-Screen: Projektarchiv
+- **Firmenprojekt → Archiv** ist ein vollwertiger Tab auf Desktop und über Projektmenü mobil erreichbar. Keine GU-Berechtigung und keine 50,99-€-Projektbuchung erforderlich.
+- Desktop: Projektkopf → [Kalender] [Zeiten] [Fotos] [Dokumente] [Rechnung] [Archiv] ; Archiv zeigt Auswahl Fotos/Zeiten/Berichte/Unterschriften/Rechnungen/Angebote/Kommunikation, Vollständigkeit, [Projektakte als ZIP erstellen], Jobstatus, Downloadhistorie und Speicher-/Löschfristen.
+- Mobile: Projekte → konkretes Projekt → **Mehr → Archiv** oder im Abschlussbereich; großer ZIP-Download ggf. mit WLAN-Hinweis. Mitarbeiter ohne Archivberechtigung sieht die Funktion nicht.
+- Eigene Projekte ohne GU: keine künstlichen Sektionen «Ausschreibung»/«Zuschlag»; vorhandene Geschäftsdaten vollständig exportieren. Eigener Auftragnehmer in GU-Bauprojekt: eigener Vergabe-/Auftragssnapshot zusätzlich.
+- Ein Projekt als «abgeschlossen» oder «archiviert» markieren erzeugt noch kein ZIP, und ein ZIP-Download löscht keine Originale.
+- Firmen-Chef sieht unter **Berichte & Exporte → Projektarchive** zusätzlich die Sammelübersicht aller eigenen Archive. Die GU-Übersicht ist rollen-/berechtigungsspezifisch getrennt.
+
 Status: Zielbild/Design-Spezifikation, keine bereits implementierte Änderung. Grundlage: das aktuelle Apple-inspirierte Design in index.css und ui.jsx und statischer Seitenreview vom 23.10.2026.
 
 ## 1. Visuelle Strategie
