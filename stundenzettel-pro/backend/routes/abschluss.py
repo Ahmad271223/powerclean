@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/abschluss", tags=["Monatsabschluss"])
 
 
 @router.get("")
-async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), user: dict = Depends(rolle_noetig("buero"))):
+async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), user: dict = Depends(rolle_noetig("inhaber"))):
     filt = {"firma_id": user["firma_id"]}
     if jahr:
         filt["year"] = jahr
@@ -23,7 +23,7 @@ async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), user: dict 
 
 
 @router.post("")
-async def abschliessen(body: AbschlussIn, user: dict = Depends(schreibend("buero"))):
+async def abschliessen(body: AbschlussIn, user: dict = Depends(schreibend("inhaber"))):
     if await db().abschluesse.find_one({"firma_id": user["firma_id"], "year": body.year, "month": body.month}):
         raise HTTPException(400, "Dieser Monat ist schon abgeschlossen.")
     # Laufende Stempelungen, die den Monat berühren, blockieren den Abschluss (sonst scheitert das spätere Ausstempeln an der Sperre)
@@ -43,7 +43,7 @@ async def abschliessen(body: AbschlussIn, user: dict = Depends(schreibend("buero
 
 
 @router.delete("/{jahr}/{monat}")
-async def oeffnen(jahr: int, monat: int, user: dict = Depends(schreibend("buero"))):
+async def oeffnen(jahr: int, monat: int, user: dict = Depends(schreibend("inhaber"))):
     r = await db().abschluesse.delete_one({"firma_id": user["firma_id"], "year": jahr, "month": monat})
     if not r.deleted_count:
         raise HTTPException(404, "Dieser Monat ist nicht abgeschlossen.")
