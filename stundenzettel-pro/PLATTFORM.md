@@ -32,6 +32,21 @@ Die Rechteprüfung bleibt datengetrieben (Projektbesitz, Beteiligung, Einladung)
 Rollen innerhalb der Firma (Inhaber, Büro, Vorarbeiter, Mitarbeiter) gelten unverändert für beide Arten; Mitarbeiter eines Auftraggebers sehen
 weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
 
+## 1c. Lizenz- und Abrechnungsmodell (23.10.2026)
+
+- **GU-Projektabo** (`projects.gu_abo`): wird für Firmen der Art auftraggeber/beides automatisch aktiviert, sobald eine Ausschreibung des
+  Projekts veröffentlicht oder eine Firma zum Projekt eingeladen wird (`abo.gu_abo_aktivieren`); 50,99 € netto je Monat und Projekt,
+  einmal je Projekt (nicht je Gewerk). Zeiträume (`zeitraeume[]`) bleiben für die Abrechnung erhalten; Beenden durch den Inhaber
+  (`POST /api/projekte/{id}/gu-abo`), eine spätere Veröffentlichung/Einladung aktiviert erneut. Betriebe, die Partner einladen, zahlen nichts.
+- **Firmenabo vs. kostenlose Projektteilnahme** (`plan.stufe` = firma|teilnahme): nach der Testphase ohne Freischaltung wird eine Firma
+  zur Teilnahme (`plan_status` → status `teilnahme`, schreiben erlaubt). Mit `firmenabo_noetig`/`firmenabo_lesend` gesperrt (402):
+  Mitarbeiter einladen, eigene Projekte, Zeiten/Stempeluhr auf eigenen Projekten (`gemeinsam.projekt_laden(schreiben=True)`), Rechnungen anlegen,
+  Lohnvorbereitung, API-Schlüssel, Webhooks. Erlaubt: Ausschreibungen, Angebote, Rückfragen, Beteiligung annehmen, Zeiten/Fotos/Berichte auf verknüpften Projekten.
+- **Nur Auftraggeber schreiben aus**: Anlegen und Veröffentlichen formaler Ausschreibungen verlangt `firmen.art` ∈ {auftraggeber, beides}
+  (403 mit Hinweis). Betriebe laden Partner weiterhin direkt unter Zusammenarbeit ein.
+- Preise an einer Stelle (`preise.py`, `GET /api/preise`), Abrechnungsgrundlage `GET /api/admin/abos` (Betreiber), Lizenzseite zeigt
+  Firmenabo, aktive GU-Projekte und Monatssumme. Offen: Zahlungsdienst, automatische Verlängerung/Mahnung, Enterprise-Vertrag.
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

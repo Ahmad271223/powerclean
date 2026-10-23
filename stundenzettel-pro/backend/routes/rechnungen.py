@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pymongo.errors import DuplicateKeyError
 
-from auth import firma_laden, jetzt_iso, rolle_noetig, schreibend
+from auth import firma_laden, firmenabo_noetig, jetzt_iso, rolle_noetig, schreibend
 from auth import hat_rolle
 from db import db
 import erechnung
@@ -94,7 +94,7 @@ async def _festschreiben(user: dict, r: dict, anlass: str) -> dict:
 
 
 @router.post("/anlegen")
-async def anlegen(body: RechnungAnlegenIn, user: dict = Depends(schreibend("buero"))):
+async def anlegen(body: RechnungAnlegenIn, user: dict = Depends(firmenabo_noetig("buero"))):
     """Bestehende Rechnung des Monats zurückgeben (nur Entwürfe werden neu berechnet, ausgestellte nie) oder mit nächster Nummer anlegen.
     Mit nur_pruefen wird nichts angelegt und keine Nummer vergeben."""
     p = await projekt_laden(user, body.project_id)

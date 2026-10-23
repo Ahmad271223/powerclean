@@ -25,6 +25,7 @@ def _aufbau(client):
     """GOLDBECK mit Admin, zwei Büro-Nutzern (Projektleiterin, Prokurist), Projekt mit Bauvorhaben-Daten und internem Plan;
     drei Elektrofirmen, eine Trockenbaufirma, eine fremde Firma."""
     gu, gu_d = registrieren(client, email="admin@goldbeck-test.de", firma="GOLDBECK Test GmbH", name="Gerd Admin")
+    assert client.put("/api/firma", json={"art": "auftraggeber"}, headers=gu).status_code == 200   # nur Auftraggeber-Konten schreiben formal aus
     pl, pl_d = einladen(client, gu, name="Paula Projektleiterin", email="paula@goldbeck-test.de", role="buero")
     pl2, _ = einladen(client, gu, name="Peter Prokurist", email="peter@goldbeck-test.de", role="buero")
     p = projekt(client, pl, name="Logistikzentrum Hannover", address="Industrieweg 1, 30179 Hannover", projektnummer="LZ-HAN-01", projektart="Logistikzentrum",

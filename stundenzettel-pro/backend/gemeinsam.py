@@ -38,11 +38,12 @@ PROJEKT_DEFAULTS = {
     "projektnummer": "", "auftraggeber": "", "generalunternehmer": "", "projektart": "", "beschreibung": "", "baubeginn": None, "bauende": None,
     "phasen": [], "bauabschnitte": [], "gewerke": [], "projektstatus": "", "volumen": None, "kosten": None, "anforderungen": "", "lat": None, "lon": None,
     "kostenlos": False,
+    "gu_abo": None,   # kostenpflichtiges GU-Projekt: {status, preis_monat, aktiviert_am, beendet_am, zeitraeume[]} (siehe abo.py)
 }
 
 # Felder, die Mitarbeiter und Vorarbeiter nicht sehen (Preise, Budgets, Kundendaten, interne Notizen)
 PROJEKT_FELDER_VERTRAULICH = {"hourly_rate", "kostenlos", "budget_hours_month", "budget_warn_percent", "budget", "notes", "customer_address",
-                              "customer_id", "reverse_charge", "volumen", "kosten", "quelle_id", "employee_name"}
+                              "customer_id", "reverse_charge", "volumen", "kosten", "quelle_id", "employee_name", "gu_abo"}
 
 # Mitarbeiter sehen keine Bank-/Steuerdaten; Logo und Stempel brauchen sie für den Stundenzettel beim Kunden
 FIRMA_FELDER_MITARBEITER = {"id", "name", "owner", "street", "zip_code", "city", "phone", "email", "website", "logo",
@@ -108,6 +109,10 @@ async def projekt_laden(user: dict, project_id: str, schreiben: bool = False) ->
         raise HTTPException(404, "Projekt nicht gefunden.")
     if schreiben and p.get("archived") and not hat_rolle(user, "buero"):
         raise HTTPException(400, "Das Projekt ist archiviert.")
+    if schreiben and not (p.get("verknuepft") or {}).get("project_id"):
+        # Zeiten und Stempelungen auf eigenen Projekten brauchen das Firmenabo; verknüpfte GU-Projekte gehören zur kostenlosen Projektteilnahme
+        from auth import firma_laden, firmenabo_pruefen
+        firmenabo_pruefen(user.get("_firma") or await firma_laden(user["firma_id"]))
     return projekt_normalisieren(p)
 
 

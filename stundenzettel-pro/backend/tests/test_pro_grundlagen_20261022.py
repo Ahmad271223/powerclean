@@ -311,11 +311,11 @@ def test_10_api_schluessel_und_lizenz(client):
     assert len(liste) == 1 and "token_hash" not in liste[0] and liste[0]["last_used_at"]
     assert client.delete(f"/api/firma/api-tokens/{liste[0]['id']}", headers=kopf).status_code == 200
     assert client.get("/api/v1/projekte", headers=schluessel).status_code == 401
-    # Lizenz: Testphase abgelaufen → Lesen geht, Schreiben 402; Freischaltung durch Betreiber
+    # Lizenz: Testphase abgelaufen → kostenlose Projektteilnahme (Lesen geht, Zeiten auf eigenen Projekten 402); Firmenabo durch Betreiber
     firma_id = daten["firma"]["id"]
     gestern = (datetime.now().astimezone() - timedelta(days=1)).isoformat()
     r = client.post("/api/admin/plan", json={"firma_id": firma_id, "status": "test", "test_bis": gestern}, headers={"X-Admin-Token": "betreiber-test"})
-    assert r.status_code == 200 and r.json()["plan"]["status"] == "abgelaufen"
+    assert r.status_code == 200 and r.json()["plan"]["status"] == "teilnahme" and r.json()["plan"]["stufe"] == "teilnahme"
     assert client.get("/api/projekte", headers=kopf).status_code == 200
     assert client.post("/api/zeiten", json={"project_id": p["id"], "date": "2026-10-06", "start_time": "08:00", "end_time": "09:00"}, headers=kopf).status_code == 402
     assert client.post("/api/admin/plan", json={"firma_id": firma_id, "status": "aktiv"}, headers={"X-Admin-Token": "falsch"}).status_code == 403

@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth import hat_rolle, aktueller_nutzer, api_token_neu, betreiber_pruefen, firma_laden, jetzt_iso, plan_status, rolle_noetig, schreibend
+from auth import hat_rolle, aktueller_nutzer, api_token_neu, betreiber_pruefen, firma_laden, firmenabo_noetig, jetzt_iso, plan_status, rolle_noetig, schreibend
 from datetime import timedelta
 
 from auth import API_RECHTE, jetzt
+import config
 from db import db
 from gemeinsam import firma_oeffentlich, neue_id
 from models import ApiTokenIn, FirmaIn, FirmaLoeschenIn, PlanIn, WebhookIn
@@ -38,6 +39,34 @@ async def firma_aendern(body: FirmaIn, user: dict = Depends(schreibend("buero"))
     await protokollieren(user, "firma.geaendert", details={"felder": felder, "logo": "logo" in aenderung, "stempel": "stamp" in aenderung})
     firma = await firma_laden(user["firma_id"])
     return {"firma": firma_oeffentlich(firma, user), "plan": plan_status(firma)}
+
+
+@router.get("/api/preise")
+async def preise_lesen():
+    """Öffentliche Preisliste (netto je Monat)."""
+    from preise import PREISE, STUFEN, TEXTE, FIRMENABO_FUNKTIONEN
+    return {"preise": PREISE, "stufen": STUFEN, "texte": TEXTE, "firmenabo_funktionen": FIRMENABO_FUNKTIONEN, "test_tage": config.TEST_TAGE}
+
+
+@router.get("/api/firma/abos")
+async def abos_lesen(user: dict = Depends(rolle_noetig("buero"))):
+    """Firmenabo, aktive GU-Projekte und Monatskosten der eigenen Firma."""
+    from abo import firma_abos
+    return await firma_abos(user["firma_id"])
+
+
+@router.get("/api/admin/abos", dependencies=[Depends(betreiber_pruefen)])
+async def abos_betreiber():
+    """Betreiber: Abrechnungsgrundlage aller Firmen (Firmenabo, aktive GU-Projekte, Monatssumme) – für Rechnungen bis ein Zahlungsdienst angebunden ist."""
+    from abo import firma_abos
+    aus = []
+    async for f in db().firmen.find({}, {"_id": 0, "id": 1, "name": 1, "email": 1, "art": 1}):
+        a = await firma_abos(f["id"])
+        aus.append({"firma_id": f["id"], "name": f.get("name"), "email": f.get("email"), "art": a["art"], "status": a["plan"]["status"], "stufe": a["plan"]["stufe"],
+                    "nutzer_aktiv": a["nutzer_aktiv"], "gu_projekte_aktiv": a["gu_projekte_aktiv"], "kosten_firma_monat": a["kosten_firma_monat"],
+                    "kosten_projekte_monat": a["kosten_projekte_monat"], "kosten_monat": a["kosten_monat"],
+                    "projekte": [{"id": p["id"], "name": p["name"], **(p.get("gu_abo") or {})} for p in a["projekte"]]})
+    return {"firmen": aus, "summe_monat": round(sum(x["kosten_monat"] for x in aus), 2)}
 
 
 @router.get("/api/firma/plan")
@@ -80,7 +109,7 @@ async def api_tokens(user: dict = Depends(rolle_noetig("inhaber"))):
 
 
 @router.post("/api/firma/api-tokens")
-async def api_token_anlegen(body: ApiTokenIn, user: dict = Depends(schreibend("inhaber"))):
+async def api_token_anlegen(body: ApiTokenIn, user: dict = Depends(firmenabo_noetig("inhaber"))):
     roh, h = api_token_neu()
     rechte = [r for r in dict.fromkeys(body.rechte) if r in API_RECHTE] or ["zeiten"]
     t = {"id": neue_id(), "firma_id": user["firma_id"], "name": body.name.strip(), "token_hash": h, "rechte": rechte,
@@ -110,7 +139,7 @@ async def webhooks_liste(user: dict = Depends(rolle_noetig("inhaber"))):
 
 
 @router.post("/api/firma/webhooks")
-async def webhook_anlegen(body: WebhookIn, user: dict = Depends(schreibend("inhaber"))):
+async def webhook_anlegen(body: WebhookIn, user: dict = Depends(firmenabo_noetig("inhaber"))):
     import secrets
     import webhooks as wh
     events = [e for e in body.events if e == "*" or e in wh.EREIGNISSE] or ["*"]

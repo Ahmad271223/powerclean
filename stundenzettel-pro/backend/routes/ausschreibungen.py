@@ -17,7 +17,9 @@ from ausschreibung import (ABRECHNUNGSARTEN, ANGEBOT_STATUS_NAMEN, ANNAHME_TEXT,
                            einladung_der_firma, frist_offen, frist_tage, heute, interessierte_firmen, leitung_benachrichtigen, leitung_noetig,
                            neue_vergabe_pruefen, nummer_vergeben, oeffentliche_ansicht, positionen_berechnen, schritt, vergabe_schritt,
                            vergabe_zugang, zweites_augenpaar)
-from auth import aktueller_nutzer, hat_rolle, jetzt_iso, rolle_noetig, schreibend
+from abo import gu_abo_aktivieren, ist_auftraggeber
+from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, rolle_noetig, schreibend
+from preise import PREISE
 from dateien import datei_speichern, speicher_belegt, speicher_grenze, version_verknuepfen
 from db import db
 from gemeinsam import neue_id, projekt_normalisieren
@@ -38,6 +40,16 @@ ANGEBOT_FELDER = ("nummer", "ansprechpartner", "preisart", "preis_netto", "stund
 
 def _link(a_id: str) -> str:
     return f"/ausschreibungen/{a_id}"
+
+
+async def _auftraggeber_noetig(user: dict) -> dict:
+    """Formale Ausschreibungen (Bieterliste, Vergleich, Vergabe) gibt es nur für Auftraggeber-Konten."""
+    firma = user.get("_firma") or await firma_laden(user["firma_id"])
+    if not ist_auftraggeber(firma):
+        raise HTTPException(403, "Formale Ausschreibungen können nur Auftraggeber-Konten anlegen und veröffentlichen (Firma → Firmendaten → Firmenart „Auftraggeber“ oder „Beides“). "
+                                 "Partnerfirmen lassen sich weiterhin direkt unter „Zusammenarbeit“ zum Projekt einladen.")
+    user["_firma"] = firma
+    return firma
 
 
 def _datei(inhalt: bytes, name: str, typ: str) -> Response:
@@ -122,6 +134,8 @@ async def _detail(user: dict, zg: dict) -> dict:
     aus["kriterien"] = list(BEWERTUNGSKRITERIEN)
     if leitung:
         aus["zaehler"] = await _zaehler(a["id"])
+        aus["gu_abo"] = ((zg.get("zugang") or {}).get("projekt") or {}).get("gu_abo")   # Stand des GU-Projektabos für die Leitung
+        aus["preise"] = PREISE
         aus["einladungen"] = [e async for e in db().ausschreibung_einladungen.find({"ausschreibung_id": a["id"]}, {"_id": 0}).sort("created_at", 1)]
         aus["vergabe"] = await db().vergaben.find_one({"ausschreibung_id": a["id"], "status": {"$in": ["vorgeschlagen", "freigegeben", "mitgeteilt", "angenommen"]}}, {"_id": 0})
         aus["vergaben_verlauf"] = [v async for v in db().vergaben.find({"ausschreibung_id": a["id"]}, {"_id": 0}).sort("created_at", 1)]
@@ -205,6 +219,7 @@ async def projekt_ausschreibungen(project_id: str, user: dict = Depends(aktuelle
 async def ausschreibung_anlegen(project_id: str, body: AusschreibungIn, user: dict = Depends(schreibend("mitarbeiter"))):
     z = await zugang(user, project_id)
     projekt_leitung_noetig(z)
+    await _auftraggeber_noetig(user)
     p = z["projekt"]
     daten = body.model_dump()
     verantwortlich = user
@@ -383,9 +398,11 @@ async def veroeffentlichen(ausschreibung_id: str, user: dict = Depends(schreiben
         fehler.append("Beschreibung oder Leistungsumfang")
     if fehler:
         raise HTTPException(400, "Vor der Veröffentlichung fehlt: " + ", ".join(fehler) + ".")
+    await _auftraggeber_noetig(user)
     aenderung = {"status": "veroeffentlicht", "veroeffentlicht_am": heute(), "updated_at": jetzt_iso()}
     await db().ausschreibungen.update_one({"id": ausschreibung_id}, {"$set": aenderung, "$push": {"verlauf": schritt(user, "veroeffentlicht", SICHTBARKEIT_NAMEN.get(a.get("sichtbarkeit"), ""))}})
     a = {**a, **aenderung}
+    await gu_abo_aktivieren(user, zg["zugang"]["projekt"], f"Ausschreibung „{a['titel']}“ veröffentlicht")   # ab jetzt kostenpflichtiges GU-Projekt
     ag = await firma_kurz(a["firma_id"])
     eingeladen = set()
     async for e in db().ausschreibung_einladungen.find({"ausschreibung_id": ausschreibung_id}, {"_id": 0, "firma_id": 1}):
@@ -421,6 +438,7 @@ async def aufheben(ausschreibung_id: str, body: VergabeMitteilungIn, user: dict 
 async def firmen_einladen(ausschreibung_id: str, body: AusschreibungEinladungIn, user: dict = Depends(schreibend("mitarbeiter"))):
     zg = await ausschreibung_zugang(user, ausschreibung_id)
     leitung_noetig(zg)
+    await _auftraggeber_noetig(user)
     a = zg["ausschreibung"]
     if a.get("status") in ("vergeben", "aufgehoben"):
         raise HTTPException(400, "Diese Ausschreibung ist abgeschlossen.")
@@ -446,6 +464,7 @@ async def firmen_einladen(ausschreibung_id: str, body: AusschreibungEinladungIn,
     if neu:
         await db().ausschreibungen.update_one({"id": ausschreibung_id}, {"$push": {"verlauf": schritt(user, "eingeladen", ", ".join(e["firma_name"] for e in neu))}})
         await protokollieren(user, "ausschreibung.eingeladen", a["titel"], details={"firmen": [e["firma_name"] for e in neu]})
+        await gu_abo_aktivieren(user, zg["zugang"]["projekt"], f"Firmen zur Ausschreibung „{a['titel']}“ eingeladen")   # ab jetzt kostenpflichtiges GU-Projekt
     return {"einladungen": neu, "uebersprungen": uebersprungen}
 
 

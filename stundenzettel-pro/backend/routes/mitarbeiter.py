@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse, Response
 
 import config
-from auth import aktueller_nutzer, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig, schreibend
+from auth import aktueller_nutzer, firmenabo_noetig, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig, schreibend
 from dateien import KATEGORIEN_PERSONAL, KATEGORIEN_PROJEKT, bild_verkleinern, datei_loeschen, datei_speichern
 from db import db
 from gemeinsam import neue_id, projekt_sichtbar
@@ -42,7 +42,7 @@ async def liste(alle: bool = False, user: dict = Depends(aktueller_nutzer)):
 
 
 @router.post("/api/mitarbeiter")
-async def einladen(body: MitarbeiterIn, user: dict = Depends(schreibend("buero"))):
+async def einladen(body: MitarbeiterIn, user: dict = Depends(firmenabo_noetig("buero"))):
     email = body.email.lower().strip()
     if await db().users.find_one({"email": email}):
         raise HTTPException(409, "Diese E-Mail-Adresse ist schon vergeben.")

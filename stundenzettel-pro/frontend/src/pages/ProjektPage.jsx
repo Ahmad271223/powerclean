@@ -42,7 +42,7 @@ const fmtZeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit',
 export default function ProjektPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { isBuero, isVorarbeiter } = useAuth();
+  const { isBuero, isVorarbeiter, firma: eigeneFirma } = useAuth();
   const today = useMemo(() => new Date(), []);
   const [{ year, month }, setYm] = useState(() => clampMonth(today.getFullYear(), today.getMonth()));
   const [tab, setTab] = useState('kalender');
@@ -175,7 +175,7 @@ export default function ProjektPage() {
     ...(verknuepft
       ? [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...(isBuero || isVorarbeiter ? baustelleTabs : []), ...(isBuero ? [{ value: 'freigaben', label: 'Freigaben', icon: Share2 }] : [])]
       : leitung
-        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, { value: 'ausschreibungen', label: 'Ausschreibungen', icon: Gavel }, { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
+        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, ...((eigeneFirma?.art || 'betrieb') !== 'betrieb' ? [{ value: 'ausschreibungen', label: 'Ausschreibungen', icon: Gavel }] : []), { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
   ];
 
@@ -185,7 +185,7 @@ export default function ProjektPage() {
         <IconBtn onClick={() => navigate('/projekte')} title="Zurück"><ArrowLeft size={20} /></IconBtn>
         <AppIcon color={color} text={initials(project.name)} size={40} className="rounded-xl" />
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-[18px] leading-tight truncate flex items-center gap-2">{project.name}{project.archived && <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#6E6E73] bg-black/[0.06] rounded-full px-2 py-0.5"><Archive size={11} /> Archiv</span>}</div>
+          <div className="font-semibold text-[18px] leading-tight truncate flex items-center gap-2">{project.name}{project.archived && <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#6E6E73] bg-black/[0.06] rounded-full px-2 py-0.5"><Archive size={11} /> Archiv</span>}{isBuero && project.gu_abo?.status === 'aktiv' && <span className="inline-flex items-center text-[11px] font-medium text-[#1B7F3B] bg-[#E8F8EC] rounded-full px-2 py-0.5" title="Kostenpflichtiges GU-Projekt, 50,99 € netto je Monat">GU-Projekt</span>}</div>
           <div className="text-[12px] text-[#6E6E73] truncate">{[project.customer_name, project.address, project.schedule].filter(Boolean).join(' · ') || 'Projekt'}</div>
         </div>
         {leitung && <IconBtn variant="soft" onClick={() => setQr(true)} title="QR-Code fürs Objekt"><QrCode size={18} /></IconBtn>}

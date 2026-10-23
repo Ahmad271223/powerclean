@@ -113,8 +113,11 @@ def plan_status(firma: dict) -> dict:
     """Stand der Lizenz: test (mit Resttagen), aktiv, abgelaufen, gesperrt."""
     plan = firma.get("plan") or {}
     status = plan.get("status") or "test"
+    stufe = plan.get("stufe") or "firma"
+    if stufe in ("pro", "plus"):   # frühere Stufenbezeichnungen
+        stufe = "firma"
     heute = jetzt()
-    aus = {"status": status, "test_bis": plan.get("test_bis"), "nutzer_max": plan.get("nutzer_max") or 0,
+    aus = {"status": status, "stufe": stufe, "test_bis": plan.get("test_bis"), "nutzer_max": plan.get("nutzer_max") or 0,
            "gueltig_bis": plan.get("gueltig_bis"), "tage_rest": None, "schreiben": True, "hinweis": ""}
     if status == "gesperrt":
         aus.update(schreiben=False, hinweis="Dieses Konto ist gesperrt. Bitte den Anbieter kontaktieren.")
@@ -140,7 +143,42 @@ def plan_status(firma: dict) -> dict:
                                hinweis="Die Lizenz ist abgelaufen. Lesen geht weiter, zum Eintragen bitte verlängern.")
             except ValueError:
                 pass
+    if aus["status"] == "abgelaufen" and config.TEILNAHME_KOSTENLOS:
+        # Kein Vollstopp: die Firma bleibt mit der kostenlosen Projektteilnahme arbeitsfähig; Firmenfunktionen brauchen das Firmenabo
+        aus.update(status="teilnahme", stufe="teilnahme", schreiben=True,
+                   hinweis="Testphase vorbei – ihr nutzt die kostenlose Projektteilnahme (Ausschreibungen, Angebote, Mitarbeit in Projekten der Auftraggeber). "
+                           "Für Mitarbeiter, eigene Projekte, Stundenzettel und Rechnungen bitte das Firmenabo freischalten lassen.")
+    elif aus["status"] in ("aktiv", "test") and stufe == "teilnahme":
+        aus["hinweis"] = "Kostenlose Projektteilnahme. Für Mitarbeiter, eigene Projekte, Stundenzettel und Rechnungen bitte das Firmenabo freischalten lassen."
     return aus
+
+
+FIRMENABO_HINWEIS = ("Dafür ist das Firmenabo nötig ({firma:.2f} € je Firma und Monat, {nutzer:.2f} € je weiterem Nutzer). Die kostenlose Projektteilnahme umfasst "
+                     "Ausschreibungen, Angebote, Rückfragen und die Mitarbeit in Projekten der Auftraggeber.")
+
+
+def firmenabo_pruefen(firma: dict) -> None:
+    from preise import PREISE
+    if plan_status(firma).get("stufe") == "teilnahme":
+        raise HTTPException(402, FIRMENABO_HINWEIS.format(firma=PREISE["firma"], nutzer=PREISE["nutzer"]))
+
+
+def firmenabo_noetig(mindestens: str):
+    """Abhängigkeit: schreibender Nutzer mit Mindestrolle UND Firmenabo (Mitarbeiter, eigene Projekte, Rechnungen, Lohn, Schnittstellen)."""
+    async def pruefen(user: dict = Depends(schreibend(mindestens))) -> dict:
+        firmenabo_pruefen(user["_firma"])
+        return user
+    return pruefen
+
+
+def firmenabo_lesend(mindestens: str):
+    """Abhängigkeit für lesende Firmenfunktionen (z. B. Lohnvorbereitung), die das Firmenabo brauchen."""
+    async def pruefen(user: dict = Depends(rolle_noetig(mindestens))) -> dict:
+        firma = await firma_laden(user["firma_id"])
+        firmenabo_pruefen(firma)
+        user["_firma"] = firma
+        return user
+    return pruefen
 
 
 async def firma_laden(firma_id: str) -> dict:

@@ -6,14 +6,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
-from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, rolle_noetig, schreibend
+from auth import aktueller_nutzer, firma_laden, firmenabo_noetig, hat_rolle, jetzt_iso, rolle_noetig, schreibend
 from dateien import KATEGORIEN_PROJEKT, datei_loeschen, datei_speichern, version_verknuepfen
 from db import db
 from feiertage import feiertage_set
 from gemeinsam import projekt_fotos
 from gemeinsam import (budget_info, eintrag_anreichern, firma_oeffentlich, kunde_laden, kundenadresse, neue_id, nutzernamen,
                        projekt_fuer_nutzer, projekt_laden, projekt_leitung, projekt_normalisieren, projekt_sichtbar)
-from models import ChecklisteIn, ChecklisteUpdateIn, KommentarIn, ProjektIn, UnterschriftIn
+from models import ChecklisteIn, ChecklisteUpdateIn, GuAboIn, KommentarIn, ProjektIn, UnterschriftIn
 from protokoll import protokollieren
 from sperre import monat_abgeschlossen
 from zeiten import datum_pruefen, eintrag_minuten, lokal_jetzt, monatsletzter, rasterbereich
@@ -72,7 +72,7 @@ async def liste(archiviert: bool = False, user: dict = Depends(aktueller_nutzer)
 
 
 @router.post("/api/projekte")
-async def anlegen(body: ProjektIn, user: dict = Depends(schreibend("buero"))):
+async def anlegen(body: ProjektIn, user: dict = Depends(firmenabo_noetig("buero"))):
     daten = await _projektdaten(user, body)
     p = {**daten, "id": neue_id(), "firma_id": user["firma_id"], "created_at": jetzt_iso(),
          "total_minutes": 0, "entry_count": 0, "last_activity_at": None}
@@ -125,6 +125,20 @@ async def loeschen(project_id: str, erzwingen: bool = False, user: dict = Depend
     await db().projects.delete_one({"id": project_id, "firma_id": user["firma_id"]})
     await protokollieren(user, "projekt.geloescht", p["name"], details={"eintraege": n, "erzwungen": bool(n)})
     return {"ok": True}
+
+
+@router.post("/api/projekte/{project_id}/gu-abo")
+async def gu_abo(project_id: str, body: GuAboIn, user: dict = Depends(schreibend("inhaber"))):
+    """GU-Projektabo von Hand aktivieren oder beenden (nur Inhaber einer Auftraggeber-Firma)."""
+    from abo import gu_abo_aktivieren, gu_abo_beenden, ist_auftraggeber
+    p = await projekt_laden(user, project_id)
+    if not ist_auftraggeber(user["_firma"]):
+        raise HTTPException(403, "GU-Projekte gibt es nur für Auftraggeber-Konten (Firma → Firmendaten → Firmenart).")
+    if body.aktiv:
+        abo = await gu_abo_aktivieren(user, p, "von Hand aktiviert")
+    else:
+        abo = await gu_abo_beenden(user, p)
+    return {"gu_abo": abo}
 
 
 # ---------------------------------------------------------------- Monatsdaten (Kalender + PDFs)

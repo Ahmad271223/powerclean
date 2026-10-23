@@ -480,7 +480,11 @@ class PlanIn(BaseModel):
     gueltig_bis: Optional[str] = None
     test_bis: Optional[str] = None
     hinweis: Optional[str] = Field(default="", max_length=300)
-    stufe: Optional[str] = Field(default=None, pattern="^(pro|plus)$")
+    stufe: Optional[str] = Field(default=None, pattern="^(pro|plus|firma|teilnahme)$")   # firma = Firmenabo, teilnahme = kostenlose Projektteilnahme
+
+
+class GuAboIn(BaseModel):
+    aktiv: bool
 
 
 class ApiTokenIn(BaseModel):

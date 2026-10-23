@@ -54,13 +54,21 @@ Dazu, was clockin nicht hat: **Rechnungen** direkt aus den Zeiten (fortlaufende 
 | Vergessen auszustempeln | Stempelungen > 10 h werden markiert; Büro beendet sie (`POST /api/stempel/{id}/beenden`), Vermerk am Eintrag |
 | KI-Texte, MCP-Server, SSO, Zeitzonen/Währung, SLA | nicht gebaut: KI-Texte und MCP brauchen laufende API-Kosten, SSO/Zeitzonen/SLA sind Konzernthemen |
 
-## Preisvorschlag
+## Preise und Lizenzmodell (Stand 23.10.2026, `backend/preise.py`)
 
-- **Pro**: 2,99 € je Nutzer und Monat, mindestens 9,99 € je Firma (3 Nutzer inklusive).
-- **Pro Plus**: 4,99 € je Nutzer und Monat, mindestens 14,99 € (alles aus der Tabelle oben).
-- Jahreszahlung mit zwei Monaten geschenkt. 14 Tage Test ohne Zahlungsdaten, in der Testphase ist alles frei.
-- Freischaltung zunächst von Hand (siehe Betrieb; `plan.stufe` = pro|plus), Zahlung über Stripe/Lemon Squeezy, sobald die
-  ersten zehn Firmen laufen. Die Stufe wird heute noch nicht im Code erzwungen (bewusst: erst verkaufen, dann sperren).
+Zwei Kundentypen, eine Plattform:
+
+| Wer | Was | Preis (netto, je Monat) |
+|---|---|---|
+| Auftraggeber (GU, Bauherr) | je **aktivem GU-Projekt** – beliebig viele Gewerke, Ausschreibungen, Projektleiter, beteiligte Firmen; Entwürfe kostenlos; Aktivierung mit der ersten Veröffentlichung oder Einladung, Beenden durch den Inhaber | **50,99 €** |
+| Ausführender Betrieb | **Firmenabo** – Mitarbeiter, Stempeluhr, Stundenzettel, Rechnungen/E-Rechnung, Lohnvorbereitung, eigene Projekte, Schnittstellen | **4,99 €** je Firma + **3,99 €** je weiterem Nutzer |
+| Eingeladener Betrieb | **kostenlose Projektteilnahme** – Ausschreibungen finden, Angebote abgeben, Rückfragen, Mitarbeit in GU-Projekten (Aufgaben, Fotos, Zeiten, Berichte) | 0 € |
+
+Im Code erzwungen: nur Auftraggeber-Konten (`firmen.art` = auftraggeber/beides) schreiben formal aus; nach der Testphase (14 Tage) fällt eine
+Firma auf die kostenlose Projektteilnahme zurück (`plan.stufe` = teilnahme) – Mitarbeiter einladen, eigene Projekte, Zeiten und Stempeluhr auf
+eigenen Projekten, Rechnungen, Lohn und Schnittstellen antworten dann mit 402 und Preis; verknüpfte GU-Projekte, Ausschreibungen und Angebote laufen weiter. Freischalten: `POST /api/admin/plan` mit `stufe: firma`;
+Abrechnungsgrundlage für den Anbieter: `GET /api/admin/abos` (Firmenabos, aktive GU-Projekte, Monatssumme). Zahlungsdienst (Karte/Lastschrift)
+ist noch nicht angebunden; Enterprise-Verträge für sehr große Projekte gesondert.
 
 ## Aufbau
 
@@ -81,7 +89,8 @@ alle Abfragen filtern darauf.
 Rollen: **inhaber** (alles) › **buero** (alles außer Lizenz, API-Schlüssel) › **mitarbeiter** (Stempeluhr, eigene
 Zeiten, zugewiesene Projekte mit Akte/Checklisten/Unterschrift, eigene Abwesenheiten, eigene Akte lesen).
 
-Lizenz: `firmen.plan` = test (14 Tage) | aktiv | gesperrt. Abgelaufen = Lesen und Exportieren geht, Schreiben gibt 402.
+Lizenz: `firmen.plan` = test (14 Tage) | aktiv | gesperrt, Stufe firma (Firmenabo) | teilnahme (kostenlos). Nach der Testphase ohne Firmenabo: Lesen, Exportieren,
+Ausschreibungen, Angebote und verknüpfte GU-Projekte gehen weiter, Firmenfunktionen geben 402 (siehe „Preise und Lizenzmodell“).
 
 ## Entwicklung
 

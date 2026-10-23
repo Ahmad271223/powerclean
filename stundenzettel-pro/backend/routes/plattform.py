@@ -153,6 +153,8 @@ async def firma_einladen(project_id: str, body: EinladungFirmaIn, user: dict = D
          "token": token, "token_bis": (jetzt() + timedelta(days=EINLADUNG_TAGE)).isoformat(), "eingeladen_von": user.get("name"),
          "eingeladen_von_id": user["id"], "lokales_project_id": None, "freigaben": {"namen": False}, "created_at": jetzt_iso()}
     await db().beteiligungen.insert_one(dict(b))
+    from abo import gu_abo_aktivieren
+    await gu_abo_aktivieren(user, p, f"Firma {firma_name or email} zum Projekt eingeladen")   # nur Auftraggeber-Konten, Betriebe bleiben kostenfrei
     eigentuemer = await firma_kurz(p["firma_id"])
     if firma_id:
         await benachrichtigen(firma_id, "projekteinladung", f"{eigentuemer['name']} lädt euch zum Projekt „{p['name']}“ ein ({b['gewerk'] or b['rolle']}).", "/zusammenarbeit")

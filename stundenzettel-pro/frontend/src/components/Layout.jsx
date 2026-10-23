@@ -59,7 +59,8 @@ function PlanHinweis() {
   if (!plan) return null;
   if (plan.status === 'test' && plan.tage_rest > 3 && !isBuero) return null;
   const rot = plan.status === 'abgelaufen' || plan.status === 'gesperrt';
-  if (plan.status === 'aktiv') return null;
+  if (plan.status === 'aktiv' && plan.stufe !== 'teilnahme') return null;
+  if ((plan.status === 'teilnahme' || plan.stufe === 'teilnahme') && !isBuero) return null;
   return (
     <div className={cn('mb-5 rounded-2xl px-4 py-3 text-[14px] flex items-start gap-3', rot ? 'bg-[#C41E3A]/10 border border-[#C41E3A]/30 text-[#8a1528]' : 'bg-white shadow-card text-[#1D1D1F]')} role="status">
       <AlertTriangle size={18} className="shrink-0 mt-0.5" />

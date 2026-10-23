@@ -7,8 +7,8 @@ import { useAuth } from '../lib/auth';
 import { Btn, Card, Field, TextInput } from '../components/ui';
 
 export const FIRMENARTEN = [
-  { value: 'betrieb', label: 'Ausführender Betrieb', text: 'Handwerk, Reinigung, Dienstleistung: Zeiten erfassen, Stundenzettel, Rechnungen, Aufträge finden und Angebote abgeben.' },
-  { value: 'auftraggeber', label: 'Auftraggeber / Generalunternehmer', text: 'Bauherr, GU, Projektsteuerung: Bauprojekte führen, Gewerke ausschreiben, Angebote vergleichen, Firmen beauftragen.' },
+  { value: 'betrieb', label: 'Ausführender Betrieb', text: 'Handwerk, Reinigung, Dienstleistung: Zeiten erfassen, Stundenzettel, Rechnungen, Aufträge finden und Angebote abgeben. Firmenabo 4,99 € + 3,99 € je weiterem Nutzer im Monat; Teilnahme an Ausschreibungen ist kostenlos.' },
+  { value: 'auftraggeber', label: 'Auftraggeber / Generalunternehmer', text: 'Bauherr, GU, Projektsteuerung: Bauprojekte führen, Gewerke ausschreiben, Angebote vergleichen, Firmen beauftragen. 50,99 € je aktivem Bauprojekt im Monat, Entwürfe kostenlos.' },
   { value: 'beides', label: 'Beides', text: 'Eigene Leistungen erbringen und zugleich Aufträge an andere Firmen vergeben.' },
 ];
 

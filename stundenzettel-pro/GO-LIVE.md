@@ -55,6 +55,16 @@ aktuellen Stand sieht (siehe README „Go-live und Betrieb“).
 | 21/22 | Listen (P2) | Feste Grenzen ohne Hinweis | bestätigt | Rechnungen und Zeiten mit `limit`/`offset`, `hat_mehr` und `gesamt`; Oberfläche zeigt den Hinweis | `test_audit4_05` |
 | 23 | Dashboard (P2) | Berechnung in einer Anfrage | zutreffend, kein Fehler | Bekannte Grenze: für sehr große Firmen vor dem Go-live Lasttest (BETRIEB.md); Indizes vorhanden | manuell |
 
+## 1c. Lizenz- und Abrechnungsmodell (23.10.2026)
+
+Umgesetzt und mit `tests/test_abo_20261023.py` abgedeckt: nur Auftraggeber-Konten schreiben formal aus (403 für Betriebe), GU-Projektabo
+50,99 €/Monat je aktivem Projekt (Aktivierung bei Veröffentlichung oder Einladung, einmal je Projekt, Beenden durch den Inhaber, Zeiträume
+bleiben erhalten), Firmenabo 4,99 € + 3,99 € je weiterem Nutzer, kostenlose Projektteilnahme nach der Testphase (Firmenfunktionen 402),
+öffentliche Preisliste `GET /api/preise`, Abrechnungsgrundlage `GET /api/admin/abos`. Mitarbeiter sehen das Abo-Feld nicht.
+
+Offen (bewusst): kein Zahlungsdienst, keine automatischen Rechnungen oder Mahnungen, kein Enterprise-Vertrag im Code; die Monatsrechnung
+stellt der Anbieter von Hand aus `/api/admin/abos` (siehe `BETRIEB.md` 4c). Die Nutzeranzahl zählt aktive Konten am Abruftag, nicht tagesgenau.
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.
@@ -80,6 +90,7 @@ Manuell auf dem Zielsystem (je Gerät, Datum und Ergebnis notieren):
 - Store-Builds auf echten Geräten (Android/iOS) – siehe `STORE.md`.
 - E-Rechnung gegen einen externen Validator (XSD-Prüfung läuft in den Tests; KoSIT-Validator/Portalannahme steht aus).
 - Rechtliche Prüfung (AV-Vertrag, Aufbewahrung, Datenschutzerklärung) durch eine fachkundige Person.
+- Abrechnung in der Praxis: Monatslauf über `/api/admin/abos`, Rechnungstellung und Zahlungseingang sind Handarbeit, bis ein Zahlungsdienst angebunden ist.
 
 ## 4. Freigabeempfehlung
 

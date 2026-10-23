@@ -55,6 +55,14 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
   nur mit `WEBHOOK_HTTP_ERLAUBEN=1` für Tests. Lieferungen werden im Ausgang gespeichert und bei Fehlern wiederholt; Stand je Webhook
   in der Oberfläche (offen / fehlgeschlagen). Der Hintergrunddienst läuft im Betrieb automatisch (`WEBHOOK_DIENST=1` erzwingt ihn im Speichermodus).
 
+## 4c. Abrechnung (bis ein Zahlungsdienst angebunden ist)
+
+- Monatlich `GET /api/admin/abos` (Kopfzeile `X-Admin-Token`) abrufen: je Firma Firmenabo (4,99 € + 3,99 € je weiterem Nutzer), aktive
+  GU-Projekte (50,99 € je Projekt) und Monatssumme; daraus die Rechnung des Anbieters stellen.
+- Freischalten/Umstellen: `POST /api/admin/plan` mit `status: aktiv`, `stufe: firma` (Firmenabo) oder `stufe: teilnahme`, optional `gueltig_bis`.
+- Nach der Testphase fällt eine Firma automatisch auf die kostenlose Projektteilnahme zurück (`TEILNAHME_KOSTENLOS=0` stellt die frühere
+  Vollsperre wieder her).
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

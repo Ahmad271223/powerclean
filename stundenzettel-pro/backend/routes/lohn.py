@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 import lohn
-from auth import firma_laden, rolle_noetig
+from auth import firma_laden, firmenabo_lesend, rolle_noetig
 from db import db
 from protokoll import protokollieren
 
@@ -20,20 +20,20 @@ def _datei(inhalt: bytes, name: str, typ: str) -> Response:
 
 
 @router.get("/vorbereitung")
-async def vorbereitung(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def vorbereitung(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(firmenabo_lesend("buero"))):
     _, daten = await _daten(user, jahr, monat)
     return daten
 
 
 @router.get("/vorbereitung.csv")
-async def vorbereitung_csv(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def vorbereitung_csv(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(firmenabo_lesend("buero"))):
     _, daten = await _daten(user, jahr, monat)
     await protokollieren(user, "export.lohnvorbereitung", f"{jahr}-{monat:02d}", details={"format": "csv", "mitarbeiter": len(daten["mitarbeiter"])})
     return _datei(lohn.vorbereitung_csv(daten), f"Lohnvorbereitung_{jahr}-{monat:02d}.csv", "text/csv; charset=utf-8")
 
 
 @router.get("/lodas.txt")
-async def lodas(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def lodas(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(firmenabo_lesend("buero"))):
     _, daten = await _daten(user, jahr, monat)
     einst = daten.get("lohn_export") or {}
     if not any((einst.get("lohnarten") or {}).values()):
@@ -48,7 +48,7 @@ async def lodas(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(...
 
 
 @router.get("/lodas-pruefung")
-async def lodas_pruefung(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def lodas_pruefung(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(firmenabo_lesend("buero"))):
     """Vorschau der LODAS-Datei und Hinweise (fehlende Lohnarten/Personalnummern), bevor sie verschickt wird."""
     _, daten = await _daten(user, jahr, monat)
     text, hinweise = lohn.lodas_text(daten)
@@ -56,14 +56,14 @@ async def lodas_pruefung(jahr: int = Query(..., ge=2025, le=2100), monat: int = 
 
 
 @router.get("/vorbereitung.pdf")
-async def vorbereitung_pdf(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def vorbereitung_pdf(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(firmenabo_lesend("buero"))):
     firma, daten = await _daten(user, jahr, monat)
     await protokollieren(user, "export.lohnvorbereitung", f"{jahr}-{monat:02d}", details={"format": "pdf"})
     return _datei(lohn.vorbereitung_pdf(firma, daten), f"Lohnvorbereitung_{jahr}-{monat:02d}.pdf", "application/pdf")
 
 
 @router.get("/stammdaten.csv")
-async def stammdaten(user: dict = Depends(rolle_noetig("buero"))):
+async def stammdaten(user: dict = Depends(firmenabo_lesend("buero"))):
     """Personal-, Steuer- und SV-Daten aller aktiven Mitarbeiter für die Anlage beim Steuerberater (wird protokolliert)."""
     nutzer = [u async for u in db().users.find({"firma_id": user["firma_id"], "active": {"$ne": False}}, {"_id": 0, "pw_hash": 0, "pin_hash": 0, "einladung_token": 0})]
     nutzer = [u for u in nutzer if not u.get("deleted_at")]
