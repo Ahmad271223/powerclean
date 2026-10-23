@@ -1,10 +1,7 @@
 /** Rahmen der App: Kopfzeile, Navigation (Seitenleiste am Rechner, Tab-Leiste am Handy), Lizenz- und Offline-Hinweis. */
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck,
-  LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff,
-} from 'lucide-react';
+import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { AppIcon, Sheet } from './ui';
 import { initials } from '../lib/utils';
@@ -13,6 +10,8 @@ import { cn } from '../lib/utils';
 const NAV_BUERO = [
   { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
+  { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
+  { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
   { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
   { to: '/rechnungen', label: 'Rechnungen', icon: Receipt },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
@@ -27,6 +26,7 @@ const NAV_MITARBEITER = [
   { to: '/', label: 'Stempeluhr', icon: Timer, end: true },
   { to: '/meine-zeiten', label: 'Meine Zeiten', icon: Clock },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
+  { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
   { to: '/abwesenheiten', label: 'Abwesenheit', icon: CalendarOff },
   { to: '/profil', label: 'Profil', icon: Contact },
 ];

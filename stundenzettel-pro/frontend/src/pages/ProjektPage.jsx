@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check,
   Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera,
+  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
@@ -14,6 +15,11 @@ import UnterschriftDialog from '../components/UnterschriftDialog';
 import FotoAuswahlDialog from '../components/FotoAuswahlDialog';
 import TagFotos from '../components/TagFotos';
 import Bild from '../components/Bild';
+import FirmenTab from '../components/plattform/FirmenTab';
+import AufgabenTab from '../components/plattform/AufgabenTab';
+import AnwesenheitTab from '../components/plattform/AnwesenheitTab';
+import NachweiseTab from '../components/plattform/NachweiseTab';
+import FreigabenTab from '../components/plattform/FreigabenTab';
 import { AppIcon, Btn, Card, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Field } from '../components/ui';
 import { api, openFile } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -130,6 +136,17 @@ export default function ProjektPage() {
   const tKey = todayKey();
   const color = project.color || '#C41E3A';
   const budget = data.budget;
+  // Plattform: verknüpftes Projekt eines Auftraggebers (Partnerseite) oder eigenes Projekt mit Firmen/Aufgaben (Eigentümerseite)
+  const verknuepft = project.verknuepft;
+  const plattformId = verknuepft?.project_id || project.id;
+  const tabs = [
+    { value: 'kalender', label: 'Kalender', icon: FileText }, { value: 'akte', label: 'Akte', icon: Paperclip }, { value: 'checklisten', label: 'Checklisten', icon: ListChecks },
+    ...(verknuepft
+      ? [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...(isBuero ? [{ value: 'freigaben', label: 'Freigaben', icon: Share2 }] : [])]
+      : leitung
+        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
+        : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
+  ];
 
   return (
     <Layout wide>
@@ -143,8 +160,14 @@ export default function ProjektPage() {
         {leitung && <IconBtn variant="soft" onClick={() => setQr(true)} title="QR-Code fürs Objekt"><QrCode size={18} /></IconBtn>}
         {isBuero && <Btn variant="soft" size="sm" onClick={() => setProjectDialog(true)}><Settings2 size={16} /> <span className="hidden sm:inline">Projekt</span></Btn>}
       </div>
-      <div className="flex justify-center mb-5">
-        <Segmented value={tab} onChange={setTab} options={[{ value: 'kalender', label: 'Kalender', icon: FileText }, { value: 'akte', label: 'Akte', icon: Paperclip }, { value: 'checklisten', label: 'Checklisten', icon: ListChecks }]} />
+      {verknuepft && (
+        <div className={`mb-4 rounded-2xl px-4 py-3 text-[13px] flex items-start gap-2 ${verknuepft.status === 'entfernt' ? 'bg-black/[0.06] text-[#6E6E73]' : 'bg-[#E8F0FE] text-[#1D4ED8]'}`}>
+          <Handshake size={15} className="shrink-0 mt-0.5" />
+          <span>{verknuepft.status === 'entfernt' ? `Die Beteiligung am Projekt von ${verknuepft.owner_firma_name} wurde beendet. Eure Zeiten, Stundenzettel und Rechnungen bleiben erhalten.` : `Projekt von ${verknuepft.owner_firma_name}${verknuepft.gewerk ? ` · ${verknuepft.gewerk}` : ''}. Aufgaben kommen vom Auftraggeber; Zeiten, Stundenzettel, Rechnungen und Lohn bleiben bei euch.`}</span>
+        </div>
+      )}
+      <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar">
+        <Segmented value={tab} onChange={setTab} options={tabs} />
       </div>
 
       {tab === 'kalender' && (
@@ -277,6 +300,11 @@ export default function ProjektPage() {
 
       {tab === 'akte' && <Akte projectId={project.id} leitung={leitung} />}
       {tab === 'checklisten' && <Checklisten projectId={project.id} leitung={leitung} />}
+      {tab === 'firmen' && <FirmenTab projectId={project.id} isBuero={isBuero} />}
+      {tab === 'aufgaben' && <AufgabenTab projectId={plattformId} />}
+      {tab === 'anwesenheit' && <AnwesenheitTab projectId={project.id} />}
+      {tab === 'nachweise' && <NachweiseTab projectId={project.id} />}
+      {tab === 'freigaben' && <FreigabenTab project={project} />}
 
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}
         entries={selectedDate ? (byDay[selectedDate] || []) : []} lastEntry={lastEntry} recentActivities={recentActivities}

@@ -136,6 +136,15 @@ sich abwählen. Die gewählten Fotos kommen als Anhang „Fotodokumentation“ a
 Technik: `GET /api/dokumente/{id}/bild?max=…` liefert ein verkleinertes JPEG (EXIF-Drehung, HEIC mit `pillow-heif`),
 `GET /api/projekte/{id}/monat` und `GET /api/rechnungen/{id}/daten` enthalten `fotos`, `PUT /api/dokumente/{id}` ändert Tag und Notiz.
 
+## Baustellenplattform: mehrere Firmen an einem Projekt (Branch `plattform`)
+
+Ein Auftraggeber (z. B. Generalunternehmer) führt das Projekt, lädt Subunternehmer über das Firmenverzeichnis oder per E-Mail-Link ein,
+trägt mehrere Projektleiter ein und plant Aufgaben je Tag und Firma. Die Partnerfirma nimmt an, bekommt ein verknüpftes eigenes
+Projekt (Stempeluhr, Stundenzettel, Rechnung an den Auftraggeber wie gewohnt), teilt Aufgaben ihren Leuten zu, meldet Status und Fotos
+und gibt Wochen-Nachweise ausdrücklich frei. Lohndaten, Konten, Personalakten und Rechnungen bleiben immer in der eigenen Firma.
+Oberfläche: „Zusammenarbeit“ (Büro), Projekt-Reiter Firmen / Aufgaben / Anwesenheit / Nachweise bzw. Freigaben, Seite „Aufgaben“ für alle.
+Architektur, Rechtemodell, Datenmodell, Migration und offene Punkte: **`PLATTFORM.md`**.
+
 ## E-Rechnung (XRechnung / ZUGFeRD)
 
 Jede Rechnung lässt sich unter Rechnungen → „E-Rechnung“ als **XRechnung 3.0** (reines XML, Pflicht bei Bund, Ländern,

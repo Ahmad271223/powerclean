@@ -5,6 +5,8 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { Btn, Card } from './components/ui';
 import { LoginPage, RegisterPage, EinladungPage } from './pages/LoginPage';
+import ZusammenarbeitPage, { ProjektEinladungPage } from './pages/ZusammenarbeitPage';
+import MeineAufgabenPage from './pages/MeineAufgabenPage';
 import DashboardPage from './pages/DashboardPage';
 import StempeluhrPage from './pages/StempeluhrPage';
 import ProjektePage from './pages/ProjektePage';
@@ -81,6 +83,7 @@ export default function App() {
             <Route path="/login" element={<Oeffentlich><LoginPage /></Oeffentlich>} />
             <Route path="/registrieren" element={<Oeffentlich><RegisterPage /></Oeffentlich>} />
             <Route path="/einladung/:token" element={<EinladungPage />} />
+            <Route path="/projekteinladung/:token" element={<ProjektEinladungPage />} />
             <Route path="/" element={<Geschuetzt><Start /></Geschuetzt>} />
             <Route path="/stempeluhr" element={<Geschuetzt><StempeluhrPage /></Geschuetzt>} />
             <Route path="/stempeln/:projectId" element={<Geschuetzt><StempeluhrPage /></Geschuetzt>} />
@@ -88,6 +91,8 @@ export default function App() {
             <Route path="/profil" element={<Geschuetzt><ProfilPage /></Geschuetzt>} />
             <Route path="/projekte" element={<Geschuetzt><ProjektePage /></Geschuetzt>} />
             <Route path="/projekte/:projectId" element={<Geschuetzt><ProjektPage /></Geschuetzt>} />
+            <Route path="/aufgaben" element={<Geschuetzt><MeineAufgabenPage /></Geschuetzt>} />
+            <Route path="/zusammenarbeit" element={<Geschuetzt buero><ZusammenarbeitPage /></Geschuetzt>} />
             <Route path="/abwesenheiten" element={<Geschuetzt><AbwesenheitenPage /></Geschuetzt>} />
             <Route path="/kunden" element={<Geschuetzt buero><KundenPage /></Geschuetzt>} />
             <Route path="/mitarbeiter" element={<Geschuetzt buero><MitarbeiterPage /></Geschuetzt>} />

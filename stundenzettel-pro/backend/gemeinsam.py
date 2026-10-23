@@ -28,6 +28,7 @@ PROJEKT_DEFAULTS = {
     "employee_name": "", "employee_ids": [], "hourly_rate": 0, "notes": "", "archived": False, "default_workers": 1,
     "reverse_charge": False, "schedule": "", "budget_hours_month": 0, "budget_warn_percent": 80,
     "total_minutes": 0, "entry_count": 0, "last_activity_at": None,
+    "leiter_ids": [], "verknuepft": None,   # Plattform: Projektleiter der Eigentümerfirma; Verknüpfung mit dem Projekt eines Auftraggebers
 }
 
 # Mitarbeiter sehen keine Bank-/Steuerdaten; Logo und Stempel brauchen sie für den Stundenzettel beim Kunden
@@ -57,14 +58,22 @@ def projekt_sichtbar(user: dict, projekt: dict) -> bool:
     """Büro/Inhaber sehen alles; Mitarbeiter und Vorarbeiter nur zugewiesene Projekte (keine Zuweisung = alle)."""
     if hat_rolle(user, "buero"):
         return True
+    leiter = projekt.get("leiter_ids") or []
+    if user["id"] in leiter:
+        return True
     ids = projekt.get("employee_ids") or []
-    return not ids or user["id"] in ids
+    if ids:
+        return user["id"] in ids
+    return not leiter   # ohne Zuweisung sehen alle – außer das Projekt hat ausdrückliche Projektleitung (Plattform)
 
 
 def projekt_leitung(user: dict, projekt: dict) -> bool:
     """Darf alle Zeiten des Projekts sehen und für Kollegen eintragen: Büro/Inhaber oder zugewiesener Vorarbeiter."""
     if hat_rolle(user, "buero"):
         return True
+    leiter = projekt.get("leiter_ids") or []
+    if leiter:
+        return user["id"] in leiter   # ausdrückliche Projektleitung: nur diese Personen
     return user.get("role") == "vorarbeiter" and projekt_sichtbar(user, projekt)
 
 

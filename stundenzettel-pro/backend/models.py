@@ -6,7 +6,7 @@ import re
 from datetime import date
 from typing import Any, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from zeiten import datum_pruefen, zeit_pruefen
 
@@ -526,3 +526,101 @@ class DokumentIn(BaseModel):
             return v
         datum_pruefen(v)
         return v
+
+
+# ---------------------------------------------------------------- Plattform: Zusammenarbeit mehrerer Firmen
+
+class VerzeichnisIn(BaseModel):
+    """Eintrag im gemeinsamen Firmenverzeichnis (nur freigegebene Felder sind für andere sichtbar)."""
+    sichtbar: bool = False
+    gewerke: list[str] = Field(default_factory=list, max_length=12)
+    beschreibung: Optional[str] = Field(default="", max_length=500)
+    ort: Optional[str] = Field(default="", max_length=120)
+
+    @field_validator("gewerke")
+    @classmethod
+    def _gewerke(cls, v):
+        return [g.strip()[:40] for g in v if g and g.strip()]
+
+
+class LeiterIn(BaseModel):
+    user_id: str
+    funktion: str = Field(default="Projektleitung", max_length=60)
+
+
+class EinladungFirmaIn(BaseModel):
+    """Firma zum Projekt einladen: registrierte Firma per ID (Verzeichnis) oder per E-Mail (auch unregistriert)."""
+    firma_id: Optional[str] = None
+    firma_name: Optional[str] = Field(default="", max_length=160)
+    email: Optional[str] = Field(default="", max_length=120)
+    gewerk: str = Field(default="", max_length=60)
+    rolle: str = Field(default="subunternehmer", pattern="^(subunternehmer|nachunternehmer|dienstleister|lieferant)$")
+    nachricht: Optional[str] = Field(default="", max_length=500)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v):
+        v = (v or "").strip().lower()
+        if v and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", v):
+            raise ValueError("E-Mail-Adresse ungültig")
+        return v
+
+    @model_validator(mode="after")
+    def _ziel(self):
+        if not self.firma_id and not (self.email and (self.firma_name or "").strip()):
+            raise ValueError("Entweder eine registrierte Firma wählen oder Firmenname und E-Mail angeben")
+        return self
+
+
+class BeteiligungAntwortIn(BaseModel):
+    annehmen: bool
+
+
+class TokenIn(BaseModel):
+    token: str = Field(min_length=8, max_length=120)
+
+
+class FreigabeNamenIn(BaseModel):
+    namen: bool = False
+
+
+class AufgabeIn(BaseModel):
+    titel: str = Field(min_length=1, max_length=160)
+    beschreibung: Optional[str] = Field(default="", max_length=2000)
+    gewerk: Optional[str] = Field(default="", max_length=60)
+    firma_id: Optional[str] = None                      # beauftragte Firma (leer = eigene Firma)
+    datum: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    prioritaet: str = Field(default="normal", pattern="^(niedrig|normal|hoch|dringend)$")
+    bereich: Optional[str] = Field(default="", max_length=160)
+    material: Optional[str] = Field(default="", max_length=500)
+    vorarbeiter_user_id: Optional[str] = None
+    mitarbeiter_ids: list[str] = Field(default_factory=list, max_length=50)
+
+
+class AufgabeUpdateIn(BaseModel):
+    titel: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    beschreibung: Optional[str] = Field(default=None, max_length=2000)
+    gewerk: Optional[str] = Field(default=None, max_length=60)
+    firma_id: Optional[str] = None
+    datum: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    prioritaet: Optional[str] = Field(default=None, pattern="^(niedrig|normal|hoch|dringend)$")
+    bereich: Optional[str] = Field(default=None, max_length=160)
+    material: Optional[str] = Field(default=None, max_length=500)
+
+
+class AufgabeStatusIn(BaseModel):
+    status: str = Field(pattern="^(geplant|zugewiesen|in_bearbeitung|blockiert|eingereicht|abgeschlossen|abgenommen)$")
+    kommentar: Optional[str] = Field(default="", max_length=500)
+
+
+class AufgabeZuteilungIn(BaseModel):
+    vorarbeiter_user_id: Optional[str] = None
+    mitarbeiter_ids: list[str] = Field(default_factory=list, max_length=50)
+
+
+class WochenFreigabeIn(BaseModel):
+    week_monday: str

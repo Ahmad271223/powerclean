@@ -184,8 +184,15 @@ async def dokument_hochladen(user_id: str, datei: UploadFile = File(...), katego
 
 
 async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
-    d = await db().documents.find_one({"id": dokument_id, "firma_id": user["firma_id"]}, {"_id": 0})
+    d = await db().documents.find_one({"id": dokument_id}, {"_id": 0})
     if not d:
+        raise HTTPException(404, "Dokument nicht gefunden.")
+    if d["scope"] == "aufgabe":
+        # Aufgabenfotos: Eigentümer-Projektleitung und beauftragte Firma (Rechte kommen aus der Aufgabe, nicht aus der firma_id der Datei)
+        from plattform import aufgabe_laden
+        await aufgabe_laden(user, d["ref_id"])
+        return d
+    if d.get("firma_id") != user["firma_id"]:
         raise HTTPException(404, "Dokument nicht gefunden.")
     if d["scope"] == "user":
         _selbst_oder_buero(user, d["ref_id"])
@@ -234,6 +241,8 @@ async def dokument_aendern(dokument_id: str, body: DokumentIn, user: dict = Depe
 @router.delete("/api/dokumente/{dokument_id}")
 async def dokument_loeschen(dokument_id: str, user: dict = Depends(schreibend("buero"))):
     d = await _dokument_zugriff(user, dokument_id)
+    if d.get("firma_id") != user["firma_id"]:
+        raise HTTPException(403, "Fotos einer anderen Firma kann nur diese Firma löschen.")
     await db().documents.delete_one({"id": dokument_id})
     datei_loeschen(d)
     await protokollieren(user, "dokument.geloescht", d.get("filename", ""), details={"scope": d["scope"], "ref": d["ref_id"]})

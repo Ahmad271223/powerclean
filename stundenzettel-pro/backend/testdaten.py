@@ -64,3 +64,19 @@ ok(c.post("/api/rechnungen/anlegen", json={"project_id": p2["id"], "year": 2026,
 ok(c.post(f"/api/projekte/{p1['id']}/checklisten", json={"name": "Unterhaltsreinigung EG", "items": [{"text": "Böden wischen"}, {"text": "Mülleimer leeren"}, {"text": "Sanitär reinigen"}]}, headers=H))
 ok(c.post(f"/api/projekte/{p1['id']}/kommentare", json={"text": "Schlüssel liegt beim Hausmeister (Herr Kurt)."}, headers=HM))
 print(f"Testdaten angelegt unter {BASIS}. Anmelden als Inhaber ({CHEF_EMAIL}) oder Mitarbeiterin ({MIA_EMAIL}), Passwörter stehen in dieser Datei.")
+
+# ---- Plattform: zweite Firma im Verzeichnis, Einladung zum Sparkassen-Projekt, Aufgabe ----
+r = c.post("/api/auth/registrieren", json={"firma_name": "Elektro Mustermann GmbH", "name": "Erika Mustermann", "email": "chef@elektro-mustermann.de", "password": CHEF_PASSWORT})
+if r.status_code == 200:
+    el = r.json()
+    HE = {"Authorization": f"Bearer {el['token']}"}
+    ok(c.put("/api/firma", json={"city": "Musterstadt", "street": "Werkstraße 7", "zip_code": "12345", "sperre_tage_mitarbeiter": 365}, headers=HE))
+    ok(c.put("/api/firma/verzeichnis", json={"sichtbar": True, "gewerke": ["Elektro"], "beschreibung": "Elektroinstallation für Gewerbe", "ort": "Musterstadt"}, headers=HE))
+    ok(c.post("/api/projekte/" + p1["id"] + "/leiter", json={"user_id": chef["user"]["id"], "funktion": "Hauptprojektleiter"}, headers=H))
+    einladung = ok(c.post("/api/projekte/" + p1["id"] + "/beteiligungen", json={"firma_id": el["firma"]["id"], "gewerk": "Elektro"}, headers=H))["beteiligung"]
+    b = ok(c.post("/api/beteiligungen/" + einladung["id"] + "/antwort", json={"annehmen": True}, headers=HE))["beteiligung"]
+    heute = __import__("datetime").date.today().isoformat()
+    ok(c.post("/api/projekte/" + p1["id"] + "/aufgaben", json={"titel": "Leuchten im Foyer tauschen", "beschreibung": "12 Panels, Leiter mitbringen", "gewerk": "Elektro",
+                                                               "firma_id": el["firma"]["id"], "datum": heute, "start_time": "07:00", "end_time": "11:00", "prioritaet": "hoch", "bereich": "Foyer EG"}, headers=H))
+    ok(c.post("/api/projekte/" + p1["id"] + "/aufgaben", json={"titel": "Treppenhaus Grundreinigung", "datum": heute, "start_time": "06:00", "end_time": "09:00", "bereich": "Treppenhaus A"}, headers=H))
+    print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

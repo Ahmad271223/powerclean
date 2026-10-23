@@ -53,6 +53,17 @@ async def indizes_anlegen(d) -> None:
         ("zeitkonto", [("firma_id", 1), ("user_id", 1), ("date", 1)], {"name": "nutzer_datum"}),
         ("webhooks", [("firma_id", 1), ("active", 1)], {"name": "firma_aktiv"}),
         ("abschluesse", [("firma_id", 1), ("year", 1), ("month", 1)], {"unique": True, "name": "firma_monat"}),
+        # Plattform (Zusammenarbeit mehrerer Firmen)
+        ("firmen", [("verzeichnis.sichtbar", 1)], {"name": "verzeichnis"}),
+        ("beteiligungen", [("project_id", 1), ("firma_id", 1), ("status", 1)], {"name": "projekt_firma"}),
+        ("beteiligungen", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
+        ("beteiligungen", [("token", 1)], {"name": "token", "sparse": True}),
+        ("projekt_leiter", [("project_id", 1), ("user_id", 1)], {"name": "projekt_nutzer"}),
+        ("aufgaben", [("project_id", 1), ("datum", 1)], {"name": "projekt_datum"}),
+        ("aufgaben", [("firma_id", 1), ("status", 1), ("datum", 1)], {"name": "firma_status_datum"}),
+        ("freigaben", [("project_id", 1), ("week_monday", -1)], {"name": "projekt_woche"}),
+        ("freigaben", [("beteiligung_id", 1), ("week_monday", 1)], {"name": "beteiligung_woche"}),
+        ("benachrichtigungen", [("firma_id", 1), ("created_at", -1)], {"name": "firma_zeit"}),
     ]
     for sammlung, schluessel, optionen in aufgaben:
         try:
