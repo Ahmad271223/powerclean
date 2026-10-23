@@ -23,7 +23,7 @@ const emptyForm = (last, defaultWorkers = 1, userId = '') => ({
  * gesperrt = Text, warum der Tag nicht bearbeitet werden darf (Monat abgeschlossen, Rechnung bezahlt).
  */
 export default function EntryDialog({ open, onOpenChange, projectId, dateKey, entries, lastEntry, recentActivities = [], defaultWorkers = 1,
-  mitarbeiter = [], leistungen = [], kannPersonen = false, gesperrt = '', feiertag = '', onChanged, onWeekPdf }) {
+  mitarbeiter = [], leistungen = [], kannPersonen = false, gesperrt = '', feiertag = '', fotoBereich = null, onChanged, onWeekPdf }) {
   const { user } = useAuth();
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm(null, defaultWorkers));
@@ -107,6 +107,8 @@ export default function EntryDialog({ open, onOpenChange, projectId, dateKey, en
             })}
           </ul>
         )}
+
+        {fotoBereich}
 
         {!showForm ? (
           <div className="flex flex-wrap gap-2">

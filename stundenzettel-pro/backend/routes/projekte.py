@@ -10,6 +10,7 @@ from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, rolle_noet
 from dateien import KATEGORIEN_PROJEKT, datei_loeschen, datei_speichern
 from db import db
 from feiertage import feiertage_set
+from gemeinsam import projekt_fotos
 from gemeinsam import (budget_info, eintrag_anreichern, firma_oeffentlich, kunde_laden, kundenadresse, neue_id, nutzernamen,
                        projekt_laden, projekt_leitung, projekt_normalisieren, projekt_sichtbar)
 from models import ChecklisteIn, ChecklisteUpdateIn, KommentarIn, ProjektIn, UnterschriftIn
@@ -146,7 +147,8 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     jahre = {int(von[:4]), int(bis[:4])}
     frei = feiertage_set(sorted(jahre), firma.get("bundesland") or "")
     leistungen = [{"id": s["id"], "name": s["name"], "hourly_rate": s.get("hourly_rate") or 0} async for s in db().services.find({"firma_id": user["firma_id"], "active": True}, {"_id": 0}).sort("sort", 1)]
-    return {"firma": firma_oeffentlich(firma, user), "projekt": p, "eintraege": eintraege, "rechnung": rechnung,
+    fotos = await projekt_fotos(user["firma_id"], project_id, von, bis)
+    return {"firma": firma_oeffentlich(firma, user), "projekt": p, "eintraege": eintraege, "rechnung": rechnung, "fotos": fotos,
             "unterschriften": unterschriften, "mitarbeiter": mitarbeiter, "raster": {"von": von, "bis": bis},
             "leitung": leitung, "budget": budget_info(p, monatsminuten) if leitung else None,
             "feiertage": {k: v for k, v in frei.items() if von <= k <= bis}, "leistungen": leistungen,

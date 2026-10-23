@@ -146,3 +146,15 @@ def budget_info(projekt: dict, verbraucht_minuten: int) -> Optional[dict]:
 
 def ohne_id(doc: Optional[dict]) -> Optional[dict]:
     return None if doc is None else {k: v for k, v in doc.items() if k != "_id"}
+
+
+async def projekt_fotos(firma_id: str, project_id: str, von: str, bis: str) -> list[dict]:
+    """Fotos der Projektakte, deren Arbeitstag (date, sonst Upload-Tag) im Zeitraum liegt – für Kalender und PDF-Anhang."""
+    fotos = []
+    async for d in db().documents.find({"firma_id": firma_id, "scope": "project", "ref_id": project_id, "mime": {"$regex": "^image/"}}, {"_id": 0, "path": 0}):
+        tag = (d.get("date") or (d.get("created_at") or "")[:10])
+        if von <= tag <= bis:
+            d["tag"] = tag
+            fotos.append(d)
+    fotos.sort(key=lambda d: (d["tag"], d.get("created_at") or ""))
+    return fotos

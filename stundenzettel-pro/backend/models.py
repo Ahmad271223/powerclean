@@ -2,6 +2,8 @@
 damit PDF-Erzeugung und Formulare dort wiederverwendet werden können."""
 from __future__ import annotations
 
+import re
+from datetime import date
 from typing import Any, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -45,6 +47,30 @@ class FirmaLoeschenIn(BaseModel):
     password: str = Field(max_length=200)
 
 
+LOHNARTEN = ("normal", "ueberstunden", "nacht", "sonntag", "feiertag", "urlaub", "krank")
+
+
+class LohnExportIn(BaseModel):
+    """Einstellungen für die LODAS-Importdatei: Berater-/Mandantennummer und die Lohnarten-Nummern des Steuerberaters."""
+    berater_nr: Optional[str] = Field(default="", max_length=10)
+    mandanten_nr: Optional[str] = Field(default="", max_length=10)
+    bs_nr: int = Field(default=1, ge=1, le=99)
+    lohnarten: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("lohnarten")
+    @classmethod
+    def _lohnarten(cls, v):
+        aus = {}
+        for k, wert in (v or {}).items():
+            if k not in LOHNARTEN:
+                raise ValueError(f"Unbekannte Lohnart-Kategorie: {k}")
+            wert = str(wert or "").strip()
+            if len(wert) > 10:
+                raise ValueError("Lohnart-Nummer zu lang")
+            aus[k] = wert
+        return aus
+
+
 class FirmaIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
     owner: Optional[str] = Field(default=None, max_length=120)
@@ -82,6 +108,8 @@ class FirmaIn(BaseModel):
     arbzg_pruefung: Optional[bool] = None
     sperre_tage_mitarbeiter: Optional[int] = Field(default=None, ge=0, le=365)
     workdays: Optional[list[int]] = Field(default=None, max_length=7)
+    country: Optional[str] = Field(default=None, min_length=2, max_length=2)   # Land des Unternehmens (ISO), Standard DE
+    lohn_export: Optional["LohnExportIn"] = None                                # DATEV/LODAS-Einstellungen für die Lohnvorbereitung
 
     @field_validator("logo", "stamp")
     @classmethod
@@ -163,6 +191,11 @@ class KundeIn(BaseModel):
     phone: Optional[str] = Field(default="", max_length=60)
     notes: Optional[str] = Field(default="", max_length=2000)
     reverse_charge: bool = False
+    # E-Rechnung (XRechnung/ZUGFeRD): Leitweg-ID für öffentliche Auftraggeber, Kundennummer, USt-IdNr. des Kunden, Land (ISO 3166-1)
+    customer_number: Optional[str] = Field(default="", max_length=40)
+    leitweg_id: Optional[str] = Field(default="", max_length=60)
+    vat_id: Optional[str] = Field(default="", max_length=40)
+    country: Optional[str] = Field(default="DE", min_length=2, max_length=2)
 
 
 class ProjektIn(BaseModel):
@@ -405,3 +438,91 @@ class PlanIn(BaseModel):
 
 class ApiTokenIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+
+
+def _iban_pruefen(iban: str) -> str:
+    iban = re.sub(r"[\s-]", "", iban or "").upper()
+    if not iban:
+        return ""
+    if not re.fullmatch(r"[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}", iban):
+        raise ValueError("IBAN hat kein gültiges Format")
+    umgestellt = iban[4:] + iban[:4]
+    zahl = "".join(str(int(c, 36)) for c in umgestellt)
+    if int(zahl) % 97 != 1:
+        raise ValueError("IBAN-Prüfziffer stimmt nicht")
+    return iban
+
+
+class LohndatenIn(BaseModel):
+    """Daten, die Lohnbüro/Steuerberater für die Abrechnung brauchen. Die App rechnet keinen Lohn, sie sammelt und
+    exportiert. Steuer-ID, SV-Nummer und IBAN werden verschlüsselt gespeichert."""
+    birth_date: Optional[str] = None
+    street: Optional[str] = Field(default=None, max_length=200)
+    zip_code: Optional[str] = Field(default=None, max_length=20)
+    city: Optional[str] = Field(default=None, max_length=120)
+    tax_id: Optional[str] = Field(default=None, max_length=20)              # Steuer-ID (11 Ziffern)
+    tax_class: Optional[str] = Field(default=None, pattern="^(|1|2|3|4|5|6)$")
+    church_tax: Optional[bool] = None
+    sv_number: Optional[str] = Field(default=None, max_length=20)           # Sozialversicherungsnummer
+    health_insurance: Optional[str] = Field(default=None, max_length=120)
+    employment_type: Optional[str] = Field(default=None, pattern="^(|vollzeit|teilzeit|minijob|kurzfristig|werkstudent|azubi|sonstiges)$")
+    hourly_wage: Optional[float] = Field(default=None, ge=0, le=1000)
+    monthly_salary: Optional[float] = Field(default=None, ge=0, le=100000)
+    entry_date: Optional[str] = None
+    exit_date: Optional[str] = None
+    iban_salary: Optional[str] = Field(default=None, max_length=40)
+    notes_payroll: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("birth_date", "entry_date", "exit_date")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return v
+        try:
+            d = date.fromisoformat(str(v)[:10])
+        except ValueError as e:
+            raise ValueError("Datum im Format JJJJ-MM-TT angeben") from e
+        if not 1900 <= d.year <= 2100:
+            raise ValueError("Datum unplausibel")
+        return d.isoformat()
+
+    @field_validator("tax_id")
+    @classmethod
+    def _steuer_id(cls, v):
+        if v in (None, ""):
+            return v
+        ziffern = re.sub(r"[^0-9]", "", v)
+        if len(ziffern) != 11 or ziffern[0] == "0":
+            raise ValueError("Die Steuer-ID hat 11 Ziffern und beginnt nicht mit 0")
+        return ziffern
+
+    @field_validator("sv_number")
+    @classmethod
+    def _sv(cls, v):
+        if v in (None, ""):
+            return v
+        sv = re.sub(r"\s", "", v).upper()
+        if not re.fullmatch(r"[0-9]{8}[A-Z][0-9]{3}", sv):
+            raise ValueError("Die SV-Nummer hat 12 Zeichen, z. B. 12 345678 A 123")
+        return sv
+
+    @field_validator("iban_salary")
+    @classmethod
+    def _iban(cls, v):
+        if v in (None, ""):
+            return v
+        return _iban_pruefen(v)
+
+
+class DokumentIn(BaseModel):
+    """Datum (Arbeitstag) und Notiz einer Datei der Projektakte ändern."""
+    date: Optional[str] = None
+    note: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("date")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return v
+        datum_pruefen(v)
+        return v

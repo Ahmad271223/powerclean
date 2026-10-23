@@ -21,6 +21,7 @@ export default function MitarbeiterDetailPage() {
   const navigate = useNavigate();
   const [m, setM] = useState(null);
   const [tab, setTab] = useState('daten');
+  const { isBuero } = useAuth();
   const laden = useCallback(() => api.get(`/api/mitarbeiter/${userId}`).then((r) => setM(r.mitarbeiter)).catch((err) => { toast.error(err.message); navigate('/mitarbeiter'); }), [userId, navigate]);
   useEffect(() => { laden(); }, [laden]);
 
@@ -34,13 +35,14 @@ export default function MitarbeiterDetailPage() {
             <div className="min-w-0"><div className="font-semibold text-[20px] leading-tight truncate">{m.name}</div><div className="text-[12px] text-[#6E6E73]">{m.rolle_name}{m.personalnummer ? ` · Nr. ${m.personalnummer}` : ''} · {m.email}</div></div>
           </div>
           <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar">
-            <Segmented value={tab} onChange={setTab} options={[{ value: 'daten', label: 'Mitarbeiterdaten' }, { value: 'konto', label: 'Konten' }, { value: 'abwesenheiten', label: 'Abwesenheiten' }, { value: 'stunden', label: 'Stundenübersicht' }, { value: 'akte', label: 'Personalakte' }]} />
+            <Segmented value={tab} onChange={setTab} options={[{ value: 'daten', label: 'Mitarbeiterdaten' }, { value: 'konto', label: 'Konten' }, { value: 'abwesenheiten', label: 'Abwesenheiten' }, { value: 'stunden', label: 'Stundenübersicht' }, { value: 'akte', label: 'Personalakte' }, ...(isBuero ? [{ value: 'lohn', label: 'Lohndaten' }] : [])]} />
           </div>
           {tab === 'daten' && <Daten m={m} onSaved={laden} />}
           {tab === 'konto' && <Konten m={m} />}
           {tab === 'abwesenheiten' && <Abwesenheiten m={m} />}
           {tab === 'stunden' && <Stunden m={m} />}
           {tab === 'akte' && <Personalakte userId={m.id} />}
+          {tab === 'lohn' && isBuero && <Lohndaten m={m} />}
         </>
       )}
     </Layout>
@@ -301,6 +303,64 @@ export function Personalakte({ userId, readOnly = false }) {
           </div>
         );
       })}
+    </Card>
+  );
+}
+
+const BESCHAEFTIGUNG = [['', '–'], ['vollzeit', 'Vollzeit'], ['teilzeit', 'Teilzeit'], ['minijob', 'Minijob'], ['kurzfristig', 'Kurzfristig beschäftigt'], ['werkstudent', 'Werkstudent'], ['azubi', 'Auszubildende/r'], ['sonstiges', 'Sonstiges']];
+const LOHN_LEER = { birth_date: '', street: '', zip_code: '', city: '', tax_id: '', tax_class: '', church_tax: false, sv_number: '', health_insurance: '', employment_type: '', hourly_wage: '', monthly_salary: '', entry_date: '', exit_date: '', iban_salary: '', notes_payroll: '' };
+const zahl = (v) => (v === '' || v === null || v === undefined ? null : (parseFloat(String(v).replace(',', '.')) || 0));
+
+/** Personal-, Steuer- und SV-Daten für das Lohnbüro. Die App rechnet keinen Lohn; Steuer-ID, SV-Nummer und IBAN liegen verschlüsselt. */
+function Lohndaten({ m }) {
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.get(`/api/mitarbeiter/${m.id}/lohndaten`).then((r) => setForm({ ...LOHN_LEER, ...Object.fromEntries(Object.entries(r.lohndaten || {}).filter(([k, v]) => k in LOHN_LEER && v !== null && v !== undefined)) })).catch((err) => toast.error(err.message));
+  }, [m.id]);
+  const set = (k) => (e) => { const v = e.target.value; setForm((f) => ({ ...f, [k]: v })); };
+  const speichern = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.put(`/api/mitarbeiter/${m.id}/lohndaten`, { ...form, hourly_wage: zahl(form.hourly_wage), monthly_salary: zahl(form.monthly_salary), birth_date: form.birth_date || null, entry_date: form.entry_date || null, exit_date: form.exit_date || null });
+      toast.success('Lohndaten gespeichert');
+    } catch (err) { toast.error(err.message); } finally { setBusy(false); }
+  };
+  if (!form) return <Ladeanzeige />;
+  const Gruppe = ({ titel, children }) => <div><span className="block text-[13px] font-medium text-[#6E6E73] mb-2">{titel}</span><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div></div>;
+  return (
+    <Card className="p-5 sm:p-7 max-w-3xl">
+      <form onSubmit={speichern} className="space-y-5">
+        <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3 text-[13px] text-[#6E6E73]">Diese Angaben braucht das Lohnbüro bzw. der Steuerberater (Export unter Exporte → Lohnvorbereitung). Die App rechnet keinen Lohn. Steuer-ID, SV-Nummer und IBAN werden verschlüsselt gespeichert; jeder Zugriff steht im Protokoll.</div>
+        <Gruppe titel="Person">
+          <Field label="Geburtsdatum"><TextInput type="date" value={form.birth_date} onChange={set('birth_date')} /></Field>
+          <Field label="Straße und Hausnummer"><TextInput value={form.street} onChange={set('street')} /></Field>
+          <Field label="PLZ"><TextInput value={form.zip_code} onChange={set('zip_code')} inputMode="numeric" /></Field>
+          <Field label="Ort"><TextInput value={form.city} onChange={set('city')} /></Field>
+        </Gruppe>
+        <Gruppe titel="Steuer">
+          <Field label="Steuer-ID (11 Ziffern)"><TextInput value={form.tax_id} onChange={set('tax_id')} inputMode="numeric" placeholder="12 345 678 901" /></Field>
+          <Field label="Steuerklasse"><Select value={form.tax_class} onChange={set('tax_class')} className="w-full"><option value="">–</option>{['1', '2', '3', '4', '5', '6'].map((k) => <option key={k} value={k}>{k}</option>)}</Select></Field>
+          <div className="sm:col-span-2 rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={!!form.church_tax} onChange={(v) => setForm((f) => ({ ...f, church_tax: v }))} label="Kirchensteuerpflichtig" /></div>
+        </Gruppe>
+        <Gruppe titel="Sozialversicherung">
+          <Field label="SV-Nummer"><TextInput value={form.sv_number} onChange={set('sv_number')} placeholder="12 345678 A 123" /></Field>
+          <Field label="Krankenkasse"><TextInput value={form.health_insurance} onChange={set('health_insurance')} /></Field>
+        </Gruppe>
+        <Gruppe titel="Beschäftigung">
+          <Field label="Art"><Select value={form.employment_type} onChange={set('employment_type')} className="w-full">{BESCHAEFTIGUNG.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
+          <Field label="Stundenlohn (€ brutto)"><TextInput value={form.hourly_wage ?? ''} onChange={set('hourly_wage')} inputMode="decimal" /></Field>
+          <Field label="Eintritt"><TextInput type="date" value={form.entry_date} onChange={set('entry_date')} /></Field>
+          <Field label="Austritt"><TextInput type="date" value={form.exit_date} onChange={set('exit_date')} /></Field>
+          <Field label="Monatsgehalt (€ brutto, falls fest)"><TextInput value={form.monthly_salary ?? ''} onChange={set('monthly_salary')} inputMode="decimal" /></Field>
+        </Gruppe>
+        <Gruppe titel="Auszahlung">
+          <Field label="IBAN (Gehaltskonto)" className="sm:col-span-2"><TextInput value={form.iban_salary} onChange={set('iban_salary')} placeholder="DE…" /></Field>
+          <Field label="Hinweise fürs Lohnbüro" className="sm:col-span-2"><TextArea rows={2} value={form.notes_payroll} onChange={set('notes_payroll')} /></Field>
+        </Gruppe>
+        <div className="flex justify-end"><Btn type="submit" loading={busy}>Speichern</Btn></div>
+      </form>
     </Card>
   );
 }

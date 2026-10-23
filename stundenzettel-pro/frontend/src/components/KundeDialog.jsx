@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { Sheet, Btn, Field, TextInput, TextArea, Toggle } from './ui';
 
-const EMPTY = { name: '', contact: '', street: '', zip_code: '', city: '', email: '', phone: '', notes: '', reverse_charge: false };
+const EMPTY = { name: '', contact: '', street: '', zip_code: '', city: '', email: '', phone: '', notes: '', reverse_charge: false, customer_number: '', leitweg_id: '', vat_id: '', country: 'DE' };
 
 export default function KundeDialog({ open, onOpenChange, kunde, onSaved, onDeleted }) {
   const [form, setForm] = useState(EMPTY);
@@ -43,6 +43,15 @@ export default function KundeDialog({ open, onOpenChange, kunde, onSaved, onDele
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="E-Mail"><TextInput type="email" value={form.email} onChange={set('email')} /></Field>
           <Field label="Telefon"><TextInput type="tel" value={form.phone} onChange={set('phone')} /></Field>
+        </div>
+        <div className="rounded-2xl bg-[#F5F5F7] p-4 space-y-3">
+          <div className="text-[12px] font-semibold uppercase tracking-wide text-[#6E6E73]">E-Rechnung (XRechnung / ZUGFeRD)</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Leitweg-ID" hint="Nur bei Behörden, Kommunen, Schulen – steht im Auftrag."><TextInput value={form.leitweg_id} onChange={set('leitweg_id')} placeholder="z. B. 05111-12345-67" /></Field>
+            <Field label="Kundennummer (eigene)"><TextInput value={form.customer_number} onChange={set('customer_number')} /></Field>
+            <Field label="USt-IdNr. des Kunden"><TextInput value={form.vat_id} onChange={set('vat_id')} placeholder="DE…" /></Field>
+            <Field label="Land (ISO-Kürzel)"><TextInput value={form.country} onChange={set('country')} maxLength={2} /></Field>
+          </div>
         </div>
         <div className="rounded-2xl bg-[#F5F5F7] px-4">
           <Toggle checked={!!form.reverse_charge} onChange={(v) => setForm((f) => ({ ...f, reverse_charge: v }))} label="Rechnungen ohne Umsatzsteuer (§ 13b UStG)" hint="Der Kunde erbringt selbst Gebäudereinigungsleistungen (Subunternehmer-Verhältnis)." />

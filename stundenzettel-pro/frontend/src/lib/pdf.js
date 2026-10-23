@@ -418,26 +418,63 @@ export function tabellePdf(company, title, subtitle, head, rows, filename, hinwe
 }
 
 // ---------- öffentliche API ----------
+/** Anhang „Fotodokumentation“: zwei Spalten, bis zu sechs Fotos je Seite, darunter Datum, Uhrzeit, Name und Notiz. */
+function photoPages(doc, project, company, logo, subtitle, photos) {
+  if (!photos?.length) return;
+  const colW = (CONTENT_W - 6) / 2;
+  const imgMaxH = 62;
+  const cellH = imgMaxH + 14;
+  let y = 0;
+  let col = 0;
+  const neueSeite = () => {
+    doc.addPage();
+    y = header(doc, company, logo, 'Fotodokumentation', subtitle);
+    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GREY);
+    doc.text([project.name, project.customer_name, project.address].filter(Boolean).join(' · ').slice(0, 140), M, y);
+    y += 6;
+    col = 0;
+  };
+  neueSeite();
+  photos.forEach((p) => {
+    if (col === 0 && y + cellH > PAGE_H - 18) neueSeite();
+    const x = M + col * (colW + 6);
+    const ratio = p.w && p.h ? p.w / p.h : 4 / 3;
+    let w = colW;
+    let h = w / ratio;
+    if (h > imgMaxH) { h = imgMaxH; w = h * ratio; }
+    try { doc.addImage(p.dataUrl, 'JPEG', x + (colW - w) / 2, y, w, h); } catch { doc.setDrawColor(...BORDER).setLineWidth(0.2).rect(x, y, colW, imgMaxH); }
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...BLACK);
+    doc.text([p.tag ? fmtDate(fromKey(p.tag)) : '', p.zeit, p.uploaded_by_name].filter(Boolean).join(' · '), x, y + imgMaxH + 4.5);
+    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...GREY);
+    const note = doc.splitTextToSize(p.note || p.filename || '', colW).slice(0, 2);
+    if (note.length) doc.text(note, x, y + imgMaxH + 8.5);
+    col += 1;
+    if (col === 2) { col = 0; y += cellH + 3; }
+  });
+}
+
 const output = (doc, filename) => ({ blob: doc.output('blob'), filename });
 
-export function weekPdf(project, company, monday, entries, signatures = {}) {
+export function weekPdf(project, company, monday, entries, signatures = {}, photos = []) {
   const logo = logoFor(company);
   const { week, year } = isoWeek(monday);
   const doc = newDoc(`Stundenzettel KW ${week} ${year} – ${project.name}`, company);
   weekSheet(doc, project, company, logo, monday, entries, signatures[toKey(monday)]);
+  photoPages(doc, project, company, logo, `KW ${week} ${year} · ${project.name}`, photos);
   footer(doc, company);
   return output(doc, `Stundenzettel_${safe(project.name)}_KW${String(week).padStart(2, '0')}_${year}.pdf`);
 }
 
-export function invoicePdf(project, company, year, month0, entries, invoice) {
+export function invoicePdf(project, company, year, month0, entries, invoice, photos = []) {
   const logo = logoFor(company);
   const doc = newDoc(`Rechnung ${invoice.number}`, company);
   invoicePage(doc, project, company, logo, year, month0, entries, invoice);
+  photoPages(doc, project, company, logo, `Anlage zur Rechnung ${invoice.number}`, photos);
   footer(doc, company);
   return output(doc, `Rechnung_${invoice.number}_${safe(project.name)}.pdf`);
 }
 
-export function monthPdf(project, company, year, month0, allEntries, invoice, signatures = {}) {
+export function monthPdf(project, company, year, month0, allEntries, invoice, signatures = {}, photos = []) {
   const logo = logoFor(company);
   const doc = newDoc(`Stundenzettel & Rechnung ${MONTHS_DE[month0]} ${year} – ${project.name}`, company);
   const firstK = toKey(new Date(year, month0, 1));
@@ -452,6 +489,7 @@ export function monthPdf(project, company, year, month0, allEntries, invoice, si
   doc.addPage();
   monthOverview(doc, project, company, logo, year, month0, monthEntries);
   if (invoice) { doc.addPage(); invoicePage(doc, project, company, logo, year, month0, monthEntries, invoice); }
+  photoPages(doc, project, company, logo, `${MONTHS_DE[month0]} ${year} · ${project.name}`, photos);
   footer(doc, company);
   return output(doc, `Monat_${year}-${String(month0 + 1).padStart(2, '0')}_${safe(project.name)}.pdf`);
 }

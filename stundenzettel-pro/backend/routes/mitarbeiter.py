@@ -4,15 +4,17 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 import config
 from auth import aktueller_nutzer, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig, schreibend
-from dateien import KATEGORIEN_PERSONAL, KATEGORIEN_PROJEKT, datei_loeschen, datei_speichern
+from dateien import KATEGORIEN_PERSONAL, KATEGORIEN_PROJEKT, bild_verkleinern, datei_loeschen, datei_speichern
 from db import db
 from gemeinsam import neue_id
-from models import MitarbeiterIn, MitarbeiterUpdateIn
+from models import DokumentIn, LohndatenIn, MitarbeiterIn, MitarbeiterUpdateIn
 from protokoll import protokollieren
+from geheim import verschluesseln
+from lohn import GEHEIM, lohndaten_lesen
 from routes.auth_routes import einladungs_token
 from zeiten import eintrag_minuten, tage_zwischen
 
@@ -201,6 +203,34 @@ async def dokument_datei(dokument_id: str, user: dict = Depends(aktueller_nutzer
     return FileResponse(d["path"], media_type=d.get("mime") or "application/octet-stream", filename=d.get("filename") or "datei")
 
 
+@router.get("/api/dokumente/{dokument_id}/bild")
+async def dokument_bild(dokument_id: str, max: int = Query(1400, ge=100, le=3000), user: dict = Depends(aktueller_nutzer)):
+    """Verkleinertes JPEG eines Fotos für Vorschau und PDF-Anhang (EXIF-Drehung berücksichtigt)."""
+    d = await _dokument_zugriff(user, dokument_id)
+    if not (d.get("mime") or "").startswith("image/"):
+        raise HTTPException(400, "Diese Datei ist kein Bild.")
+    try:
+        daten = bild_verkleinern(d["path"], max)
+    except Exception as exc:  # noqa: BLE001 – defekte oder nicht lesbare Bilder (z. B. HEIC ohne pillow-heif)
+        raise HTTPException(415, "Bild kann nicht gelesen werden – bitte als JPEG oder PNG hochladen.") from exc
+    return Response(content=daten, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.put("/api/dokumente/{dokument_id}")
+async def dokument_aendern(dokument_id: str, body: DokumentIn, user: dict = Depends(schreibend("mitarbeiter"))):
+    """Arbeitstag oder Notiz eines Fotos ändern (eigene Fotos, Büro alle)."""
+    d = await _dokument_zugriff(user, dokument_id)
+    if d.get("uploaded_by") != user["id"] and not hat_rolle(user, "buero"):
+        raise HTTPException(403, "Nur eigene Fotos lassen sich ändern.")
+    aenderung = body.model_dump(exclude_unset=True)
+    if not aenderung:
+        return {"dokument": d}
+    aenderung["updated_at"] = jetzt_iso()
+    await db().documents.update_one({"id": dokument_id}, {"$set": aenderung})
+    d.update(aenderung)
+    return {"dokument": d}
+
+
 @router.delete("/api/dokumente/{dokument_id}")
 async def dokument_loeschen(dokument_id: str, user: dict = Depends(schreibend("buero"))):
     d = await _dokument_zugriff(user, dokument_id)
@@ -213,3 +243,29 @@ async def dokument_loeschen(dokument_id: str, user: dict = Depends(schreibend("b
 @router.get("/api/dokumente/kategorien")
 async def kategorien(user: dict = Depends(aktueller_nutzer)):
     return {"personal": KATEGORIEN_PERSONAL, "projekt": KATEGORIEN_PROJEKT}
+
+
+# ---------- Lohndaten (Personal-, Steuer-, SV-Daten für Lohnbüro/Steuerberater) ----------
+
+@router.get("/api/mitarbeiter/{user_id}/lohndaten")
+async def lohndaten(user_id: str, user: dict = Depends(aktueller_nutzer)):
+    """Eigene Lohndaten darf jeder sehen, fremde nur Büro/Inhaber (Zugriff wird protokolliert)."""
+    _selbst_oder_buero(user, user_id)
+    u = await _laden(user, user_id)
+    if user["id"] != user_id:
+        await protokollieren(user, "mitarbeiter.lohndaten_gelesen", u.get("name", ""))
+    return {"lohndaten": lohndaten_lesen(u)}
+
+
+@router.put("/api/mitarbeiter/{user_id}/lohndaten")
+async def lohndaten_aendern(user_id: str, body: LohndatenIn, user: dict = Depends(schreibend("buero"))):
+    u = await _laden(user, user_id)
+    aenderung = body.model_dump(exclude_unset=True)
+    if not aenderung:
+        return {"lohndaten": lohndaten_lesen(u)}
+    setzen = {f"lohndaten.{k}": (verschluesseln(v) if k in GEHEIM else v) for k, v in aenderung.items()}
+    setzen["lohndaten.updated_at"] = jetzt_iso()
+    await db().users.update_one({"id": user_id}, {"$set": setzen})
+    # Nur die Feldnamen ins Protokoll, nie die Werte (Steuer-ID, SV-Nummer, IBAN)
+    await protokollieren(user, "mitarbeiter.lohndaten", u.get("name", ""), details={"felder": sorted(aenderung)})
+    return {"lohndaten": lohndaten_lesen(await _laden(user, user_id))}

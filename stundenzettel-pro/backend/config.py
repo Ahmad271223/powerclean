@@ -42,7 +42,9 @@ APPLE_TEAM_ID = env("APPLE_TEAM_ID", "")
 
 # Lizenz
 TEST_TAGE = int(env("TEST_TAGE", "14"))
-ADMIN_TOKEN = env("ADMIN_TOKEN", "")  # Betreiber-Schlüssel zum Freischalten von Firmen (POST /api/admin/plan)
+ADMIN_TOKEN = env("ADMIN_TOKEN", "")
+# Fernet-Schluessel fuer verschluesselte Personaldaten (Steuer-ID, SV-Nummer, IBAN); leer = aus JWT_SECRET abgeleitet (nur Entwicklung)
+DATEN_SCHLUESSEL = env("DATEN_SCHLUESSEL", "")  # Betreiber-Schlüssel zum Freischalten von Firmen (POST /api/admin/plan)
 
 # Zeitzone für die Stempeluhr (Datum/Uhrzeit des Eintrags)
 ZEITZONE = env("ZEITZONE", "Europe/Berlin")

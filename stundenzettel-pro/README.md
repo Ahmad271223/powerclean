@@ -126,6 +126,37 @@ curl -X POST https://pro.deine-domain.de/api/admin/plan -H "X-Admin-Token: $ADMI
 curl https://pro.deine-domain.de/api/admin/firmen -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
+## Fotos am Arbeitstag und in der PDF
+
+Fotos (Vorher/Nachher, Schäden, Leistungsnachweis) hängen am Arbeitstag: Im Projektkalender zeigt der Tag ein Kamera-Zeichen
+mit Anzahl, Antippen öffnet den Tag mit Zeiten und Fotos; dort lassen sich Fotos aufnehmen oder hochladen (Datum des Tages,
+optionale Notiz), eigene Fotos löschen, Büro alle. In der Projektakte wird beim Hochladen der Arbeitstag mitgegeben.
+Vor jedem Wochen-, Monats- oder Rechnungs-PDF fragt die App, ob Fotos mit sollen: alle sind vorausgewählt, einzelne lassen
+sich abwählen. Die gewählten Fotos kommen als Anhang „Fotodokumentation“ ans Ende (Datum, Uhrzeit, Name, Notiz, sechs je Seite).
+Technik: `GET /api/dokumente/{id}/bild?max=…` liefert ein verkleinertes JPEG (EXIF-Drehung, HEIC mit `pillow-heif`),
+`GET /api/projekte/{id}/monat` und `GET /api/rechnungen/{id}/daten` enthalten `fotos`, `PUT /api/dokumente/{id}` ändert Tag und Notiz.
+
+## E-Rechnung (XRechnung / ZUGFeRD)
+
+Jede Rechnung lässt sich unter Rechnungen → „E-Rechnung“ als **XRechnung 3.0** (reines XML, Pflicht bei Bund, Ländern,
+Kommunen) oder als **ZUGFeRD 2.x / Factur-X, Profil EN 16931** (PDF/A-3 mit eingebetteter `factur-x.xml`, für Firmenkunden)
+herunterladen. Vorher zeigt die App in Klartext, was noch fehlt (Leitweg-ID des Kunden, IBAN, Anschrift, E-Mail …).
+Pflicht zur Ausstellung: ab 2027 bei über 800.000 € Vorjahresumsatz, ab 2028 für alle (Kleinbeträge bis 250 € ausgenommen).
+Technik: `backend/erechnung.py` (UN/CEFACT-CII-XML, Prüfung, serverseitiges Rechnungs-PDF mit eingebetteter Schrift),
+`backend/pdfbasis.py` (PDF/A-3 mit XMP, Factur-X-Erweiterungsschema, sRGB-OutputIntent). § 13b-Rechnungen tragen Kategorie AE
+(VATEX-EU-AE), Kleinunternehmer Kategorie E. Die XML wird in den Tests gegen das EN-16931-Schema geprüft.
+Kundendaten dafür: Leitweg-ID, Kundennummer, USt-IdNr., Land (Kunde bearbeiten → E-Rechnung).
+
+## Lohnvorbereitung für Steuerberater / DATEV (keine Lohnabrechnung)
+
+Die App rechnet bewusst keinen Lohn (Steuer- und SV-Regeln ändern sich jährlich). Sie stellt alles zusammen, was das Lohnbüro
+braucht, unter Exporte → Lohnvorbereitung: je Mitarbeiter und Monat Stunden gesamt, Nacht (20–6 Uhr), Sonntag, Feiertag,
+Überstunden (Saldo), Urlaubs-, Krank- und sonstige Tage, Resturlaub – als CSV, als **LODAS-Importdatei** (Lohnarten-Nummern und
+Berater-/Mandantennummer unter „DATEV-Einstellungen“, vom Steuerberater vorgegeben), als PDF zum Abzeichnen und einmalig als
+Stammdaten-CSV. Personal-, Steuer- und SV-Daten pflegt das Büro unter Mitarbeiter → Lohndaten; Steuer-ID, SV-Nummer und IBAN
+liegen verschlüsselt (`DATEN_SCHLUESSEL` in der `.env`, erzeugen mit
+`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`), jeder Zugriff und Export steht im Protokoll.
+
 ## Play Store und App Store
 
 Native Hülle mit Capacitor 8 in `frontend/android` und `frontend/ios`, Workflow `.github/workflows/stundenzettel-pro-mobile.yml`

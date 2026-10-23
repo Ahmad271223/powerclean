@@ -68,6 +68,14 @@ export async function download(path, filename) {
   downloadBlob(blob, filename || (m ? m[1] : 'datei'));
 }
 
+/** Datei mit Anmeldung als Blob laden (Fotos, Vorschauen). */
+export async function fetchBlob(path) {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(BASE + path, { headers });
+  if (!res.ok) throw new ApiError(`Fehler ${res.status}`, res.status, null);
+  return res.blob();
+}
+
 /** Datei mit Anmeldung öffnen (z. B. Foto in neuem Tab). */
 export async function openFile(path) {
   const headers = token ? { Authorization: `Bearer ${token}` } : {};

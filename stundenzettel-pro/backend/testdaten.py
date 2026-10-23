@@ -33,8 +33,10 @@ if r.status_code == 409:
 chef = ok(r)
 H = {"Authorization": f"Bearer {chef['token']}"}
 ok(c.put("/api/firma", json={"default_hourly_rate": 30, "street": "Teststraße 1", "zip_code": "12345", "city": "Musterstadt",
-                            "iban": "DE00 1234 5678", "bank_name": "Testbank", "tax_number": "12/345/6789",
-                            "bundesland": "NW", "auto_pause": True, "sperre_tage_mitarbeiter": 365}, headers=H))
+                            "iban": "DE89 3704 0044 0532 0130 00", "bic": "COBADEFFXXX", "bank_name": "Testbank", "tax_number": "12/345/6789",
+                            "vat_id": "DE123456789", "phone": "0211 123456", "email": "buero@powerclean-test.de", "owner": "Ahmad Test", "payment_days": 14,
+                            "bundesland": "NW", "auto_pause": True, "sperre_tage_mitarbeiter": 365,
+                            "lohn_export": {"berater_nr": "1234567", "mandanten_nr": "12345", "lohnarten": {"normal": "100", "ueberstunden": "200", "nacht": "300", "urlaub": "400", "krank": "500"}}}, headers=H))
 mia = ok(c.post("/api/mitarbeiter", json={"name": "Mia Muster", "email": MIA_EMAIL, "role": "mitarbeiter", "personalnummer": "7"}, headers=H))
 token = mia["einladung_link"].rsplit("/", 1)[-1]
 mia_login = ok(c.post(f"/api/auth/einladung/{token}", json={"password": MIA_PASSWORT}))
@@ -44,7 +46,8 @@ ok(c.put(f"/api/mitarbeiter/{mia_id}", json={"weekly_hours": 30, "vacation_days"
 glas = ok(c.post("/api/leistungen", json={"name": "Glasreinigung", "hourly_rate": 45, "sort": 2}, headers=H))["leistung"]
 ok(c.post("/api/leistungen", json={"name": "Unterhaltsreinigung", "hourly_rate": 0, "sort": 1}, headers=H))
 ok(c.post("/api/leistungen", json={"name": "Grundreinigung", "hourly_rate": 38, "sort": 3}, headers=H))
-kunde = ok(c.post("/api/kunden", json={"name": "Sparkasse Musterstadt", "contact": "Frau Richter", "street": "Marktplatz 2", "zip_code": "12345", "city": "Musterstadt"}, headers=H))["kunde"]
+kunde = ok(c.post("/api/kunden", json={"name": "Sparkasse Musterstadt", "contact": "Frau Richter", "street": "Marktplatz 2", "zip_code": "12345", "city": "Musterstadt",
+                                        "email": "rechnungen@sparkasse-test.de", "leitweg_id": "05111-12345-67", "customer_number": "K-100"}, headers=H))["kunde"]
 sub = ok(c.post("/api/kunden", json={"name": "Gebäudeservice Groß GmbH", "street": "Industriestraße 9", "zip_code": "12345", "city": "Musterstadt", "reverse_charge": True}, headers=H))["kunde"]
 p1 = ok(c.post("/api/projekte", json={"name": "Sparkasse Hauptstelle", "customer_id": kunde["id"], "address": "Marktplatz 2", "schedule": "Mo–Fr 06:00–09:00", "hourly_rate": 30, "budget_hours_month": 70, "budget_warn_percent": 80}, headers=H))["projekt"]
 p2 = ok(c.post("/api/projekte", json={"name": "Bürokomplex Nord (Subunternehmer)", "customer_id": sub["id"], "hourly_rate": 26, "color": "#1D4ED8"}, headers=H))["projekt"]

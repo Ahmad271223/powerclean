@@ -57,3 +57,24 @@ def datei_loeschen(meta: dict) -> None:
         Path(meta.get("path", "")).unlink(missing_ok=True)
     except Exception:  # noqa: BLE001
         pass
+
+
+try:  # iPhone-Fotos (HEIC) lesbar machen, wenn pillow-heif installiert ist
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:  # pragma: no cover
+    pass
+
+
+def bild_verkleinern(pfad: str, max_seite: int = 1400) -> bytes:
+    """Foto als JPEG mit höchstens max_seite Pixeln Kantenlänge (Vorschau und PDF-Anhang), EXIF-Drehung berücksichtigt."""
+    import io as _io
+    from PIL import Image, ImageOps
+    with Image.open(pfad) as bild:
+        bild = ImageOps.exif_transpose(bild)
+        bild.thumbnail((max_seite, max_seite))
+        if bild.mode not in ("RGB", "L"):
+            bild = bild.convert("RGB")
+        puffer = _io.BytesIO()
+        bild.save(puffer, "JPEG", quality=82, optimize=True)
+        return puffer.getvalue()

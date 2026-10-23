@@ -79,7 +79,7 @@ def _token_lesen(authorization: Optional[str]) -> dict:
 
 def nutzer_oeffentlich(u: dict) -> dict:
     """Nutzer ohne Geheimnisse (für die Oberfläche)."""
-    verboten = {"_id", "pw_hash", "einladung_token", "einladung_bis", "pin_hash"}
+    verboten = {"_id", "pw_hash", "einladung_token", "einladung_bis", "pin_hash", "lohndaten"}  # Lohndaten nur über eigene Route
     aus = {k: v for k, v in u.items() if k not in verboten}
     aus["eingeladen"] = bool(u.get("einladung_token")) and not u.get("pw_hash")
     aus["rolle_name"] = ROLLEN_NAMEN.get(u.get("role"), u.get("role"))

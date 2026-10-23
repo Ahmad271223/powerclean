@@ -6,11 +6,14 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pymongo.errors import DuplicateKeyError
 
 from auth import firma_laden, jetzt_iso, rolle_noetig, schreibend
 from db import db
-from gemeinsam import eintrag_anreichern, firma_oeffentlich, neue_id, nutzernamen, projekt_laden
+import erechnung
+import pdfbasis
+from gemeinsam import eintrag_anreichern, firma_oeffentlich, kunde_laden, neue_id, nutzernamen, projekt_fotos, projekt_laden
 from models import ExtrasIn, RechnungAnlegenIn, RechnungStatusIn
 from protokoll import protokollieren
 from zeiten import datum_pruefen, lokal_jetzt, monatsletzter, rasterbereich, rechnung_berechnen
@@ -112,7 +115,8 @@ async def daten(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
     unterschriften = []
     async for s in db().signatures.find({"firma_id": user["firma_id"], "project_id": p["id"], "week_monday": {"$gte": von, "$lte": bis}}, {"_id": 0}):
         unterschriften.append(s)
-    return {"firma": firma_oeffentlich(firma, user), "projekt": p, "rechnung": r, "eintraege": eintraege, "unterschriften": unterschriften}
+    return {"firma": firma_oeffentlich(firma, user), "projekt": p, "rechnung": r, "eintraege": eintraege, "unterschriften": unterschriften,
+            "fotos": await projekt_fotos(user["firma_id"], p["id"], von, bis)}
 
 
 @router.put("/{rechnung_id}/extras")
@@ -174,3 +178,58 @@ async def loeschen(rechnung_id: str, user: dict = Depends(schreibend("buero"))):
     await db().invoices.delete_one({"id": rechnung_id})
     await protokollieren(user, "rechnung.zurueckgesetzt", r["number"])
     return {"ok": True}
+
+
+# ---------- E-Rechnung: XRechnung 3.0 (XML) und ZUGFeRD/Factur-X EN 16931 (PDF/A-3) ----------
+
+async def _erechnung(user: dict, rechnung_id: str) -> tuple[dict, dict, dict]:
+    r = await _laden(user, rechnung_id)
+    p = await projekt_laden(user, r["project_id"])
+    firma = await firma_laden(user["firma_id"])
+    k = await kunde_laden(user["firma_id"], r.get("customer_id") or p.get("customer_id"))
+    return erechnung.rechnungsdaten(firma, p, k, r), firma, r
+
+
+def _datei(inhalt: bytes, name: str, typ: str) -> Response:
+    return Response(content=inhalt, media_type=typ, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.get("/{rechnung_id}/erechnung")
+async def erechnung_status(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+    """Vorab-Prüfung: Was fehlt noch für XRechnung bzw. ZUGFeRD? Nichts wird erzeugt."""
+    daten, _, r = await _erechnung(user, rechnung_id)
+    k = daten["kaeufer"]
+    return {"xrechnung": erechnung.pruefen(daten, "xrechnung"), "zugferd": erechnung.pruefen(daten, "zugferd"), "erzeugt": r.get("erechnung") or {},
+            "faellig": daten["faellig"], "kaeufer": {"name": k["name"], "leitweg_id": k["leitweg_id"], "email": k["email"], "zip_code": k["zip_code"], "city": k["city"]},
+            "steuer": daten["steuer"]["category"]}
+
+
+async def _freigeben(user: dict, rechnung_id: str, profil: str) -> tuple[dict, dict, dict]:
+    daten, firma, r = await _erechnung(user, rechnung_id)
+    pr = erechnung.pruefen(daten, profil)
+    if not pr["ok"]:
+        raise HTTPException(422, f"Für {pr['bezeichnung']} fehlt: " + "; ".join(pr["fehlt"]))
+    await db().invoices.update_one({"id": r["id"]}, {"$set": {f"erechnung.{profil}_at": jetzt_iso()}})
+    await protokollieren(user, "rechnung.erechnung", r["number"], details={"format": profil})
+    return daten, firma, r
+
+
+@router.get("/{rechnung_id}/xrechnung.xml")
+async def xrechnung_xml(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+    daten, _, _ = await _freigeben(user, rechnung_id, "xrechnung")
+    return _datei(erechnung.cii_xml(daten, "xrechnung"), "XRechnung_" + erechnung.dateiname(daten, "xml"), "application/xml")
+
+
+@router.get("/{rechnung_id}/zugferd.pdf")
+async def zugferd_pdf(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+    daten, firma, _ = await _freigeben(user, rechnung_id, "zugferd")
+    pdf = pdfbasis.pdfa3_mit_xml(erechnung.rechnung_pdf(daten), erechnung.cii_xml(daten, "zugferd"), f"Rechnung {daten['nummer']}", firma.get("name") or "")
+    return _datei(pdf, "ZUGFeRD_" + erechnung.dateiname(daten, "pdf"), "application/pdf")
+
+
+@router.get("/{rechnung_id}/rechnung.pdf")
+async def rechnung_pdf(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+    """Serverseitige Rechnung ohne XML (PDF/A-3b), gleicher Aufbau wie die ZUGFeRD-Rechnung."""
+    daten, firma, _ = await _erechnung(user, rechnung_id)
+    pdf = pdfbasis.pdfa3_mit_xml(erechnung.rechnung_pdf(daten), None, f"Rechnung {daten['nummer']}", firma.get("name") or "")
+    return _datei(pdf, "Rechnung_" + erechnung.dateiname(daten, "pdf"), "application/pdf")

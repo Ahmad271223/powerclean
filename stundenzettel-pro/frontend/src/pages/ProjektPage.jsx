@@ -4,19 +4,23 @@ import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check,
-  Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer,
+  Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
 import EntryDialog from '../components/EntryDialog';
 import SerieDialog from '../components/SerieDialog';
 import UnterschriftDialog from '../components/UnterschriftDialog';
+import FotoAuswahlDialog from '../components/FotoAuswahlDialog';
+import TagFotos from '../components/TagFotos';
+import Bild from '../components/Bild';
 import { AppIcon, Btn, Card, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Field } from '../components/ui';
 import { api, openFile } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { weekPdf, monthPdf, invoicePdf, preloadLogo, signatureMap } from '../lib/pdf';
 import { MIN_YEAR, MAX_YEAR, MONTHS_DE, WEEKDAYS_DE, toKey, fromKey, addDays, isoWeek, monthWeeks, clampMonth, fmtHours, fmtDecimalHours, fmtEur, fmtDateShort, fmtDate, todayKey, monthLastDay, entryMinutes, entryWorkers, fmtDecimal } from '../lib/dates';
 import { initials, deliverPdf, downloadBlob } from '../lib/utils';
+import { fotosNachTag, fotosImZeitraum, ladeFotoDaten } from '../lib/fotos';
 
 const YEARS = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
 const fmtZeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -36,6 +40,7 @@ export default function ProjektPage() {
   const [sigMonday, setSigMonday] = useState(null);
   const [qr, setQr] = useState(false);
   const [busy, setBusy] = useState('');
+  const [fotoWahl, setFotoWahl] = useState(null);   // { art: 'week'|'month'|'invoice', monday, fotos } – Auswahl vor der PDF
 
   const laden = useCallback(async () => {
     try {
@@ -57,6 +62,8 @@ export default function ProjektPage() {
   const sigs = useMemo(() => signatureMap(data?.unterschriften), [data]);
   const weeks = useMemo(() => monthWeeks(year, month), [year, month]);
   const byDay = useMemo(() => { const m = {}; for (const e of entries) (m[e.date] ||= []).push(e); return m; }, [entries]);
+  const fotos = data?.fotos || [];
+  const fotosByDay = useMemo(() => fotosNachTag(fotos), [fotos]);
   const recentActivities = useMemo(() => { const seen = []; for (let i = entries.length - 1; i >= 0 && seen.length < 4; i--) { const a = (entries[i].activity || '').trim(); if (a && !seen.includes(a)) seen.push(a); } return seen; }, [entries]);
 
   if (!project) return <Layout><div className="py-24 flex justify-center text-[#A1A1A6]"><Loader2 className="animate-spin" size={28} /></div></Layout>;
@@ -83,21 +90,41 @@ export default function ProjektPage() {
     setBusy(key);
     deliverPdf(result, mode).catch((err) => { console.error(err); toast.error('PDF konnte nicht weitergegeben werden'); }).finally(() => setBusy(''));
   };
-  const weekDoc = (monday, mode) => deliver(`week-${toKey(monday)}`, () => weekPdf(project, firma, monday, entries.filter((e) => e.date >= toKey(monday) && e.date <= toKey(addDays(monday, 6))), sigs), mode);
+  // Fotos im Zeitraum: gibt es welche, fragt ein Dialog vor der PDF, welche mit hinein sollen (bilder === null → noch nicht gefragt)
+  const weekMake = (monday, bilder) => weekPdf(project, firma, monday, entries.filter((e) => e.date >= toKey(monday) && e.date <= toKey(addDays(monday, 6))), sigs, bilder);
+  const weekDoc = (monday, mode) => {
+    const f = fotosImZeitraum(fotos, toKey(monday), toKey(addDays(monday, 6)));
+    if (f.length) { setFotoWahl({ art: 'week', monday, fotos: f }); return; }
+    deliver(`week-${toKey(monday)}`, () => weekMake(monday, []), mode);
+  };
   const rechnungHolen = async () => (await api.post('/api/rechnungen/anlegen', { project_id: project.id, year, month: month + 1 })).rechnung;
-  const monthDoc = async (mode) => {
+  const monthDoc = async (mode, bilder = null) => {
+    if (bilder === null) { const f = fotosImZeitraum(fotos, firstKey, lastKey); if (f.length) { setFotoWahl({ art: 'month', fotos: f }); return; } bilder = []; }
     setBusy('month');
     try {
       let inv = null;
       try { inv = await rechnungHolen(); } catch (err) { if (err.status !== 400) throw err; toast.info('Keine Zeiten im Monat – Mappe ohne Rechnung'); }
-      await deliverPdf(monthPdf(project, firma, year, month, entries, inv, sigs), mode);
+      await deliverPdf(monthPdf(project, firma, year, month, entries, inv, sigs, bilder), mode);
       laden();
     } catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
-  const invoiceDoc = async (mode) => {
+  const invoiceDoc = async (mode, bilder = null) => {
+    if (bilder === null) { const f = fotosImZeitraum(fotos, firstKey, lastKey); if (f.length) { setFotoWahl({ art: 'invoice', fotos: f }); return; } bilder = []; }
     setBusy('invoice');
-    try { const inv = await rechnungHolen(); await deliverPdf(invoicePdf(project, firma, year, month, monthEntries, inv), mode); laden(); }
+    try { const inv = await rechnungHolen(); await deliverPdf(invoicePdf(project, firma, year, month, monthEntries, inv, bilder), mode); laden(); }
     catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
+  const fotoWahlBestaetigt = async (ausgewaehlt, mode) => {
+    const wahl = fotoWahl;
+    if (!wahl) return;
+    setBusy('fotos');
+    try {
+      const bilder = ausgewaehlt.length ? await ladeFotoDaten(ausgewaehlt) : [];
+      setFotoWahl(null);
+      if (wahl.art === 'week') await deliverPdf(weekMake(wahl.monday, bilder), mode);
+      else if (wahl.art === 'month') await monthDoc(mode, bilder);
+      else await invoiceDoc(mode, bilder);
+    } catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
 
   const tKey = todayKey();
@@ -169,6 +196,7 @@ export default function ProjektPage() {
                               {dayMinutes > 0 && <span className="text-[11px] font-semibold" style={{ color: inMonth ? color : undefined }}>{fmtHours(dayMinutes)}</span>}
                             </div>
                             {frei && <div className="text-[10px] text-[#B25E00] px-0.5 truncate">{frei}</div>}
+                            {(fotosByDay[key]?.length || 0) > 0 && <span className="absolute bottom-1 right-1 inline-flex items-center gap-0.5 text-[10px] font-semibold rounded-full bg-black/[0.07] text-[#6E6E73] px-1.5 py-0.5" title={`${fotosByDay[key].length} Fotos`}><Camera size={10} /> {fotosByDay[key].length}</span>}
                             <div className="mt-1 space-y-1">
                               {dayEntries.slice(0, 3).map((e) => (
                                 <div key={e.id} className="text-[11px] leading-[1.25] truncate rounded-md px-1.5 py-1" style={{ backgroundColor: `${color}14`, color: inMonth ? '#1D1D1F' : undefined }}>
@@ -187,7 +215,7 @@ export default function ProjektPage() {
                 })}
               </div>
             </div>
-            <div className="px-5 py-3 text-[12px] text-[#86868B]">Tag antippen: Zeit eintragen. Links je Woche: Stundenzettel als PDF und Kunden-Unterschrift. Feiertage sind hell markiert.</div>
+            <div className="px-5 py-3 text-[12px] text-[#86868B]">Tag antippen: Zeit eintragen, Fotos ansehen oder aufnehmen. Links je Woche: Stundenzettel als PDF und Kunden-Unterschrift. Feiertage sind hell markiert.</div>
           </Card>
 
           <aside className="space-y-4">
@@ -253,11 +281,14 @@ export default function ProjektPage() {
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}
         entries={selectedDate ? (byDay[selectedDate] || []) : []} lastEntry={lastEntry} recentActivities={recentActivities}
         defaultWorkers={project.default_workers || 1} mitarbeiter={data.mitarbeiter || []} leistungen={data.leistungen || []} kannPersonen={leitung}
+        fotoBereich={selectedDate ? <TagFotos projectId={project.id} dateKey={selectedDate} fotos={fotosByDay[selectedDate] || []} onChanged={laden} darfHochladen={!project.archived} /> : null}
         gesperrt={gesperrt} feiertag={selectedDate ? feiertage[selectedDate] || '' : ''} onChanged={laden} onWeekPdf={() => selectedDate && weekDoc(fromKey(selectedDate))} />
       <SerieDialog open={serie} onOpenChange={setSerie} projectId={project.id} year={year} month0={month} mitarbeiter={data.mitarbeiter || []} leistungen={data.leistungen || []} defaultWorkers={project.default_workers || 1} onDone={laden} />
       <UnterschriftDialog open={!!sigMonday} onOpenChange={(o) => { if (!o) setSigMonday(null); }} projectId={project.id} mondayKey={sigMonday} customerName={sigs[sigMonday]?.signer_name || ''} onSaved={laden} />
       <ProjectDialog open={projectDialog} onOpenChange={setProjectDialog} project={project} defaultRate={firma.default_hourly_rate || 0} onSaved={laden} onDeleted={() => navigate('/projekte')} />
       <QrDialog open={qr} onOpenChange={setQr} project={project} />
+      <FotoAuswahlDialog open={!!fotoWahl} onOpenChange={(o) => { if (!o) setFotoWahl(null); }} fotos={fotoWahl?.fotos || []} busy={busy === 'fotos'} onConfirm={fotoWahlBestaetigt}
+        titel={fotoWahl?.art === 'week' ? `Stundenzettel KW ${fotoWahl.monday ? isoWeek(fotoWahl.monday).week : ''} als PDF` : fotoWahl?.art === 'month' ? `Monats-PDF ${MONTHS_DE[month]} ${year}` : `Rechnung ${MONTHS_DE[month]} ${year} als PDF`} />
     </Layout>
   );
 }
@@ -292,6 +323,7 @@ function Akte({ projectId, leitung }) {
   const [akte, setAkte] = useState(null);
   const [text, setText] = useState('');
   const [kategorie, setKategorie] = useState('Fotos');
+  const [datum, setDatum] = useState(todayKey());   // Arbeitstag, an dem das Foto im Kalender erscheint
   const [busy, setBusy] = useState(false);
   const laden = useCallback(() => api.get(`/api/projekte/${projectId}/akte`).then(setAkte).catch((err) => toast.error(err.message)), [projectId]);
   useEffect(() => { laden(); }, [laden]);
@@ -307,6 +339,7 @@ function Akte({ projectId, leitung }) {
     const fd = new FormData();
     fd.append('datei', file);
     fd.append('kategorie', kategorie);
+    fd.append('date', datum);
     setBusy(true);
     try { await api.upload(`/api/projekte/${projectId}/dateien`, fd); toast.success('Datei gespeichert'); laden(); } catch (err) { toast.error(err.message); } finally { setBusy(false); }
   };
@@ -333,14 +366,15 @@ function Akte({ projectId, leitung }) {
           <h2 className="text-[16px] mb-3 flex items-center gap-2"><ImageIcon size={16} /> Fotos &amp; Dateien</h2>
           <div className="flex flex-wrap gap-2 items-center mb-3">
             <Select value={kategorie} onChange={(e) => setKategorie(e.target.value)}>{akte.kategorien.map((k) => <option key={k} value={k}>{k}</option>)}</Select>
+            <TextInput type="date" value={datum} onChange={(e) => setDatum(e.target.value)} className="w-[160px]" title="Arbeitstag (so erscheint das Foto im Kalender)" />
             <label className="inline-flex"><input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} /><span className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-[#1D1D1F] text-white text-[14px] font-semibold cursor-pointer">{busy ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15} />} Hochladen / Foto</span></label>
           </div>
-          {akte.dateien.length === 0 ? <p className="text-[13px] text-[#6E6E73]">Noch keine Dateien. Vorher/Nachher-Fotos landen hier.</p> : (
+          {akte.dateien.length === 0 ? <p className="text-[13px] text-[#6E6E73]">Noch keine Dateien. Fotos landen hier und im Kalender am gewählten Arbeitstag.</p> : (
             <ul className="divide-y divide-black/[0.06]">
               {akte.dateien.map((d) => (
                 <li key={d.id} className="py-2.5 flex items-center gap-3 text-[14px]">
-                  <span className="w-9 h-9 rounded-xl bg-[#F5F5F7] flex items-center justify-center text-[#6E6E73]">{d.mime?.startsWith('image/') ? <ImageIcon size={16} /> : <FileText size={16} />}</span>
-                  <div className="flex-1 min-w-0"><div className="font-medium truncate">{d.filename}</div><div className="text-[12px] text-[#86868B]">{d.category} · {d.uploaded_by_name} · {fmtZeit(d.created_at)} · {Math.round(d.size / 1024)} KB</div></div>
+                  {d.mime?.startsWith('image/') ? <Bild id={d.id} max={120} className="w-9 h-9 rounded-xl shrink-0" alt="" /> : <span className="w-9 h-9 rounded-xl bg-[#F5F5F7] flex items-center justify-center text-[#6E6E73] shrink-0"><FileText size={16} /></span>}
+                  <div className="flex-1 min-w-0"><div className="font-medium truncate">{d.note || d.filename}</div><div className="text-[12px] text-[#86868B]">{d.category}{d.date ? ` · Arbeitstag ${fmtDate(fromKey(d.date))}` : ''} · {d.uploaded_by_name} · {fmtZeit(d.created_at)} · {Math.round(d.size / 1024)} KB</div></div>
                   <IconBtn size={30} onClick={() => openFile(`/api/dokumente/${d.id}/datei`).catch((err) => toast.error(err.message))} title="Öffnen"><ExternalLink size={15} /></IconBtn>
                   {isBuero && <IconBtn size={30} variant="danger" onClick={() => loeschen(d.id, `/api/dokumente/${d.id}`)} title="Löschen"><Trash2 size={14} /></IconBtn>}
                 </li>

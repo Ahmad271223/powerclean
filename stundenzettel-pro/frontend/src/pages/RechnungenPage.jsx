@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Receipt, FileStack, Download, RotateCcw, CheckCircle2, Ban, ListPlus, Trash2, Plus } from 'lucide-react';
+import { Receipt, FileStack, Download, RotateCcw, CheckCircle2, Ban, ListPlus, Trash2, Plus, FileCode } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import { Btn, Card, Empty, IconBtn, Select, Sheet, TextInput } from '../components/ui';
-import { api } from '../lib/api';
+import { api, download } from '../lib/api';
+import FotoAuswahlDialog from '../components/FotoAuswahlDialog';
+import { fotosImZeitraum, ladeFotoDaten } from '../lib/fotos';
 import { invoicePdf, monthPdf, signatureMap, preloadLogo } from '../lib/pdf';
 import { fmtDate, fmtDecimalHours, fmtEur, fromKey, MONTHS_DE, monthLastDay, toKey } from '../lib/dates';
 import { deliverPdf } from '../lib/utils';
@@ -17,13 +19,15 @@ export default function RechnungenPage() {
   const [status, setStatus] = useState('alle');
   const [busy, setBusy] = useState('');
   const [extras, setExtras] = useState(null);   // Rechnung, deren Zusatzpositionen bearbeitet werden
+  const [erech, setErech] = useState(null);     // Rechnung, für die eine E-Rechnung erzeugt wird
+  const [fotoWahl, setFotoWahl] = useState(null); // PDF mit Fotos: { r, art, fotos }
   const laden = useCallback(() => api.get(`/api/rechnungen${jahr ? `?jahr=${jahr}` : ''}`).then(setDaten).catch((err) => toast.error(err.message)), [jahr]);
   useEffect(() => { laden(); }, [laden]);
 
   const liste = (daten?.rechnungen || []).filter((r) => status === 'alle' || r.status === status);
   const summe = (st) => (daten?.rechnungen || []).filter((r) => r.status === st).reduce((s, r) => s + (Number(r.gross) || 0), 0);
 
-  const pdf = async (r, art, mode) => {
+  const pdf = async (r, art, mode, bilder = null) => {
     setBusy(`${art}-${r.id}`);
     try {
       const d = await api.get(`/api/rechnungen/${r.id}/daten`);
@@ -31,10 +35,22 @@ export default function RechnungenPage() {
       const m0 = r.month - 1;
       const first = toKey(new Date(r.year, m0, 1));
       const last = toKey(monthLastDay(r.year, m0));
+      if (bilder === null) {   // Fotos im Monat? Dann erst fragen, welche mit in die PDF sollen
+        const f = fotosImZeitraum(d.fotos || [], first, last);
+        if (f.length) { setFotoWahl({ r, art, fotos: f }); return; }
+        bilder = [];
+      }
       const monthE = d.eintraege.filter((e) => e.date >= first && e.date <= last);
-      const result = art === 'month' ? monthPdf(d.projekt, d.firma, r.year, m0, d.eintraege, d.rechnung, signatureMap(d.unterschriften)) : invoicePdf(d.projekt, d.firma, r.year, m0, monthE, d.rechnung);
+      const result = art === 'month' ? monthPdf(d.projekt, d.firma, r.year, m0, d.eintraege, d.rechnung, signatureMap(d.unterschriften), bilder) : invoicePdf(d.projekt, d.firma, r.year, m0, monthE, d.rechnung, bilder);
       await deliverPdf(result, mode);
     } catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
+  const fotoWahlBestaetigt = async (ausgewaehlt, mode) => {
+    const w = fotoWahl;
+    if (!w) return;
+    setBusy('fotos');
+    try { const bilder = ausgewaehlt.length ? await ladeFotoDaten(ausgewaehlt) : []; setFotoWahl(null); await pdf(w.r, w.art, mode, bilder); }
+    catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
   const setzen = async (r, st) => {
     if (st === 'storniert' && !window.confirm(`Rechnung ${r.number} stornieren?`)) return;
@@ -72,6 +88,7 @@ export default function RechnungenPage() {
                     <Btn size="sm" onClick={() => pdf(r, 'invoice')} loading={busy === `invoice-${r.id}`}><Receipt size={15} /> PDF</Btn>
                     <IconBtn size={34} variant="soft" onClick={() => pdf(r, 'month')} disabled={!!busy} title="Monats-PDF (Stundenzettel + Rechnung)"><FileStack size={15} /></IconBtn>
                     <IconBtn size={34} variant="soft" onClick={() => pdf(r, 'invoice', 'download')} disabled={!!busy} title="Rechnung herunterladen"><Download size={15} /></IconBtn>
+                    {r.status !== 'storniert' && <IconBtn size={34} variant="soft" onClick={() => setErech(r)} title="E-Rechnung: XRechnung (XML) oder ZUGFeRD (PDF/A-3)"><FileCode size={15} /></IconBtn>}
                     {r.status === 'offen' && <><IconBtn size={34} variant="soft" onClick={() => setExtras(r)} title="Zusatzpositionen (Material, Anfahrt, Pauschalen)"><ListPlus size={16} /></IconBtn><IconBtn size={34} onClick={() => setzen(r, 'bezahlt')} title="Als bezahlt markieren" className="text-[#1B7F3B]"><CheckCircle2 size={16} /></IconBtn><IconBtn size={34} onClick={() => setzen(r, 'storniert')} title="Stornieren" className="text-[#6E6E73]"><Ban size={15} /></IconBtn><IconBtn size={34} onClick={() => reset(r)} title="Nummer zurücksetzen" className="text-[#A1A1A6]"><RotateCcw size={14} /></IconBtn></>}
                     {r.status === 'bezahlt' && <Btn size="sm" variant="ghost" onClick={() => setzen(r, 'offen')}>Wieder offen</Btn>}
                   </div>
@@ -82,6 +99,8 @@ export default function RechnungenPage() {
         </>
       )}
       <ExtrasDialog rechnung={extras} onOpenChange={(o) => { if (!o) setExtras(null); }} onSaved={laden} />
+      <ERechnungDialog rechnung={erech} onOpenChange={(o) => { if (!o) setErech(null); }} onSaved={laden} />
+      <FotoAuswahlDialog open={!!fotoWahl} onOpenChange={(o) => { if (!o) setFotoWahl(null); }} fotos={fotoWahl?.fotos || []} busy={busy === 'fotos'} titel={fotoWahl ? `${fotoWahl.art === 'month' ? 'Monats-PDF' : 'Rechnung'} ${fotoWahl.r.number}` : ''} onConfirm={fotoWahlBestaetigt} />
     </Layout>
   );
 }
@@ -125,6 +144,47 @@ function ExtrasDialog({ rechnung, onOpenChange, onSaved }) {
         )}
         <div className="flex items-center justify-between pt-2"><div className="text-[14px]">Zusatz netto: <strong>{fmtEur(summe)}</strong></div><div className="flex gap-2"><Btn variant="soft" onClick={() => onOpenChange(false)}>Abbrechen</Btn><Btn onClick={speichern} loading={busy}>Speichern</Btn></div></div>
       </div>
+    </Sheet>
+  );
+}
+
+const STEUER_TEXT = { S: 'Regelbesteuerung', AE: '§ 13b UStG (Steuerschuld beim Leistungsempfänger)', E: '§ 19 UStG (Kleinunternehmer)' };
+
+/** E-Rechnung: zeigt vor dem Erzeugen in Klartext, was noch fehlt, und lädt XRechnung (XML) oder ZUGFeRD (PDF/A-3) herunter. */
+function ERechnungDialog({ rechnung, onOpenChange, onSaved }) {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState('');
+  useEffect(() => {
+    if (!rechnung) { setStatus(null); return; }
+    api.get(`/api/rechnungen/${rechnung.id}/erechnung`).then(setStatus).catch((err) => toast.error(err.message));
+  }, [rechnung]);
+  const holen = async (art) => {
+    setBusy(art);
+    try {
+      await download(`/api/rechnungen/${rechnung.id}/${art === 'xrechnung' ? 'xrechnung.xml' : 'zugferd.pdf'}`);
+      toast.success(art === 'xrechnung' ? 'XRechnung erzeugt' : 'ZUGFeRD-Rechnung erzeugt');
+      onSaved?.();
+    } catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
+  const Block = ({ p, titel, text, art }) => (
+    <div className={`rounded-2xl p-4 ${p.ok ? 'bg-[#E8F8EC]' : 'bg-[#FFF4E5]'}`}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div><div className="font-semibold text-[15px]">{titel}</div><div className="text-[12px] text-[#6E6E73]">{text}</div></div>
+        <Btn size="sm" disabled={!p.ok} loading={busy === art} onClick={() => holen(art)}><Download size={14} /> Herunterladen</Btn>
+      </div>
+      {p.fehlt.length > 0 && <ul className="mt-2 text-[13px] text-[#7A4100] list-disc pl-5 space-y-0.5">{p.fehlt.map((f) => <li key={f}>{f}</li>)}</ul>}
+      {p.hinweise.length > 0 && <ul className="mt-2 text-[12px] text-[#6E6E73] list-disc pl-5">{p.hinweise.map((f) => <li key={f}>{f}</li>)}</ul>}
+    </div>
+  );
+  return (
+    <Sheet open={!!rechnung} onOpenChange={onOpenChange} title={`E-Rechnung ${rechnung?.number || ''}`} subtitle="Pflicht ab 2027 (über 800.000 € Vorjahresumsatz) bzw. ab 2028 für alle. Behörden und Kommunen verlangen die XRechnung schon heute.">
+      {!status ? <div className="text-[14px] text-[#6E6E73]">Angaben werden geprüft …</div> : (
+        <div className="space-y-3">
+          <Block p={status.xrechnung} art="xrechnung" titel="XRechnung 3.0 (XML)" text="Für Bund, Länder, Kommunen, Schulen: Datei im Rechnungsportal des Auftraggebers hochladen oder per E-Mail senden." />
+          <Block p={status.zugferd} art="zugferd" titel="ZUGFeRD / Factur-X (PDF mit XML)" text="Für Firmenkunden: normale PDF-Rechnung, die Buchhaltungsprogramme (DATEV, Lexware, sevdesk …) automatisch einlesen." />
+          <p className="text-[12px] text-[#86868B]">Fällig am {fmtDate(fromKey(status.faellig))} · {STEUER_TEXT[status.steuer] || status.steuer}{status.erzeugt?.xrechnung_at ? ' · XRechnung bereits erzeugt' : ''}{status.erzeugt?.zugferd_at ? ' · ZUGFeRD bereits erzeugt' : ''}</p>
+        </div>
+      )}
     </Sheet>
   );
 }
