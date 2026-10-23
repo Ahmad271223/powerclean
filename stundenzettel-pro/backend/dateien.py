@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import re
+import time
 import uuid
+from collections import deque
 from pathlib import Path
+from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
@@ -34,22 +37,78 @@ def ablageort(firma_id: str, dokument_id: str, endung: str) -> Path:
     return ordner / f"{dokument_id}{endung}"
 
 
-async def datei_speichern(firma_id: str, datei: UploadFile) -> dict:
-    """Prüft Typ und Größe, schreibt die Datei und liefert die Metadaten (ohne id-Verweis auf die Akte)."""
+_uploads: dict[str, deque] = {}
+
+
+def uploadrate_pruefen(user_id: Optional[str]) -> None:
+    """Einfache Uploadrate je Nutzer (gleitendes 10-Minuten-Fenster) gegen Massen-Uploads."""
+    if not user_id:
+        return
+    jetzt = time.monotonic()
+    q = _uploads.setdefault(user_id, deque())
+    while q and jetzt - q[0] > 600:
+        q.popleft()
+    if len(q) >= config.UPLOADS_JE_10_MIN:
+        raise HTTPException(429, "Zu viele Uploads in kurzer Zeit. Bitte in ein paar Minuten weitermachen.")
+    q.append(jetzt)
+
+
+async def speicher_belegt(firma_id: str) -> int:
+    """Belegter Speicher der Firma in Bytes (Summe aller Dateien in `documents`)."""
+    from db import db
+    gesamt = 0
+    async for d in db().documents.find({"firma_id": firma_id}, {"_id": 0, "size": 1}):
+        gesamt += int(d.get("size") or 0)
+    return gesamt
+
+
+async def speicher_grenze(firma_id: str) -> int:
+    from db import db
+    f = await db().firmen.find_one({"id": firma_id}, {"_id": 0, "plan": 1})
+    gb = ((f or {}).get("plan") or {}).get("speicher_gb")
+    return int(float(gb if gb is not None else config.SPEICHER_GB) * 1024 * 1024 * 1024)
+
+
+async def datei_speichern(firma_id: str, datei: UploadFile, user_id: Optional[str] = None) -> dict:
+    """Prüft Typ, Größe, Uploadrate und Speicherkontingent, schreibt die Datei und liefert die Metadaten."""
     typ = (datei.content_type or "").split(";")[0].strip().lower()
     endung = ERLAUBT.get(typ)
     if not endung:
         raise HTTPException(400, "Dateityp nicht erlaubt (PDF, Bilder, Word, Excel, Text).")
+    uploadrate_pruefen(user_id)
     inhalt = await datei.read()
     if len(inhalt) > config.MAX_DATEI_MB * 1024 * 1024:
         raise HTTPException(413, f"Datei ist zu groß (max. {config.MAX_DATEI_MB} MB).")
     if not inhalt:
         raise HTTPException(400, "Die Datei ist leer.")
+    grenze = await speicher_grenze(firma_id)
+    if await speicher_belegt(firma_id) + len(inhalt) > grenze:
+        raise HTTPException(413, f"Der Speicherplatz der Firma ({grenze / 1024 / 1024 / 1024:g} GB) ist erschöpft. Bitte Dateien löschen oder den Tarif erweitern.")
     dokument_id = str(uuid.uuid4())
     pfad = ablageort(firma_id, dokument_id, endung)
     pfad.write_bytes(inhalt)
     return {"id": dokument_id, "filename": _sicherer_name(datei.filename or f"datei{endung}"), "mime": typ,
             "size": len(inhalt), "path": str(pfad)}
+
+
+async def version_verknuepfen(doc: dict, ersetzt_id: Optional[str], firma_id: str) -> dict:
+    """Neue Version einer vorhandenen Datei: Versionsnummer hochzählen, Vorgänger als nicht mehr aktuell markieren."""
+    from db import db
+    doc.setdefault("version", 1)
+    doc.setdefault("aktuell", True)
+    if not ersetzt_id:
+        return doc
+    alt = await db().documents.find_one({"id": ersetzt_id, "firma_id": firma_id, "scope": doc.get("scope"), "ref_id": doc.get("ref_id")}, {"_id": 0})
+    if not alt:
+        raise HTTPException(404, "Die zu ersetzende Datei wurde nicht gefunden.")
+    doc["version"] = int(alt.get("version") or 1) + 1
+    doc["vorgaenger_id"] = alt["id"]
+    doc["ordner"] = doc.get("ordner") or alt.get("ordner") or ""
+    doc["category"] = doc.get("category") or alt.get("category")
+    if not doc.get("note"):
+        doc["note"] = alt.get("note") or ""
+    await db().documents.update_one({"id": ersetzt_id}, {"$set": {"aktuell": False, "ersetzt_von": doc["id"]}})
+    return doc
 
 
 def datei_loeschen(meta: dict) -> None:

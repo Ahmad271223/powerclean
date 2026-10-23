@@ -1,4 +1,4 @@
-# Baustellenplattform: Zusammenarbeit mehrerer Firmen (Branch `plattform`)
+# Baustellenplattform: Zusammenarbeit mehrerer Firmen (Branches `plattform` und `ausschreibungen`)
 
 Stand 23.10.2026. Erweiterung von Stundenzettel Pro um eine Projekt- und Unternehmensebene, auf der ein Auftraggeber
 (Generalunternehmer) Projekte führt und Subunternehmer mit eigenen Firmenkonten beteiligt. Alle bisherigen Funktionen bleiben
@@ -15,7 +15,7 @@ unverändert; die Erweiterung ist rein additiv (neue Sammlungen, neue optionale 
 | Projekt | `projects` gehört einer Firma; Sichtbarkeit über `employee_ids` (leer = alle), Leitung = Büro/Inhaber oder zugewiesener Vorarbeiter. |
 | Zugriffskontrolle | `projekt_laden(user, id)` erzwingt `firma_id == user.firma_id`; Dokumente über `_dokument_zugriff` (Scope user/project). |
 | API | Router je Modul (`routes/*.py`), ca. 130 Endpunkte; lesende Fremd-API mit Schlüssel (`api_v1`), Webhooks. |
-| Tests | pytest mit `DB_MODE=memory` (mongomock), vorher 32 Tests, jetzt 38 (Plattform 3, Baustellenalltag 3). |
+| Tests | pytest mit `DB_MODE=memory` (mongomock), vorher 32 Tests, jetzt 42 (Plattform 3, Baustellenalltag 3, Ausschreibungen/Vergabe 4). |
 | Migrationsrisiken | Keine Schemaänderung nötig. Neue Felder sind optional (`projects.leiter_ids`, `projects.verknuepft`, `firmen.verzeichnis`), neue Sammlungen leer. Indizes werden beim Start idempotent angelegt. |
 
 ## 2. Architekturentscheidung
@@ -116,7 +116,94 @@ Bestehende Endpunkte sind unverändert.
 Keine Datenmigration erforderlich. Beim Serverstart legt `db.indizes_anlegen` die neuen Indizes an (idempotent). Bestehende Projekte
 ohne `leiter_ids` verhalten sich exakt wie bisher. Vor dem Ausrollen: Datenbank-Backup (`mongodump`) wie bei jedem Update.
 
-## 8. Offen (ausdrücklich nicht fertig)
+## 8. Ausschreibungen, Angebote und Vergabe (Branch `ausschreibungen`, 23.10.2026)
+
+Zweite Erweiterung nach dem Masterprompt „Projektplanung, Ausschreibungen und digitale Vergabeplattform“. Alles additiv:
+neue Sammlungen, neue optionale Projektfelder, neue Routen (`routes/ausschreibungen.py`, Rechtemodell in `ausschreibung.py`).
+
+### 8.1 Erweiterte Projekte und Dokumente
+
+- `projects` optional: `projektnummer, auftraggeber, generalunternehmer, projektart, beschreibung, baubeginn, bauende, phasen[], bauabschnitte[],
+  gewerke[], projektstatus, volumen, kosten, anforderungen, lat, lon` (Projektdialog → „Bauvorhaben“; Karte als OpenStreetMap-Link).
+- `documents` bekommt `ordner`, `version`, `vorgaenger_id`, `aktuell`, `ersetzt_von`: neue Version per `ersetzt_id` beim Upload (Projektakte,
+  geteilte Projektdokumente, Ausschreibungsunterlagen). Jede Datei trägt Name, Typ, Größe, Ersteller, Zeit, Version, Freigabe.
+- Grenzen statt willkürlicher Stückzahlen: Dateigröße `MAX_DATEI_MB` (25), Speicher je Firma `SPEICHER_GB` (5, je Firma über `plan.speicher_gb`),
+  Uploadrate `UPLOADS_JE_10_MIN` (120 je Nutzer); `GET /api/firma/speicher` zeigt den Stand. Überschreitung → 413/429.
+- Projektinterne Dokumente (Scope `project`, nicht freigegebene Plattformdokumente) bleiben für Bieter unsichtbar; Bieter sehen nur
+  Unterlagen der Ausschreibung (Scope `ausschreibung`).
+
+### 8.2 Datenmodell
+
+| Sammlung | Inhalt |
+|---|---|
+| `ausschreibungen` | `{nummer A-JJJJ-NNNN, project_id, firma_id, titel, gewerk, leistungsart, beschreibung, leistungsumfang, ausfuehrungsort, sichtbarkeit: oeffentlich/privat/kombiniert, status: entwurf/veroeffentlicht/in_vergabe/vergeben/aufgehoben, bewerbungsfrist, angebotsfrist, ausfuehrung_von/bis, anforderungen{…}, kaufmaennisch{abrechnungsart, budget, zahlungsbedingungen, vertragsbedingungen, preisaufschluesselung}, freigabe{budget, auftraggeber, adresse}, positionen[{nr, leistung, beschreibung, menge, einheit}], intern, verantwortlich_user_id, verlauf[]}` |
+| `ausschreibung_einladungen` | `{ausschreibung_id, firma_id, firma_name, nachricht, status: eingeladen/angesehen/angebot}` – eindeutig je Firma |
+| `angebote` | `{ausschreibung_id, firma_id, nummer AN-JJJJ-NNNN, preisart: pauschal/einheitspreise/stunden, preis_netto, stundensatz, stunden_geschaetzt, ust_satz, reverse_charge, positionen[{nr, einzelpreis, bemerkung}], leistungsbeschreibung, ausfuehrung_von/bis, verfuegbarkeit, kapazitaet, material, zusatzleistungen, bemerkungen, gueltig_bis, status, version, versionen[], nachreichen_bis, bewertung{kriterien, notiz, mindestanforderungen_erfuellt}, verlauf[]}` – ein Angebot je Firma, Überarbeitungen als Versionen |
+| `ausschreibung_fragen` | `{ausschreibung_id, firma_id, text, position_nr, antwort, beantwortet_von, oeffentlich}` |
+| `vergaben` | `{ausschreibung_id, angebot_id, firma_id, summe_netto, begruendung, status: vorgeschlagen/freigegeben/mitgeteilt/angenommen/abgelehnt_firma/zurueckgezogen, vorgeschlagen_von, freigegeben_von, mitgeteilt_at, bestaetigung{name, text, user}, beteiligung_id, lokales_project_id, verlauf[]}` |
+| `documents` Scopes | `ausschreibung` (Unterlagen), `angebot` (Anhänge des Bieters), `vergabe` (Vertrags-/Auftragsdokumente) |
+
+Angebotsstatus: entwurf → eingereicht → in_pruefung / rueckfrage → ueberarbeitet → angenommen / abgelehnt / zurueckgezogen.
+Gesamtpreise werden serverseitig aus Mengen × Einzelpreisen berechnet; Einreichen verlangt vollständige Positionspreise.
+
+### 8.3 Rechte und Vergaberegeln
+
+- `ausschreibung_zugang`: Eigentümerfirma nur mit Projektleitung („leitung“); andere Firmen nur Büro/Inhaber und nur, wenn veröffentlicht
+  und (plattformweit sichtbar oder eingeladen oder eigenes Angebot). Entwürfe sind unsichtbar, fremde IDs antworten 404.
+- `angebot_zugang`: bietende Firma sieht ihr Angebot; die Eigentümer-Leitung erst ab Einreichung (nie Entwürfe); Bewertungen nur Eigentümer.
+  Bieter sehen keine fremden Angebote, Preise, Anhänge oder Bewertungen – auch nicht über `/api/dokumente/{id}/datei`.
+- Fristen: Einreichen/Ändern nur bis zur Angebotsfrist (Zeitzone der Anwendung); danach nur nach Rückfrage/Nachforderung mit
+  `nachreichen_bis`. Änderungen an Ausschreibungen landen im `verlauf` (Felder) und im Sicherheitsprotokoll; Bieter werden informiert.
+- Vergabe: Vorschlag (Leitung) → interne Freigabe (Büro/Inhaber; Vier-Augen-Prinzip, sobald eine zweite berechtigte Person existiert) →
+  Mitteilung mit Vertragsdokumenten → **verbindliche Annahme nur durch den Inhaber der Firma mit dem Satz „Ich nehme den Auftrag verbindlich an“
+  und Namensangabe**. Erst dann: Beteiligung aktiv, verknüpftes lokales Projekt (wie bei der Einladung), Ausschreibung „vergeben“, übrige Angebote
+  „abgelehnt“ mit Absage. Ablehnung durch die Firma öffnet die Ausschreibung wieder. Keine automatische Vergabe nach Punkten.
+- Benachrichtigungen (In-App): ausschreibung_neu (Gewerk/Region aus dem Verzeichnis), ausschreibung_einladung, ausschreibung_aktualisiert,
+  ausschreibung_dokument, rueckfrage_neu, rueckfrage_antwort, angebot_eingereicht, angebot_bestaetigung, angebot_in_pruefung,
+  angebot_nachforderung, angebot_entscheidung, vergabe_freigabe, vergabe_erhalten, vergabe_dokument, vergabe_angenommen, vergabe_abgelehnt,
+  absage, ausschreibung_aufgehoben. „Bald endende Frist“ wird in der Übersicht berechnet (kein Zeitplaner).
+- Öffentliche Auftraggeber: Die Plattform ist **keine** vergaberechtskonforme Vergabeplattform (GWB/VgV/UVgO, eVergabe); dafür wären
+  separate Prüfung und Umsetzung nötig.
+
+### 8.4 API (neu)
+
+`GET/POST /api/projekte/{id}/ausschreibungen` · `GET /api/ausschreibungen/uebersicht` · `GET /api/ausschreibungen?q&gewerk&ort&auftraggeber&projektart&abrechnungsart&von&bis&frist_bis&volumen_max&status&nur_einladungen` ·
+`GET/PUT/DELETE /api/ausschreibungen/{id}`, `POST …/veroeffentlichen`, `POST …/aufheben`, `POST …/einladungen`, `DELETE …/einladungen/{eid}`, `POST …/dokumente`,
+`GET …/positionen.csv`, `POST …/positionen/import` (CSV), `POST …/positionen/gaeb` (501, Modul `gaeb.py` vorbereitet), `POST …/fragen`, `POST /api/fragen/{id}/antwort`,
+`POST …/angebot`, `GET …/angebote` (Liste + Vergleich), `POST …/vergabe` · `GET/PUT /api/angebote/{id}`, `POST …/einreichen`, `POST …/zurueckziehen`, `POST …/dokumente`,
+`GET …/positionen.csv`, `POST …/pruefung`, `PUT …/bewertung` · `GET /api/vergaben/{id}`, `POST …/freigabe`, `POST …/dokumente`, `POST …/mitteilen`, `POST …/zurueckziehen`, `POST …/antwort` ·
+`GET /api/firma/speicher`. `GET/PUT /api/firma/verzeichnis` um `regionen[]` und `ausschreibungen_benachrichtigen` erweitert.
+
+### 8.5 Oberfläche
+
+- Menü **Ausschreibungen** (Büro/Inhaber): Entdecken (Filter Gewerk, Ort, Abrechnungsart, Frist, nur Einladungen), Einladungen, Meine Angebote,
+  Erhaltene Aufträge (mit Annahme), Meine Ausschreibungen (mit Zählern und laufenden Vergaben); Hinweis auf bald endende Fristen.
+- Projekt → Reiter **Ausschreibungen** (Eigentümer-Leitung): Liste, Neue Ausschreibung (Dialog mit allen Feldern, Positionen-Editor, CSV-Einfügen).
+- Ausschreibungsdetail: Übersicht (Eckdaten, Kaufmännisches, Projekt, Einladungen, Verlauf), Positionen (CSV), Unterlagen (Bilder und Dokumente),
+  Anforderungen, Rückfragen (fragen/antworten, Freigabe für alle Bieter), Angebot abgeben (Bieter: Preisart, Einzelpreise je Position mit
+  Summen, Anhänge, Entwurf/Einreichen/Zurückziehen, Verlauf), Angebote (Leitung: Vergleichstabelle, Details, Bewertung 0–5 je Kriterium,
+  In Prüfung/Rückfrage/Ablehnen, Zur Vergabe vorschlagen), Vergabe (Schritte, Dokumente, Freigabe, Mitteilung, verbindliche Annahme).
+- Projektdialog → „Bauvorhaben“; Zusammenarbeit → Verzeichnis mit Regionen und Benachrichtigungsschalter; Projektdokumente mit Ordnern,
+  Versionen und „ältere Versionen anzeigen“.
+
+### 8.6 Tests
+
+`tests/test_ausschreibung_20261023.py` (Beispielablauf GOLDBECK – Logistikzentrum Hannover): Anlegen, Entwurf unsichtbar, Veröffentlichen mit
+Pflichtfeldern, Benachrichtigungen nach Gewerk/Region, Marktplatz und Filter, private Ausschreibung nur für Eingeladene, Mitarbeiter ohne Zugriff,
+Bieteransicht ohne interne Vermerke/Budget, interne Projektunterlagen privat, Änderungsprotokoll, Aufheben; Angebote mit Positionspreisen und
+Summen, kein Doppelangebot, Entwürfe für den Eigentümer unsichtbar, Konkurrenten sehen nichts, Vergleich sortiert, Bewertung nur Leitung,
+Rückfragen öffentlich/privat, Frist serverseitig, Nachforderung mit Version 2, Rücknahme protokolliert; Vergabe mit Vier-Augen-Freigabe,
+Vertragsdokument, Mitteilung, Annahme nur Inhaber mit Bestätigungssatz, Beteiligung + lokales Projekt, Absage an Konkurrenten, Aufgabe für die
+Firma, Zeiten/Monat/Rechnung/PDF der Firma weiterhin (und für den Auftraggeber unsichtbar), Protokoll beider Firmen; Ablehnung durch die Firma,
+Vergabe zurückziehen, CSV-Import, GAEB 501, Dokumentversionen, Speichergrenze 413.
+
+## 9. Offen (ausdrücklich nicht fertig)
+
+- GAEB (X83/X84, GAEB 90): nur Erkennung und ehrliche Ablehnung (`gaeb.py`); Austausch des LV über CSV.
+- Umkreissuche mit Geokoordinaten (Projekte können lat/lon tragen; der Marktplatz filtert nach Ortstext); Karte nur als OpenStreetMap-Link.
+- Benachrichtigungen nur In-App; „bald endende Frist“ ohne Zeitplaner; keine E-Mail/Push.
+- Tabellenimport nur CSV (kein XLSX); Angebots-PDF wird vom Bieter hochgeladen, nicht erzeugt.
+- Vergaberecht für öffentliche Auftraggeber nicht abgedeckt (siehe 8.3).
 
 - Lieferungen sind Termine mit Freitext (Material, Menge); keine Mengen-/Lagerverwaltung, kein Zugang für Lieferanten.
 - Bautagesbericht-PDF ohne Unterschrift; keine Sammel-PDF je Woche/Monat; Mängel ohne Serien-/Sammelabnahme.

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import Response
 
 from auth import aktueller_nutzer, hat_rolle, jetzt_iso, schreibend
-from dateien import bild_verkleinern, datei_speichern
+from dateien import bild_verkleinern, datei_speichern, version_verknuepfen
 from db import db
 from gemeinsam import neue_id
 from models import (DokumentFreigabeIn, KommentarIn, LieferungIn, LieferungStatusIn, LieferungUpdateIn, MangelIn, MangelStatusIn, MangelUpdateIn,
@@ -531,14 +531,18 @@ async def dokumente_liste(project_id: str, user: dict = Depends(aktueller_nutzer
 
 @router.post("/api/projekte/{project_id}/dokumente")
 async def dokument_hochladen(project_id: str, datei: UploadFile = File(...), kategorie: str = Form("Sonstiges"), note: str = Form(""),
-                             fuer_alle: bool = Form(False), user: dict = Depends(aktueller_nutzer)):
+                             fuer_alle: bool = Form(False), ordner: str = Form(""), ersetzt_id: str = Form(""), user: dict = Depends(aktueller_nutzer)):
     z = await zugang(user, project_id)
     if not ((z["eigentuemer"] and z["leitung"]) or partner_leitung(z, user)):
         raise HTTPException(403, "Dafür fehlt die Berechtigung.")
-    meta = await datei_speichern(user["firma_id"], datei)
+    meta = await datei_speichern(user["firma_id"], datei, user["id"])
     doc = {**meta, "firma_id": user["firma_id"], "scope": "plattform", "ref_id": project_id, "project_id": project_id,
            "category": kategorie if kategorie in KATEGORIEN_DOKUMENTE else "Sonstiges", "note": note[:500], "freigabe_alle": bool(fuer_alle) and z["eigentuemer"],
-           "uploaded_by": user["id"], "uploaded_by_name": user.get("name"), "created_at": jetzt_iso()}
+           "ordner": ordner.strip()[:120], "uploaded_by": user["id"], "uploaded_by_name": user.get("name"), "created_at": jetzt_iso()}
+    doc = await version_verknuepfen(doc, ersetzt_id.strip() or None, user["firma_id"])
+    if doc.get("vorgaenger_id"):
+        alt = await db().documents.find_one({"id": doc["vorgaenger_id"]}, {"_id": 0, "freigabe_alle": 1})
+        doc["freigabe_alle"] = doc["freigabe_alle"] or bool((alt or {}).get("freigabe_alle"))
     await db().documents.insert_one(dict(doc))
     if doc["freigabe_alle"]:
         async for b in db().beteiligungen.find({"project_id": project_id, "status": "aktiv"}, {"_id": 0, "firma_id": 1}):

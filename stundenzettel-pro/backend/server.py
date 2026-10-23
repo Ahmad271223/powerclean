@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 from db import db, indizes_anlegen
-from routes import (abschluss, api_v1, auth_routes, auswertung, baustelle, dashboard, exporte, firma, import_free, konten, kunden,
+from routes import (abschluss, api_v1, ausschreibungen, auth_routes, auswertung, baustelle, dashboard, exporte, firma, import_free, konten, kunden,
                     leistungen, lohn, mitarbeiter, plattform, projekte, rechnungen, zeiten_routes)
 
 VERSION = "1.1.0"
@@ -35,7 +35,7 @@ app = FastAPI(title="Stundenzettel Pro", version=VERSION, docs_url="/api/docs", 
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 for modul in (auth_routes, firma, mitarbeiter, kunden, projekte, zeiten_routes, rechnungen, exporte, import_free, api_v1, dashboard,
-              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle):
+              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle, ausschreibungen):
     app.include_router(modul.router)
 
 

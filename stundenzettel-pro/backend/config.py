@@ -20,7 +20,9 @@ DB_NAME = env("DB_NAME", "stundenzettel_pro")
 
 # Dateien (Personalakte, Projektakte) liegen auf der Platte, Metadaten in der Datenbank
 DATA_DIR = Path(env("DATA_DIR", str(BASIS / "daten")))
-MAX_DATEI_MB = int(env("MAX_DATEI_MB", "15"))
+MAX_DATEI_MB = int(env("MAX_DATEI_MB", "25"))
+SPEICHER_GB = float(env("SPEICHER_GB", "5"))            # Speicherplatz je Firma (Standard; je Firma über plan.speicher_gb anpassbar)
+UPLOADS_JE_10_MIN = int(env("UPLOADS_JE_10_MIN", "120"))  # Uploadrate je Nutzer
 
 # Oberfläche
 FRONTEND_DIST = Path(env("FRONTEND_DIST", str(BASIS.parent / "frontend" / "dist")))

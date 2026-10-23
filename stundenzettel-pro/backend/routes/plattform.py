@@ -36,7 +36,8 @@ async def verzeichnis_lesen(user: dict = Depends(rolle_noetig("buero"))):
     firma = await firma_laden(user["firma_id"])
     v = firma.get("verzeichnis") or {}
     return {"verzeichnis": {"sichtbar": bool(v.get("sichtbar")), "gewerke": v.get("gewerke") or [], "beschreibung": v.get("beschreibung") or "",
-                            "ort": v.get("ort") or firma.get("city") or ""}, "gewerke_vorschlaege": GEWERKE}
+                            "ort": v.get("ort") or firma.get("city") or "", "regionen": v.get("regionen") or [],
+                            "ausschreibungen_benachrichtigen": v.get("ausschreibungen_benachrichtigen", True)}, "gewerke_vorschlaege": GEWERKE}
 
 
 @router.put("/api/firma/verzeichnis")

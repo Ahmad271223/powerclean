@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check,
   Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera,
-  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen,
+  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen, Gavel,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
@@ -26,6 +26,7 @@ import BerichteTab from '../components/plattform/BerichteTab';
 import DokumenteTab from '../components/plattform/DokumenteTab';
 import MeilensteineKarte from '../components/plattform/MeilensteineKarte';
 import PlattformTag from '../components/plattform/PlattformTag';
+import AusschreibungenTab from '../components/plattform/AusschreibungenTab';
 import { AppIcon, Btn, Card, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Field } from '../components/ui';
 import { api, openFile } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -164,7 +165,7 @@ export default function ProjektPage() {
     ...(verknuepft
       ? [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...(isBuero || isVorarbeiter ? baustelleTabs : []), ...(isBuero ? [{ value: 'freigaben', label: 'Freigaben', icon: Share2 }] : [])]
       : leitung
-        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
+        ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, { value: 'ausschreibungen', label: 'Ausschreibungen', icon: Gavel }, { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
   ];
 
@@ -329,6 +330,7 @@ export default function ProjektPage() {
       {tab === 'akte' && <Akte projectId={project.id} leitung={leitung} />}
       {tab === 'checklisten' && <Checklisten projectId={project.id} leitung={leitung} />}
       {tab === 'firmen' && <FirmenTab projectId={project.id} isBuero={isBuero} />}
+      {tab === 'ausschreibungen' && <AusschreibungenTab projectId={project.id} />}
       {tab === 'aufgaben' && <AufgabenTab projectId={plattformId} />}
       {tab === 'anwesenheit' && <AnwesenheitTab projectId={project.id} />}
       {tab === 'nachweise' && <NachweiseTab projectId={project.id} />}

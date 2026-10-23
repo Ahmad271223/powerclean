@@ -7,6 +7,8 @@ import { Btn, Card } from './components/ui';
 import { LoginPage, RegisterPage, EinladungPage } from './pages/LoginPage';
 import ZusammenarbeitPage, { ProjektEinladungPage } from './pages/ZusammenarbeitPage';
 import MeineAufgabenPage from './pages/MeineAufgabenPage';
+import AusschreibungenPage from './pages/AusschreibungenPage';
+import AusschreibungPage from './pages/AusschreibungPage';
 import DashboardPage from './pages/DashboardPage';
 import StempeluhrPage from './pages/StempeluhrPage';
 import ProjektePage from './pages/ProjektePage';
@@ -93,6 +95,8 @@ export default function App() {
             <Route path="/projekte/:projectId" element={<Geschuetzt><ProjektPage /></Geschuetzt>} />
             <Route path="/aufgaben" element={<Geschuetzt><MeineAufgabenPage /></Geschuetzt>} />
             <Route path="/zusammenarbeit" element={<Geschuetzt buero><ZusammenarbeitPage /></Geschuetzt>} />
+            <Route path="/ausschreibungen" element={<Geschuetzt buero><AusschreibungenPage /></Geschuetzt>} />
+            <Route path="/ausschreibungen/:ausschreibungId" element={<Geschuetzt buero><AusschreibungPage /></Geschuetzt>} />
             <Route path="/abwesenheiten" element={<Geschuetzt><AbwesenheitenPage /></Geschuetzt>} />
             <Route path="/kunden" element={<Geschuetzt buero><KundenPage /></Geschuetzt>} />
             <Route path="/mitarbeiter" element={<Geschuetzt buero><MitarbeiterPage /></Geschuetzt>} />

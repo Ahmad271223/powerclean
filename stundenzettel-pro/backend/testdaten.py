@@ -94,4 +94,27 @@ if r.status_code == 200:
                                                                    "taetigkeiten": v["taetigkeiten"] or "Leuchten im Foyer getauscht", "lieferungen": v["lieferungen"], "fortschritt": "8 von 12 Panels montiert"}, headers=HE))
     ok(c.post("/api/projekte/" + p1["id"] + "/dokumente", data={"kategorie": "Baupläne", "note": "Grundriss EG mit Leuchtenplan", "fuer_alle": "true"},
               files={"datei": ("Grundriss-EG.pdf", b"%PDF-1.4\n% Demo-Bauplan Stundenzettel Pro\n", "application/pdf")}, headers=H))
+    # Ausschreibung im Sparkassen-Projekt: kombiniert sichtbar + Einladung an Elektro Mustermann, Unterlage, eingereichtes Angebot, beantwortete Rückfrage; dazu ein Entwurf
+    frist = (date.fromisoformat(heute) + timedelta(days=14)).isoformat()
+    von, bis = (date.fromisoformat(heute) + timedelta(days=30)).isoformat(), (date.fromisoformat(heute) + timedelta(days=75)).isoformat()
+    a = ok(c.post("/api/projekte/" + p1["id"] + "/ausschreibungen", json={
+        "titel": "Elektro-Nachrüstung Foyer und Schalterhalle", "gewerk": "Elektro", "leistungsart": "Sanierung", "sichtbarkeit": "kombiniert", "angebotsfrist": frist,
+        "ausfuehrung_von": von, "ausfuehrung_bis": bis, "beschreibung": "Austausch der Beleuchtung auf LED, neue Unterverteilung Schalterhalle, Datenverkabelung der Beratungsplätze.",
+        "leistungsumfang": "Demontage Altbestand, Montage, Prüfung nach DIN VDE 0100-600, Dokumentation und Einweisung.",
+        "positionen": [{"nr": "001", "leistung": "LED-Panel 60×60 inkl. Montage", "menge": 48, "einheit": "Stück"}, {"nr": "002", "leistung": "Unterverteilung Schalterhalle", "menge": 1, "einheit": "Stück"},
+                       {"nr": "003", "leistung": "Datenleitung Cat.7 verlegen", "menge": 320, "einheit": "m"}],
+        "kaufmaennisch": {"abrechnungsart": "einheitspreise", "budget": 48000, "zahlungsbedingungen": "30 Tage netto, Abschlag nach Montage", "vertragsbedingungen": "VOB/B, 5 % Sicherheitseinbehalt"},
+        "freigabe": {"budget": True, "auftraggeber": True, "adresse": True},
+        "anforderungen": {"qualifikationen": "Eingetragener Elektrofachbetrieb", "versicherungen": "Betriebshaftpflicht mind. 3 Mio. €", "sicherheit": "Arbeiten im laufenden Betrieb, Sicherheitsunterweisung vor Beginn"},
+        "intern": "Zielpreis 42.000 €"}, headers=H))["ausschreibung"]
+    ok(c.post("/api/ausschreibungen/" + a["id"] + "/dokumente", data={"kategorie": "Pläne", "note": "Leuchtenplan EG"}, files={"datei": ("leuchtenplan.pdf", b"%PDF-1.4\n% Demo-Leuchtenplan\n", "application/pdf")}, headers=H))
+    ok(c.post("/api/ausschreibungen/" + a["id"] + "/einladungen", json={"firma_ids": [el["firma"]["id"]], "nachricht": "Wir würden uns über Ihr Angebot freuen."}, headers=H))
+    ok(c.post("/api/ausschreibungen/" + a["id"] + "/veroeffentlichen", headers=H))
+    g = ok(c.post("/api/ausschreibungen/" + a["id"] + "/angebot", json={"preisart": "einheitspreise", "positionen": [{"nr": "001", "einzelpreis": 185}, {"nr": "002", "einzelpreis": 4200}, {"nr": "003", "einzelpreis": 95}],
+                                                                          "ansprechpartner": "Erika Mustermann", "ausfuehrung_von": von, "ausfuehrung_bis": bis, "kapazitaet": "4 Monteure, 1 Meister",
+                                                                          "leistungsbeschreibung": "Komplettleistung inkl. Prüfprotokoll und Bestandsplan.", "gueltig_bis": bis}, headers=HE))["angebot"]
+    ok(c.post("/api/angebote/" + g["id"] + "/einreichen", headers=HE))
+    fr = ok(c.post("/api/ausschreibungen/" + a["id"] + "/fragen", json={"text": "Sind Notlichtleuchten im Leuchtenplan enthalten?", "position_nr": "001"}, headers=HE))["frage"]
+    ok(c.post("/api/fragen/" + fr["id"] + "/antwort", json={"antwort": "Ja, sechs Notlichtleuchten sind in Position 001 enthalten.", "oeffentlich": True}, headers=H))
+    ok(c.post("/api/projekte/" + p1["id"] + "/ausschreibungen", json={"titel": "Glasreinigung Fassade", "gewerk": "Reinigung", "beschreibung": "Quartalsweise Glasreinigung der Fassade", "sichtbarkeit": "oeffentlich", "angebotsfrist": frist}, headers=H))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

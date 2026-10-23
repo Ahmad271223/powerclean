@@ -150,6 +150,19 @@ Oberfläche: „Zusammenarbeit“ (Büro), Projekt-Reiter Firmen / Aufgaben / Li
 bzw. Freigaben, Seite „Aufgaben“ für alle.
 Architektur, Rechtemodell, Datenmodell, Migration und offene Punkte: **`PLATTFORM.md`**.
 
+## Ausschreibungen, Angebote und Vergabe (Branch `ausschreibungen`)
+
+Auftraggeber legen je Gewerk Ausschreibungen im Projekt an (Beschreibung, Termine, Anforderungen, Kaufmännisches, Leistungsverzeichnis mit
+Positionen, Unterlagen), speichern sie als Entwurf und veröffentlichen sie plattformweit, nur für eingeladene Firmen oder beides. Registrierte
+Firmen finden passende Ausschreibungen unter „Ausschreibungen → Entdecken“ (Filter Gewerk, Ort, Abrechnungsart, Frist), werden nach Gewerk und
+Region benachrichtigt, stellen Rückfragen und geben Angebote ab (Pauschal, Einzelpreise je Position mit automatischen Summen oder Stunden, mit
+Anhängen, Versionen, Rücknahme). Die Projektleitung vergleicht (Preis, Termin, Vollständigkeit, Bewertung 0–5 je Kriterium), stellt Rückfragen
+oder lehnt ab und schlägt eine Vergabe vor: interne Freigabe (Vier-Augen-Prinzip), Mitteilung mit Vertragsdokumenten, verbindliche Annahme
+nur durch den Inhaber der Firma mit Bestätigungssatz. Erst dann wird die Firma automatisch beteiligt und bekommt ihr verknüpftes Projekt
+(Mitarbeiter, Aufgaben, Zeiten, Fotos, Berichte, Stundenzettel, Rechnung – alles wie bisher). Bieter sehen nie Angebote anderer Firmen;
+Entwürfe und interne Vermerke bleiben vertraulich; Fristen werden serverseitig geprüft. Projekte tragen optional Bauvorhaben-Daten;
+Dokumente haben Ordner und Versionen; Speicher- und Upload-Grenzen je Firma. Details: **`PLATTFORM.md`, Abschnitt 8**.
+
 ## E-Rechnung (XRechnung / ZUGFeRD)
 
 Jede Rechnung lässt sich unter Rechnungen → „E-Rechnung“ als **XRechnung 3.0** (reines XML, Pflicht bei Bund, Ländern,
@@ -180,11 +193,11 @@ Lokal: `npm run cap:sync` (baut mit `.env.app`), `npm run assets`, `npm run cap:
 
 ## Tests
 
-`cd stundenzettel-pro/backend && python -m pytest -q` – 38 Tests ohne Datenbank (mongomock): Grundlagen
+`cd stundenzettel-pro/backend && python -m pytest -q` – 42 Tests ohne Datenbank (mongomock): Grundlagen
 (`test_pro_grundlagen_20261022.py`), Pro Plus (`test_pro_plus_20261022.py`: Feiertage, Konten, ArbZG, Sperren,
 Leistungen/Zusatzpositionen, Budget/Auswertung, Webhooks, Vorarbeiter, Stempelung beenden, Lohnsummen), E-Rechnung und
 Lohnvorbereitung (`test_erechnung_lohn_20261023.py`), Fotos (`test_fotos_20261023.py`), Plattform (`test_plattform_20261023.py`)
-und Baustellenalltag (`test_baustelle_20261023.py`).
+Baustellenalltag (`test_baustelle_20261023.py`) und Ausschreibungen/Vergabe (`test_ausschreibung_20261023.py`, Beispielablauf GOLDBECK).
 
 ## Offen / nächste Schritte
 

@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
 from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, rolle_noetig, schreibend
-from dateien import KATEGORIEN_PROJEKT, datei_loeschen, datei_speichern
+from dateien import KATEGORIEN_PROJEKT, datei_loeschen, datei_speichern, version_verknuepfen
 from db import db
 from feiertage import feiertage_set
 from gemeinsam import projekt_fotos
@@ -213,19 +213,20 @@ async def kommentar_loeschen(kommentar_id: str, user: dict = Depends(schreibend(
 
 @router.post("/api/projekte/{project_id}/dateien")
 async def datei_hochladen(project_id: str, datei: UploadFile = File(...), kategorie: str = Form("Fotos"), note: str = Form(""),
-                          date: str = Form(""), user: dict = Depends(schreibend("mitarbeiter"))):
+                          date: str = Form(""), ordner: str = Form(""), ersetzt_id: str = Form(""), user: dict = Depends(schreibend("mitarbeiter"))):
     p = await projekt_laden(user, project_id)
-    meta = await datei_speichern(user["firma_id"], datei)
+    meta = await datei_speichern(user["firma_id"], datei, user["id"])
     if date:
         try:
             datum_pruefen(date)
         except ValueError as exc:
             raise HTTPException(400, str(exc))
     doc = {**meta, "firma_id": user["firma_id"], "scope": "project", "ref_id": project_id,
-           "category": kategorie if kategorie in KATEGORIEN_PROJEKT else "Sonstiges", "note": note[:500], "date": date or None,
+           "category": kategorie if kategorie in KATEGORIEN_PROJEKT else "Sonstiges", "note": note[:500], "date": date or None, "ordner": ordner.strip()[:120],
            "uploaded_by": user["id"], "uploaded_by_name": user.get("name"), "created_at": jetzt_iso()}
+    doc = await version_verknuepfen(doc, ersetzt_id.strip() or None, user["firma_id"])
     await db().documents.insert_one(dict(doc))
-    await protokollieren(user, "projektakte.datei", p["name"], details={"datei": meta["filename"], "kategorie": doc["category"]})
+    await protokollieren(user, "projektakte.datei", p["name"], details={"datei": meta["filename"], "kategorie": doc["category"], "version": doc["version"]})
     doc.pop("path", None)
     return {"dokument": doc}
 

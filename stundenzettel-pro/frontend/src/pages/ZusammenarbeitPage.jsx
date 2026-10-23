@@ -86,7 +86,9 @@ export default function ZusammenarbeitPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Ort"><TextInput value={verz.verzeichnis.ort} onChange={(e) => { const v = e.target.value; setVerz((x) => ({ ...x, verzeichnis: { ...x.verzeichnis, ort: v } })); }} /></Field>
             <Field label="Beschreibung" className="sm:col-span-2"><TextArea rows={2} value={verz.verzeichnis.beschreibung} onChange={(e) => { const v = e.target.value; setVerz((x) => ({ ...x, verzeichnis: { ...x.verzeichnis, beschreibung: v } })); }} /></Field>
+            <Field label="Regionen für Ausschreibungen (durch Komma)" hint="Leer = überall. Benachrichtigung bei neuen passenden Ausschreibungen nach Gewerk und Region." className="sm:col-span-2"><TextInput value={(verz.verzeichnis.regionen || []).join(', ')} onChange={(e) => { const v = e.target.value; setVerz((x) => ({ ...x, verzeichnis: { ...x.verzeichnis, regionen: v.split(',').map((r) => r.trim()).filter(Boolean) } })); }} placeholder="z. B. Hannover, Braunschweig, 30" /></Field>
           </div>
+          <div className="rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={verz.verzeichnis.ausschreibungen_benachrichtigen !== false} onChange={(v) => setVerz((x) => ({ ...x, verzeichnis: { ...x.verzeichnis, ausschreibungen_benachrichtigen: v } }))} label="Über neue passende Ausschreibungen benachrichtigen" /></div>
           {isInhaber ? <Btn onClick={verzSpeichern} loading={busy === 'verz'}>Speichern</Btn> : <p className="text-[12px] text-[#86868B]">Ändern kann das nur der Inhaber.</p>}
         </Card>
 

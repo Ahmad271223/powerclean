@@ -68,6 +68,18 @@ async def indizes_anlegen(d) -> None:
         ("maengel", [("project_id", 1), ("status", 1)], {"name": "projekt_status"}),
         ("tagesberichte", [("project_id", 1), ("datum", -1)], {"name": "projekt_datum"}),
         ("meilensteine", [("project_id", 1), ("datum", 1)], {"name": "projekt_datum"}),
+        # Ausschreibungen und Vergabe
+        ("ausschreibungen", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
+        ("ausschreibungen", [("project_id", 1)], {"name": "projekt"}),
+        ("ausschreibungen", [("status", 1), ("sichtbarkeit", 1), ("angebotsfrist", 1)], {"name": "marktplatz"}),
+        ("ausschreibungen", [("firma_id", 1), ("nummer", 1)], {"unique": True, "name": "nummer_je_firma"}),
+        ("ausschreibung_einladungen", [("ausschreibung_id", 1), ("firma_id", 1)], {"unique": True, "name": "eine_je_firma"}),
+        ("ausschreibung_einladungen", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
+        ("angebote", [("ausschreibung_id", 1), ("firma_id", 1)], {"unique": True, "name": "ein_angebot_je_firma"}),
+        ("angebote", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
+        ("ausschreibung_fragen", [("ausschreibung_id", 1), ("created_at", 1)], {"name": "ausschreibung_zeit"}),
+        ("vergaben", [("ausschreibung_id", 1), ("status", 1)], {"name": "ausschreibung_status"}),
+        ("vergaben", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
     ]
     for sammlung, schluessel, optionen in aufgaben:
         try:

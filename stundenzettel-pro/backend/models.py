@@ -215,6 +215,36 @@ class ProjektIn(BaseModel):
     schedule: Optional[str] = Field(default="", max_length=300)  # z. B. "Mo–Fr 06:00–09:00"
     budget_hours_month: float = Field(default=0, ge=0, le=100000)
     budget_warn_percent: int = Field(default=80, ge=1, le=100)
+    # Bauvorhaben (Ausschreibungsplattform), alles optional
+    projektnummer: Optional[str] = Field(default="", max_length=60)
+    auftraggeber: Optional[str] = Field(default="", max_length=160)
+    generalunternehmer: Optional[str] = Field(default="", max_length=160)
+    projektart: Optional[str] = Field(default="", max_length=120)
+    beschreibung: Optional[str] = Field(default="", max_length=8000)
+    baubeginn: Optional[str] = None
+    bauende: Optional[str] = None
+    phasen: list[str] = Field(default_factory=list, max_length=50)
+    bauabschnitte: list[str] = Field(default_factory=list, max_length=100)
+    gewerke: list[str] = Field(default_factory=list, max_length=40)
+    projektstatus: str = Field(default="", pattern="^(|planung|ausschreibung|ausfuehrung|abgeschlossen)$")
+    volumen: Optional[float] = Field(default=None, ge=0, le=1e12)
+    kosten: Optional[float] = Field(default=None, ge=0, le=1e12)
+    anforderungen: Optional[str] = Field(default="", max_length=4000)
+    lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    lon: Optional[float] = Field(default=None, ge=-180, le=180)
+
+    @field_validator("baubeginn", "bauende")
+    @classmethod
+    def _bau_datum(cls, v):
+        if v in (None, ""):
+            return None
+        datum_pruefen(v)
+        return v
+
+    @field_validator("phasen", "bauabschnitte", "gewerke")
+    @classmethod
+    def _listen(cls, v):
+        return [x.strip()[:80] for x in v if x and x.strip()]
 
 
 class ZeitIn(BaseModel):
@@ -536,8 +566,10 @@ class VerzeichnisIn(BaseModel):
     gewerke: list[str] = Field(default_factory=list, max_length=12)
     beschreibung: Optional[str] = Field(default="", max_length=500)
     ort: Optional[str] = Field(default="", max_length=120)
+    regionen: list[str] = Field(default_factory=list, max_length=20)        # Interessen für Ausschreibungen: Orte/Regionen/PLZ-Bereiche
+    ausschreibungen_benachrichtigen: bool = True
 
-    @field_validator("gewerke")
+    @field_validator("gewerke", "regionen")
     @classmethod
     def _gewerke(cls, v):
         return [g.strip()[:40] for g in v if g and g.strip()]
@@ -711,3 +743,180 @@ class MeilensteinIn(BaseModel):
 
 class DokumentFreigabeIn(BaseModel):
     fuer_alle: bool = False
+
+
+# ---------------------------------------------------------------- Ausschreibungen, Angebote, Vergabe
+
+def _datum_optional(v):
+    if v in (None, ""):
+        return None
+    datum_pruefen(v)
+    return v
+
+
+class PositionIn(BaseModel):
+    nr: str = Field(min_length=1, max_length=20)
+    leistung: str = Field(min_length=1, max_length=300)
+    beschreibung: Optional[str] = Field(default="", max_length=2000)
+    menge: float = Field(default=0, ge=0, le=1e9)
+    einheit: str = Field(default="Stück", max_length=20)
+
+
+class AnforderungenIn(BaseModel):
+    qualifikationen: Optional[str] = Field(default="", max_length=2000)
+    zertifikate: Optional[str] = Field(default="", max_length=2000)
+    versicherungen: Optional[str] = Field(default="", max_length=2000)
+    kapazitaet: Optional[str] = Field(default="", max_length=1000)
+    ausruestung: Optional[str] = Field(default="", max_length=2000)
+    material: Optional[str] = Field(default="", max_length=2000)
+    technik: Optional[str] = Field(default="", max_length=4000)
+    bedingungen: Optional[str] = Field(default="", max_length=4000)
+    sicherheit: Optional[str] = Field(default="", max_length=2000)
+    sonstiges: Optional[str] = Field(default="", max_length=2000)
+
+
+class KaufmaennischIn(BaseModel):
+    abrechnungsart: str = Field(default="pauschal", pattern="^(pauschal|einheitspreise|stunden|gemischt)$")
+    budget: Optional[float] = Field(default=None, ge=0, le=1e12)
+    zahlungsbedingungen: Optional[str] = Field(default="", max_length=2000)
+    vertragsbedingungen: Optional[str] = Field(default="", max_length=4000)
+    preisaufschluesselung: Optional[str] = Field(default="", max_length=2000)
+
+
+class FreigabeAusschreibungIn(BaseModel):
+    budget: bool = False          # Budgetrahmen für Bieter sichtbar
+    auftraggeber: bool = True     # Firmenname des Auftraggebers sichtbar
+    adresse: bool = True          # Projektadresse sichtbar
+
+
+class AusschreibungIn(BaseModel):
+    titel: str = Field(min_length=1, max_length=200)
+    gewerk: str = Field(default="", max_length=60)
+    leistungsart: Optional[str] = Field(default="", max_length=120)
+    beschreibung: Optional[str] = Field(default="", max_length=20000)
+    leistungsumfang: Optional[str] = Field(default="", max_length=20000)
+    ausfuehrungsort: Optional[str] = Field(default="", max_length=300)
+    sichtbarkeit: str = Field(default="privat", pattern="^(oeffentlich|privat|kombiniert)$")
+    bewerbungsfrist: Optional[str] = None
+    angebotsfrist: Optional[str] = None
+    ausfuehrung_von: Optional[str] = None
+    ausfuehrung_bis: Optional[str] = None
+    anforderungen: AnforderungenIn = Field(default_factory=AnforderungenIn)
+    kaufmaennisch: KaufmaennischIn = Field(default_factory=KaufmaennischIn)
+    freigabe: FreigabeAusschreibungIn = Field(default_factory=FreigabeAusschreibungIn)
+    positionen: list[PositionIn] = Field(default_factory=list, max_length=500)
+    verantwortlich_user_id: Optional[str] = None
+    intern: Optional[str] = Field(default="", max_length=4000)   # interne Vermerke, nie für Bieter sichtbar
+
+    @field_validator("bewerbungsfrist", "angebotsfrist", "ausfuehrung_von", "ausfuehrung_bis")
+    @classmethod
+    def _d(cls, v):
+        return _datum_optional(v)
+
+    @model_validator(mode="after")
+    def _pruefen(self):
+        nrn = [p.nr for p in self.positionen]
+        if len(nrn) != len(set(nrn)):
+            raise ValueError("Positionsnummern müssen eindeutig sein")
+        if self.ausfuehrung_von and self.ausfuehrung_bis and self.ausfuehrung_bis < self.ausfuehrung_von:
+            raise ValueError("Ausführungsende liegt vor dem Beginn")
+        return self
+
+
+class AusschreibungEinladungIn(BaseModel):
+    firma_ids: list[str] = Field(min_length=1, max_length=50)
+    nachricht: Optional[str] = Field(default="", max_length=1000)
+
+
+class AngebotPositionIn(BaseModel):
+    nr: str = Field(min_length=1, max_length=20)
+    einzelpreis: Optional[float] = Field(default=None, ge=0, le=1e9)
+    bemerkung: Optional[str] = Field(default="", max_length=300)
+
+
+class AngebotIn(BaseModel):
+    nummer: Optional[str] = Field(default="", max_length=60)
+    ansprechpartner: Optional[str] = Field(default="", max_length=160)
+    preisart: str = Field(default="pauschal", pattern="^(pauschal|einheitspreise|stunden)$")
+    preis_netto: Optional[float] = Field(default=None, ge=0, le=1e12)
+    stundensatz: Optional[float] = Field(default=None, ge=0, le=100000)
+    stunden_geschaetzt: Optional[float] = Field(default=None, ge=0, le=1e7)
+    ust_satz: float = Field(default=19, ge=0, le=30)
+    reverse_charge: bool = False
+    positionen: list[AngebotPositionIn] = Field(default_factory=list, max_length=500)
+    leistungsbeschreibung: Optional[str] = Field(default="", max_length=20000)
+    ausfuehrung_von: Optional[str] = None
+    ausfuehrung_bis: Optional[str] = None
+    verfuegbarkeit: Optional[str] = Field(default="", max_length=1000)
+    kapazitaet: Optional[str] = Field(default="", max_length=1000)
+    material: Optional[str] = Field(default="", max_length=2000)
+    zusatzleistungen: Optional[str] = Field(default="", max_length=2000)
+    bemerkungen: Optional[str] = Field(default="", max_length=4000)
+    gueltig_bis: Optional[str] = None
+
+    @field_validator("ausfuehrung_von", "ausfuehrung_bis", "gueltig_bis")
+    @classmethod
+    def _d(cls, v):
+        return _datum_optional(v)
+
+
+class AngebotPruefungIn(BaseModel):
+    """Entscheidung der Projektleitung zu einem eingereichten Angebot."""
+    status: str = Field(pattern="^(in_pruefung|rueckfrage|abgelehnt)$")
+    nachricht: Optional[str] = Field(default="", max_length=2000)
+    nachreichen_bis: Optional[str] = None
+
+    @field_validator("nachreichen_bis")
+    @classmethod
+    def _d(cls, v):
+        return _datum_optional(v)
+
+
+class BewertungIn(BaseModel):
+    kriterien: dict[str, int] = Field(default_factory=dict)
+    notiz: Optional[str] = Field(default="", max_length=4000)
+    mindestanforderungen_erfuellt: Optional[bool] = None
+
+    @field_validator("kriterien")
+    @classmethod
+    def _k(cls, v):
+        erlaubt = {"preis", "leistung", "termin", "verfuegbarkeit", "qualifikation", "vollstaendigkeit", "mindestanforderungen"}
+        aus = {}
+        for k, punkte in v.items():
+            if k not in erlaubt:
+                raise ValueError(f"Unbekanntes Kriterium: {k}")
+            if not 0 <= int(punkte) <= 5:
+                raise ValueError("Punkte 0–5")
+            aus[k] = int(punkte)
+        return aus
+
+
+class FrageIn(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+    position_nr: Optional[str] = Field(default="", max_length=20)
+
+
+class AntwortIn(BaseModel):
+    antwort: str = Field(min_length=1, max_length=4000)
+    oeffentlich: bool = False   # Antwort allen berechtigten Bietern zeigen (ohne Nennung der fragenden Firma)
+
+
+class VergabeVorschlagIn(BaseModel):
+    angebot_id: str
+    begruendung: Optional[str] = Field(default="", max_length=4000)
+
+
+class VergabeMitteilungIn(BaseModel):
+    nachricht: Optional[str] = Field(default="", max_length=4000)
+
+
+class VergabeAntwortIn(BaseModel):
+    annehmen: bool
+    bestaetigung: Optional[str] = Field(default="", max_length=200)
+    name: Optional[str] = Field(default="", max_length=160)
+    grund: Optional[str] = Field(default="", max_length=2000)
+
+
+class PositionenTextIn(BaseModel):
+    """Leistungsverzeichnis als Text (CSV: Nr;Leistung;Menge;Einheit[;Beschreibung])."""
+    csv: str = Field(min_length=1, max_length=400000)

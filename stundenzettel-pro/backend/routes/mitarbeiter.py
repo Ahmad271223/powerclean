@@ -187,6 +187,11 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
     d = await db().documents.find_one({"id": dokument_id}, {"_id": 0})
     if not d:
         raise HTTPException(404, "Dokument nicht gefunden.")
+    if d["scope"] in ("ausschreibung", "angebot", "vergabe"):
+        # Ausschreibungsunterlagen, Angebotsanhänge, Vergabedokumente: Rechte über den Eintrag (Bieter sehen nie fremde Angebote)
+        from ausschreibung import dokument_zugang as ausschreibung_dokument_zugang
+        await ausschreibung_dokument_zugang(user, d["scope"], d["ref_id"])
+        return d
     if d["scope"] in ("aufgabe", "lieferung", "mangel", "tagesbericht", "plattform"):
         # Plattform-Dateien: Rechte kommen aus dem Eintrag/Projekt, nicht aus der firma_id der Datei
         from plattform import dokument_zugang, zugang

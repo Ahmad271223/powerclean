@@ -1,7 +1,7 @@
 /** Rahmen der App: Kopfzeile, Navigation (Seitenleiste am Rechner, Tab-Leiste am Handy), Lizenz- und Offline-Hinweis. */
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { AppIcon, Sheet } from './ui';
 import { initials } from '../lib/utils';
@@ -11,6 +11,7 @@ const NAV_BUERO = [
   { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
+  { to: '/ausschreibungen', label: 'Ausschreibungen', icon: Gavel },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
   { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
   { to: '/rechnungen', label: 'Rechnungen', icon: Receipt },

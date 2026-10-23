@@ -3,9 +3,13 @@ import { Check, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PROJECT_COLORS } from '../lib/utils';
 import { api } from '../lib/api';
-import { Sheet, Btn, Field, TextInput, TextArea, SectionLabel, Toggle, Chip } from './ui';
+import { Sheet, Btn, Field, TextInput, TextArea, SectionLabel, Toggle, Chip, Select } from './ui';
 
-const EMPTY = { name: '', customer_id: '', customer_name: '', customer_address: '', address: '', schedule: '', employee_ids: [], hourly_rate: '', color: PROJECT_COLORS[0], notes: '', archived: false, default_workers: 1, reverse_charge: false, budget_hours_month: '', budget_warn_percent: 80 };
+const EMPTY = { name: '', customer_id: '', customer_name: '', customer_address: '', address: '', schedule: '', employee_ids: [], hourly_rate: '', color: PROJECT_COLORS[0], notes: '', archived: false, default_workers: 1, reverse_charge: false, budget_hours_month: '', budget_warn_percent: 80,
+  projektnummer: '', auftraggeber: '', generalunternehmer: '', projektart: '', beschreibung: '', baubeginn: '', bauende: '', phasen: '', bauabschnitte: '', gewerke: '', projektstatus: '', volumen: '', kosten: '', anforderungen: '', lat: '', lon: '' };
+const liste = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
+const zuListe = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
+const zahl = (v) => (v === '' || v === null || v === undefined ? null : parseFloat(String(v).replace(',', '.')) || 0);
 
 /** Projekt anlegen / ändern: Kunde aus dem Kundenstamm, zugewiesene Mitarbeiter, § 13b, Einsatzzeiten. */
 export default function ProjectDialog({ open, onOpenChange, project, defaultRate = 0, onSaved, onDeleted }) {
@@ -16,7 +20,7 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
 
   useEffect(() => {
     if (!open) return;
-    setForm(project ? { ...EMPTY, ...project, customer_id: project.customer_id || '', hourly_rate: project.hourly_rate ? String(project.hourly_rate) : '', employee_ids: project.employee_ids || [], budget_hours_month: project.budget_hours_month ? String(project.budget_hours_month) : '', budget_warn_percent: project.budget_warn_percent || 80 } : EMPTY);
+    setForm(project ? { ...EMPTY, ...project, customer_id: project.customer_id || '', hourly_rate: project.hourly_rate ? String(project.hourly_rate) : '', employee_ids: project.employee_ids || [], budget_hours_month: project.budget_hours_month ? String(project.budget_hours_month) : '', budget_warn_percent: project.budget_warn_percent || 80, phasen: liste(project.phasen), bauabschnitte: liste(project.bauabschnitte), gewerke: liste(project.gewerke), baubeginn: project.baubeginn || '', bauende: project.bauende || '', projektstatus: project.projektstatus || '', volumen: project.volumen ?? '', kosten: project.kosten ?? '', lat: project.lat ?? '', lon: project.lon ?? '', beschreibung: project.beschreibung || '', anforderungen: project.anforderungen || '', projektnummer: project.projektnummer || '', auftraggeber: project.auftraggeber || '', generalunternehmer: project.generalunternehmer || '', projektart: project.projektart || '' } : EMPTY);
     Promise.all([api.get('/api/kunden'), api.get('/api/mitarbeiter')])
       .then(([k, m]) => { setKunden(k.kunden); setMitarbeiter(m.mitarbeiter.filter((x) => x.active !== false)); })
       .catch((err) => toast.error(err.message));
@@ -40,6 +44,9 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
       default_workers: Math.max(1, Math.min(99, parseInt(form.default_workers, 10) || 1)), reverse_charge: !!form.reverse_charge,
       budget_hours_month: parseFloat(String(form.budget_hours_month).replace(',', '.')) || 0,
       budget_warn_percent: Math.max(1, Math.min(100, parseInt(form.budget_warn_percent, 10) || 80)),
+      projektnummer: (form.projektnummer || '').trim(), auftraggeber: (form.auftraggeber || '').trim(), generalunternehmer: (form.generalunternehmer || '').trim(), projektart: (form.projektart || '').trim(),
+      beschreibung: form.beschreibung || '', anforderungen: form.anforderungen || '', baubeginn: form.baubeginn || null, bauende: form.bauende || null, phasen: zuListe(form.phasen), bauabschnitte: zuListe(form.bauabschnitte),
+      gewerke: zuListe(form.gewerke), projektstatus: form.projektstatus || '', volumen: zahl(form.volumen), kosten: zahl(form.kosten), lat: zahl(form.lat), lon: zahl(form.lon),
     };
     setBusy(true);
     try {
@@ -124,6 +131,30 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
           </div>
           <Field label="Notizen"><TextArea rows={2} value={form.notes} onChange={set('notes')} placeholder="Schlüssel, Besonderheiten, Ansprechpartner" /></Field>
         </section>
+
+        <details className="rounded-2xl bg-[#F5F5F7] p-4" open={!!(form.projektnummer || form.projektart || form.baubeginn || form.beschreibung)}>
+          <summary className="text-[13px] font-semibold cursor-pointer">Bauvorhaben (für Ausschreibungen und Partnerfirmen)</summary>
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Projektnummer"><TextInput value={form.projektnummer} onChange={set('projektnummer')} /></Field>
+              <Field label="Projektart / Bauvorhaben"><TextInput value={form.projektart} onChange={set('projektart')} placeholder="z. B. Logistikzentrum, Bürogebäude" /></Field>
+              <Field label="Auftraggeber (Bauherr)"><TextInput value={form.auftraggeber} onChange={set('auftraggeber')} /></Field>
+              <Field label="Generalunternehmer"><TextInput value={form.generalunternehmer} onChange={set('generalunternehmer')} /></Field>
+              <Field label="Geplanter Baubeginn"><TextInput type="date" value={form.baubeginn} onChange={set('baubeginn')} /></Field>
+              <Field label="Geplantes Bauende"><TextInput type="date" value={form.bauende} onChange={set('bauende')} /></Field>
+              <Field label="Projektstatus"><Select value={form.projektstatus} onChange={set('projektstatus')} className="w-full"><option value="">–</option><option value="planung">Planung</option><option value="ausschreibung">Ausschreibung</option><option value="ausfuehrung">Ausführung</option><option value="abgeschlossen">Abgeschlossen</option></Select></Field>
+              <Field label="Gewerke (durch Komma)"><TextInput value={form.gewerke} onChange={set('gewerke')} placeholder="Elektro, Trockenbau, Sanitär / Heizung" /></Field>
+              <Field label="Projektphasen (durch Komma)"><TextInput value={form.phasen} onChange={set('phasen')} placeholder="Rohbau, Ausbau, Übergabe" /></Field>
+              <Field label="Bauabschnitte (durch Komma)"><TextInput value={form.bauabschnitte} onChange={set('bauabschnitte')} placeholder="Halle A, Halle B" /></Field>
+              <Field label="Geschätztes Projektvolumen (€, optional)"><TextInput type="number" step="1000" min="0" inputMode="decimal" value={form.volumen} onChange={set('volumen')} /></Field>
+              <Field label="Geplante Kosten (€, optional)"><TextInput type="number" step="1000" min="0" inputMode="decimal" value={form.kosten} onChange={set('kosten')} /></Field>
+              <Field label="Standort Breitengrad (lat)"><TextInput type="number" step="0.000001" inputMode="decimal" value={form.lat} onChange={set('lat')} placeholder="52.42" /></Field>
+              <Field label="Standort Längengrad (lon)"><TextInput type="number" step="0.000001" inputMode="decimal" value={form.lon} onChange={set('lon')} placeholder="9.74" /></Field>
+            </div>
+            <Field label="Projektbeschreibung"><TextArea rows={3} value={form.beschreibung} onChange={set('beschreibung')} /></Field>
+            <Field label="Besondere Projektanforderungen"><TextArea rows={2} value={form.anforderungen} onChange={set('anforderungen')} placeholder="z. B. Sicherheitsunterweisung Pflicht, Arbeiten nur werktags 7–17 Uhr" /></Field>
+          </div>
+        </details>
 
         {project && (
           <div className="rounded-2xl bg-[#F5F5F7] px-4">
