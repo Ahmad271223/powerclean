@@ -36,19 +36,17 @@ def _bereich(von: str, bis: str) -> tuple[str, str]:
 
 
 async def _person_pruefen(user: dict, user_id: Optional[str], projekt: dict) -> Optional[str]:
-    """Büro und Vorarbeiter des Projekts buchen auf jede Person der Firma oder ohne Person (Anzahl);
-    alle anderen nur auf sich selbst."""
-    if not projekt_leitung(user, projekt):
+    """Nur der Firmeninhaber kann Zeiten einer anderen Person erfassen oder korrigieren."""
+    if user.get("role") != "inhaber":
         return user["id"]
     if not user_id:
         return None
     u = await db().users.find_one({"id": user_id, "firma_id": user["firma_id"]}, {"_id": 0, "id": 1})
     if not u:
         raise HTTPException(400, "Mitarbeiter nicht gefunden.")
-    if not hat_rolle(user, "buero"):
-        zugewiesen = set(projekt.get("employee_ids") or []) | set(projekt.get("leiter_ids") or [])
-        if zugewiesen and user_id not in zugewiesen:
-            raise HTTPException(403, "Diese Person ist dem Projekt nicht zugewiesen – Zeiten für sie trägt das Büro ein.")
+    zugewiesen = set(projekt.get("employee_ids") or []) | set(projekt.get("leiter_ids") or [])
+    if zugewiesen and user_id not in zugewiesen:
+        raise HTTPException(403, "Diese Person ist dem Projekt nicht zugewiesen.")
     return user_id
 
 
@@ -110,7 +108,7 @@ async def _frisch(firma_id: str, eintrag_id: str) -> dict:
 # ---------------------------------------------------------------- Einträge
 @router.get("/api/zeiten")
 async def liste(von: str, bis: str, user_id: Optional[str] = None, project_id: Optional[str] = None, limit: int = Query(5000, ge=1, le=20000),
-                offset: int = Query(0, ge=0), user: dict = Depends(rolle_noetig("buero"))):
+                offset: int = Query(0, ge=0), user: dict = Depends(rolle_noetig("inhaber"))):
     von, bis = _bereich(von, bis)
     filt = {"firma_id": user["firma_id"], "date": {"$gte": von, "$lte": bis}}
     if user_id:
@@ -192,8 +190,8 @@ async def anlegen(body: ZeitIn, user: dict = Depends(schreibender_nutzer)):
 async def serie(body: SerieIn, user: dict = Depends(schreibender_nutzer)):
     firma = user["_firma"]
     p = await projekt_laden(user, body.project_id, schreiben=True)
-    if not projekt_leitung(user, p):
-        raise HTTPException(403, "Serien dürfen Büro und Vorarbeiter des Projekts anlegen.")
+    if user.get("role") != "inhaber":
+        raise HTTPException(403, "Serien für Mitarbeiter erstellt nur der Firmeninhaber.")
     von, bis = _bereich(body.from_date, body.to_date)
     if (date.fromisoformat(bis) - date.fromisoformat(von)).days > 370:
         raise HTTPException(400, "Eine Serie darf höchstens ein Jahr umfassen.")
@@ -231,8 +229,8 @@ async def _eintrag_laden(user: dict, eintrag_id: str) -> tuple[dict, dict]:
     if not e:
         raise HTTPException(404, "Eintrag nicht gefunden.")
     p = await projekt_laden(user, e["project_id"])
-    if e.get("user_id") != user["id"] and not projekt_leitung(user, p):
-        raise HTTPException(403, "Nur eigene Einträge lassen sich ändern.")
+    if e.get("user_id") != user["id"] and user.get("role") != "inhaber":
+        raise HTTPException(403, "Nur eigene Arbeitszeiten lassen sich ändern. Zeiten anderer Personen korrigiert der Inhaber.")
     return e, p
 
 
@@ -443,7 +441,7 @@ async def stempel_stop(body: StempelStopIn, user: dict = Depends(schreibender_nu
 
 
 @router.post("/api/stempel/{stempel_id}/beenden")
-async def stempel_beenden_buero(stempel_id: str, body: StempelStopIn, user: dict = Depends(schreibend("buero"))):
+async def stempel_beenden_buero(stempel_id: str, body: StempelStopIn, user: dict = Depends(schreibend("inhaber"))):
     """Büro beendet eine vergessene Stempelung eines Mitarbeiters (Eintrag endet jetzt, Vermerk im Protokoll)."""
     s = await db().stempel.find_one({"id": stempel_id, "firma_id": user["firma_id"]}, {"_id": 0})
     if not s:
@@ -461,7 +459,7 @@ async def stempel_abbrechen(user: dict = Depends(schreibender_nutzer)):
 
 
 @router.get("/api/stempel/aktiv")
-async def stempel_aktiv(user: dict = Depends(rolle_noetig("buero"))):
+async def stempel_aktiv(user: dict = Depends(rolle_noetig("inhaber"))):
     projekte = await _projekte_sichtbar(user)
     namen = await nutzernamen(user["firma_id"])
     aus = []
