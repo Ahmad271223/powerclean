@@ -3,7 +3,7 @@ import { Bell, CalendarDays, CheckCircle2, Clock3, MapPin, Plus, ShieldAlert } f
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import { Btn, Card, Field, Select, TextArea, TextInput } from '../components/ui';
-import { api } from '../lib/api';
+import { api, download } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { toKey, addDays } from '../lib/dates';
 
@@ -191,6 +191,16 @@ export default function EinsatzplanPage() {
           ))}
         </div>
       )}
+      {isInhaber && (
+        <Card className="p-4 mt-5 space-y-3">
+          <h2 className="text-[16px] font-semibold">Stundenzettel für Projektleitung oder Auftraggeber</h2>
+          <p className="text-[13px] text-[#6E6E73]">Das PDF verwendet nur von dir freigegebene Zeiten. Es ersetzt weder rohe Stempelereignisse noch Pflichtnachweise.</p>
+          <div className="flex flex-wrap gap-3">
+            <Select value={form.project_id} onChange={set('project_id')}><option value="">Projekt wählen</option>{projekte.map((p) => <option value={p.id} key={p.id}>{p.name}</option>)}</Select>
+            <Btn size="sm" disabled={!form.project_id} onClick={() => download(`/api/einsatzplan/stundenzettel.pdf?project_id=${encodeURIComponent(form.project_id)}&von=${von}&bis=${bis}`).catch((err) => toast.error(err.message))}>Freigegebenen Stundenzettel (PDF)</Btn>
+          </div>
+        </Card>
+      )}
       {isInhaber && analyse?.projekte?.length > 0 && (
         <Card className="p-5 mt-5 space-y-3">
           <h2 className="text-[17px] font-semibold">Projekt-Auswertung (nur Inhaber)</h2>
@@ -202,6 +212,13 @@ export default function EinsatzplanPage() {
               ))}</tbody>
             </table>
           </div>
+          {analyse.projekte.filter((p) => p.pauschale_netto !== undefined).map((p) => (
+            <div key={p.project_id} className="rounded-xl bg-[#EAF7ED] p-3 text-[13px]">
+              <strong>{p.projekt} – Pauschalauftrag:</strong> {geld(p.pauschale_netto)} netto,
+              abzgl. bisher berücksichtigter direkter Lohnkosten: {geld(p.deckung_vor_nebenkosten)} übrig.
+              <span className="block text-[12px] text-[#606067]">Kein endgültiger Gewinn: Material, Arbeitgebernebenkosten, Gemeinkosten, andere Zeiträume und weitere Kosten fehlen.</span>
+            </div>
+          ))}
           <p className="text-[12px] text-[#606067]">Nur eine Kostenschätzung aus hinterlegtem Stundenlohn. Arbeitgebernebenkosten und die endgültige Lohnabrechnung sind nicht enthalten. Geplante Stunden ohne Bestätigung zählen hier nicht als gearbeitet.</p>
         </Card>
       )}
