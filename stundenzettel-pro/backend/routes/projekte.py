@@ -72,7 +72,7 @@ async def liste(archiviert: bool = False, user: dict = Depends(aktueller_nutzer)
 
 
 @router.post("/api/projekte")
-async def anlegen(body: ProjektIn, user: dict = Depends(firmenabo_noetig("buero"))):
+async def anlegen(body: ProjektIn, user: dict = Depends(firmenabo_noetig("inhaber"))):
     daten = await _projektdaten(user, body)
     p = {**daten, "id": neue_id(), "firma_id": user["firma_id"], "created_at": jetzt_iso(),
          "total_minutes": 0, "entry_count": 0, "last_activity_at": None}
