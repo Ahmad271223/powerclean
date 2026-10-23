@@ -278,3 +278,90 @@ async def auswertung(von: str, bis: str, project_id: Optional[str] = None,
             w["kalkulationshinweis"] = "Noch ohne Material, Gemeinkosten, AG-Nebenkosten, Steuern und nicht erfasste Einsätze; kein vollständiger Gewinn."
         aus.append(w)
     return {"projekte": aus, "hinweis": "Planung, Stempelung und Freigabe sind getrennt. Die Kostenschätzung ist kein Lohnlauf und enthält keine Arbeitgebernebenkosten."}
+
+
+@router.get("/stundenzettel.pdf")
+async def projekt_stundenzettel(project_id: str, von: str, bis: str,
+                               user: dict = Depends(aktueller_nutzer)):
+    """Projektleiter-Nachweis aus ausdrücklich freigegebenen Zeiten; niemals aus Rohstempeln/Planung.
+
+    Der Bericht enthält ausschließlich bestätigte Soll/Abrechnungszeiten.
+    Ungeprüfte Einsätze sind oben als fehlend angegeben.
+    """
+    _chef(user)
+    try:
+        start, ende = datum_pruefen(von), datum_pruefen(bis)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if ende < start or (ende - start).days > 31:
+        raise HTTPException(400, "Bitte einen Zeitraum von höchstens 32 Tagen wählen.")
+    p = await projekt_laden(user, project_id)
+    daten = [x async for x in db().einsatzplaene.find(
+        {"firma_id": user["firma_id"], "project_id": project_id,
+         "date": {"$gte": von, "$lte": bis}}, {"_id": 0}).sort([("date", 1), ("start_time", 1)])]
+    bestaetigt = [x for x in daten if x.get("status") == "freigegeben" and x.get("freigabe")]
+    if not bestaetigt:
+        raise HTTPException(409, "Es sind noch keine Arbeitszeiten für diesen Projektzeitraum freigegeben.")
+    import io
+    from xml.sax.saxutils import escape
+    from fastapi.responses import Response
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
+    from pdfbasis import SCHRIFT, SCHRIFT_FETT, schrift_registrieren
+    schrift_registrieren()
+    uids = list({x["user_id"] for x in bestaetigt})
+    personen = {u["id"]: u.get("name", "") async for u in db().users.find(
+        {"firma_id": user["firma_id"], "id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1})}
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16*mm, rightMargin=16*mm,
+                            topMargin=18*mm, bottomMargin=18*mm)
+    h1 = ParagraphStyle("Titel", fontName=SCHRIFT_FETT, fontSize=14, leading=18)
+    label = ParagraphStyle("Hinweis", fontName=SCHRIFT, fontSize=9, leading=13)
+    story = [
+        Paragraph("Projekt-Stundennachweis – freigegebene Zeiten", h1),
+        Spacer(1, 5*mm),
+        Paragraph("Projekt: " + escape(p.get("name") or ""), label),
+        Paragraph("Zeitraum: " + von + " bis " + bis, label),
+        Paragraph("Nur vom Firmeninhaber überprüfte und freigegebene Einsatzzeiten. "
+                  "Nicht identisch mit ungeprüften Stempelereignissen.", label),
+        Spacer(1, 4*mm),
+    ]
+    offen = len(daten) - len(bestaetigt)
+    if offen:
+        story.append(Paragraph(f"Achtung: {offen} Einsätze sind noch nicht freigegeben und fehlen in diesem Nachweis.", label))
+        story.append(Spacer(1, 3*mm))
+    zeilen = [["Datum", "Mitarbeiter", "Beginn", "Ende", "Pause", "Std."]]
+    gesamt = 0
+    for x in bestaetigt:
+        a = x["freigabe"]
+        net = int(a.get("net_minutes") or 0)
+        gesamt += net
+        zeilen.append([x["date"], personen.get(x["user_id"], ""), a["start_time"], a["end_time"],
+                       str(a["pause_minutes"]) + " min", f"{net/60:.2f}"])
+    zeilen.append(["Gesamt", "", "", "", "", f"{gesamt/60:.2f}"])
+    table = Table(zeilen, repeatRows=1, colWidths=[26*mm, 48*mm, 23*mm, 23*mm, 26*mm, 27*mm])
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0,0), (-1,0), SCHRIFT_FETT),
+        ("FONTNAME", (0,1), (-1,-1), SCHRIFT),
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#EFF0F2")),
+        ("ROWBACKGROUNDS", (0,1), (-1,-2), [colors.white, colors.HexColor("#F7F7F8")]),
+        ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#DDDEE0")),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
+        ("LEFTPADDING", (0,0), (-1,-1), 5),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 6*mm))
+    story.append(Paragraph("Grundlage: individuelle Einsatzfreigaben im Änderungsprotokoll. "
+                           "Für Lohnabrechnung, Arbeitszeiterfassung und Dokumentationspflichten "
+                           "bleiben die ursprünglichen Stempelereignisse gesondert erhalten.", label))
+    doc.build(story)
+    await protokollieren(user, "einsatzplan.stundenzettel_pdf", p.get("name", ""),
+                         details={"von": von, "bis": bis, "eintraege": len(bestaetigt), "offen": offen})
+    return Response(content=buf.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="Projekt-Stundenzettel_{von}_{bis}.pdf"'})
