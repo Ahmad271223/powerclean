@@ -12,7 +12,7 @@ import { initials } from '../lib/utils';
 
 export default function ProjektePage() {
   const navigate = useNavigate();
-  const { isBuero, firma } = useAuth();
+  const { isBuero, isInhaber, firma } = useAuth();
   const [projekte, setProjekte] = useState(null);
   const [archiv, setArchiv] = useState(false);
   const [search, setSearch] = useState('');
@@ -27,7 +27,7 @@ export default function ProjektePage() {
 
   return (
     <Layout title={archiv ? 'Archiv' : 'Projekte'} subtitle={archiv ? 'Abgeschlossene Objekte, alle Daten bleiben erhalten.' : 'Objekt antippen: Kalender, Stundenzettel, Akte.'}
-      action={isBuero ? <Btn onClick={() => { setEdit(null); setDialog(true); }}><Plus size={18} /> <span className="hidden sm:inline">Neues Projekt</span><span className="sm:hidden">Neu</span></Btn> : null}>
+      action={isInhaber ? <Btn onClick={() => { setEdit(null); setDialog(true); }}><Plus size={18} /> <span className="hidden sm:inline">Neues Projekt</span><span className="sm:hidden">Neu</span></Btn> : null}>
       <div className="flex flex-wrap items-center gap-2 mb-5">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868B]" />
@@ -38,7 +38,7 @@ export default function ProjektePage() {
       </div>
       {!projekte ? <Ladeanzeige /> : liste.length === 0 ? (
         <Card>{projekte.length === 0
-          ? <Empty icon={FolderKanban} title={archiv ? 'Nichts archiviert' : 'Noch keine Projekte'} text={isBuero ? 'Jedes Objekt bekommt seinen eigenen Kalender, Stundenzettel und Rechnungen.' : 'Dir ist noch kein Projekt zugewiesen.'} action={isBuero && !archiv ? <Btn onClick={() => { setEdit(null); setDialog(true); }}><Plus size={18} /> Erstes Projekt anlegen</Btn> : null} />
+          ? <Empty icon={FolderKanban} title={archiv ? 'Nichts archiviert' : 'Noch keine Projekte'} text={isBuero ? 'Jedes Objekt bekommt seinen eigenen Kalender, Stundenzettel und Rechnungen.' : 'Dir ist noch kein Projekt zugewiesen.'} action={isInhaber && !archiv ? <Btn onClick={() => { setEdit(null); setDialog(true); }}><Plus size={18} /> Erstes Projekt anlegen</Btn> : null} />
           : <Empty icon={Search} title="Nichts gefunden" />}</Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
