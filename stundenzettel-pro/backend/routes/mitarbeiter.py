@@ -130,7 +130,8 @@ async def deaktivieren(user_id: str, user: dict = Depends(schreibend("buero"))):
 @router.get("/api/mitarbeiter/{user_id}/uebersicht")
 async def uebersicht(user_id: str, jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12),
                      user: dict = Depends(aktueller_nutzer)):
-    _selbst_oder_buero(user, user_id)
+    if user["id"] != user_id and user.get("role") != "inhaber":
+        raise HTTPException(403, "Die Stunden anderer Mitarbeiter sieht nur der Firmeninhaber.")
     u = await _laden(user, user_id)
     von = f"{jahr:04d}-{monat:02d}-01"
     bis = f"{jahr:04d}-{monat:02d}-31"
