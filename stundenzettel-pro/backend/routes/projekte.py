@@ -10,7 +10,7 @@ from auth import aktueller_nutzer, firma_laden, firmenabo_noetig, hat_rolle, jet
 from dateien import KATEGORIEN_PROJEKT, datei_loeschen, datei_speichern, version_verknuepfen
 from db import db
 from feiertage import feiertage_set
-from gemeinsam import projekt_fotos
+from gemeinsam import foto_fuer_nutzer, projekt_fotos
 from gemeinsam import (budget_info, eintrag_anreichern, firma_oeffentlich, kunde_laden, kundenadresse, neue_id, nutzernamen,
                        projekt_fuer_nutzer, projekt_laden, projekt_leitung, projekt_normalisieren, projekt_sichtbar)
 from models import ChecklisteIn, ChecklisteUpdateIn, GuAboIn, KommentarIn, ProjektIn, UnterschriftIn
@@ -174,7 +174,7 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     frei = feiertage_set(sorted(jahre), firma.get("bundesland") or "")
     buero = hat_rolle(user, "buero")
     leistungen = [{"id": s["id"], "name": s["name"], **({"hourly_rate": s.get("hourly_rate") or 0} if buero else {})} async for s in db().services.find({"firma_id": user["firma_id"], "active": True}, {"_id": 0}).sort("sort", 1)]
-    fotos = await projekt_fotos(user["firma_id"], project_id, von, bis)
+    fotos = [foto_fuer_nutzer(user, f) for f in await projekt_fotos(user["firma_id"], project_id, von, bis)]
     return {"firma": firma_oeffentlich(firma, user), "projekt": projekt_fuer_nutzer(user, p), "eintraege": eintraege, "rechnung": rechnung, "fotos": fotos,
             "unterschriften": unterschriften, "mitarbeiter": mitarbeiter, "raster": {"von": von, "bis": bis},
             "leitung": leitung, "budget": budget_info(p, monatsminuten) if leitung else None,
@@ -209,7 +209,7 @@ async def akte(project_id: str, user: dict = Depends(aktueller_nutzer)):
     async for k in db().comments.find({"firma_id": f, "project_id": project_id}, {"_id": 0}).sort("created_at", -1).limit(200):
         kommentare.append(k)
     async for d in db().documents.find({"firma_id": f, "scope": "project", "ref_id": project_id}, {"_id": 0, "path": 0}).sort("created_at", -1):
-        dateien.append(d)
+        dateien.append(foto_fuer_nutzer(user, d) if (d.get("mime") or "").startswith("image/") else d)
     async for c in db().checklists.find({"firma_id": f, "project_id": project_id}, {"_id": 0}).sort("created_at", -1):
         checklisten.append(c)
     async for s in db().signatures.find({"firma_id": f, "project_id": project_id}, {"_id": 0, "image": 0}).sort("week_monday", -1).limit(60):
@@ -255,7 +255,7 @@ async def datei_hochladen(project_id: str, datei: UploadFile = File(...), katego
     await db().documents.insert_one(dict(doc))
     await protokollieren(user, "projektakte.datei", p["name"], details={"datei": meta["filename"], "kategorie": doc["category"], "version": doc["version"]})
     doc.pop("path", None)
-    return {"dokument": doc}
+    return {"dokument": foto_fuer_nutzer(user, doc) if (doc.get("mime") or "").startswith("image/") else doc}
 
 
 @router.post("/api/projekte/{project_id}/checklisten")
