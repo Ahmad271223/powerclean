@@ -137,6 +137,24 @@ class FirmaIn(BaseModel):
     angebot_schluss: Optional[str] = Field(default=None, max_length=4000)
     angebot_zahlungsbedingungen: Optional[str] = Field(default=None, max_length=2000)
     kalkulation: Optional[dict] = None   # {stundensatz, gemeinkosten_prozent, risiko_prozent, gewinn_prozent} – nur mit Recht „kostensaetze“
+    mahnwesen: Optional[dict] = None     # {erinnerung_tage, mahnung_tage, letzte_mahnung_tage, gebuehr_mahnung, gebuehr_letzte, text_erinnerung, text_mahnung, text_letzte}
+
+    @field_validator("mahnwesen")
+    @classmethod
+    def _mahnwesen(cls, v):
+        if v is None:
+            return v
+        aus = {}
+        for k in ("erinnerung_tage", "mahnung_tage", "letzte_mahnung_tage"):
+            if v.get(k) not in (None, ""):
+                aus[k] = max(0, min(365, int(float(v[k]))))
+        for k in ("gebuehr_mahnung", "gebuehr_letzte"):
+            if v.get(k) not in (None, ""):
+                aus[k] = max(0.0, min(10000.0, float(v[k])))
+        for k in ("text_erinnerung", "text_mahnung", "text_letzte"):
+            if v.get(k) not in (None, ""):
+                aus[k] = str(v[k])[:4000]
+        return aus
 
     @field_validator("kalkulation")
     @classmethod
@@ -1308,3 +1326,68 @@ class EingangBezahltIn(BaseModel):
 
 class EingangStornoIn(BaseModel):
     grund: str = Field(min_length=1, max_length=500)
+
+
+# ---------------------------------------------------------------- Rechnungsprozesse (Stufe E)
+
+class RechnungAuftragIn(BaseModel):
+    project_id: str = Field(min_length=1, max_length=64)
+    art: str = Field(default="pauschal", pattern="^(pauschal|abschlag|schluss)$")
+    betrag_netto: Optional[float] = Field(default=None, gt=0, le=1e9)              # pauschaler Abschlag
+    leistungsstand_prozent: Optional[float] = Field(default=None, gt=0, le=100)   # kumulativer Abschlag
+    positionen: list[ExtraIn] = Field(default_factory=list, max_length=100)        # nur art=pauschal: eigene Positionen statt Auftragspositionen
+    leistung_von: Optional[str] = None
+    leistung_bis: Optional[str] = None
+    text: Optional[str] = Field(default="", max_length=1000)
+    invoice_date: Optional[str] = None
+    nur_pruefen: bool = False
+
+    @field_validator("leistung_von", "leistung_bis", "invoice_date")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return None
+        datum_pruefen(v)
+        return v
+
+
+class GutschriftIn(BaseModel):
+    project_id: Optional[str] = Field(default=None, max_length=64)
+    customer_id: Optional[str] = Field(default=None, max_length=64)
+    positionen: list[ExtraIn] = Field(min_length=1, max_length=100)   # Beträge positiv angeben, gespeichert wird negativ
+    grund: str = Field(min_length=1, max_length=500)
+    text: Optional[str] = Field(default="", max_length=1000)
+    bezug_nummer: Optional[str] = Field(default="", max_length=40)     # Rechnung, auf die sich die Gutschrift bezieht
+    invoice_date: Optional[str] = None
+
+    @field_validator("invoice_date")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return None
+        datum_pruefen(v)
+        return v
+
+
+class StornoIn(BaseModel):
+    grund: str = Field(min_length=1, max_length=500)
+
+
+class ZahlungIn(BaseModel):
+    am: Optional[str] = None
+    betrag: float = Field(gt=0, le=1e9)
+    art: str = Field(default="ueberweisung", pattern="^(ueberweisung|bar|karte|lastschrift|verrechnung|skonto)$")
+    notiz: Optional[str] = Field(default="", max_length=300)
+
+
+class MahnungIn(BaseModel):
+    stufe: Optional[int] = Field(default=None, ge=1, le=3)
+    text: Optional[str] = Field(default=None, max_length=4000)
+    per_email: bool = True
+    erzwingen: bool = False       # Frist der Stufe ignorieren
+    gebuehr: Optional[float] = Field(default=None, ge=0, le=10000)
+
+
+class RechnungSendenIn(BaseModel):
+    an: Optional[str] = Field(default=None, max_length=200)
+    nachricht: Optional[str] = Field(default="", max_length=4000)

@@ -417,3 +417,36 @@ def angebot_pdf(daten: dict) -> bytes:
                   Table([[Paragraph("______________________________<br/>Ort, Datum", st_klein), Paragraph("______________________________<br/>Unterschrift Auftraggeber", st_klein)]], colWidths=[85 * mm, 85 * mm])]
     doc.build(story, onFirstPage=fuss, onLaterPages=fuss)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------- Zahlungserinnerung / Mahnung (Stufe E)
+
+def mahnung_pdf(firma: dict, kunde: dict, rechnung: dict, mahnung: dict, art_name: str, faellig: str | None) -> bytes:
+    """Mahnschreiben: Briefkopf, Anschrift, Text der Stufe, Tabelle der offenen Rechnung mit Gebühr, Gesamtforderung."""
+    st = _stile()
+    f = firma
+    buf = io.BytesIO()
+    doc = _doc(buf, f"{mahnung.get('name')} {rechnung.get('number')}", f.get("name") or "")
+    story = []
+    logo = _bild_flowable(f.get("logo"), 45 * mm, 20 * mm)
+    kopf = Table([[Paragraph(f"<b>{esc(f.get('name'))}</b><br/>{esc(f.get('street'))}<br/>{esc((f.get('zip_code') or '') + ' ' + (f.get('city') or ''))}", st["n"]), logo or ""]], colWidths=[120 * mm, 58 * mm])
+    kopf.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    story += [kopf, Spacer(1, 8 * mm)]
+    empf = [kunde.get("name"), kunde.get("contact"), kunde.get("street"), f"{kunde.get('zip_code') or ''} {kunde.get('city') or ''}".strip()]
+    story += [Paragraph("<br/>".join(esc(z) for z in empf if z), st["n"]), Spacer(1, 6 * mm)]
+    story += [Paragraph(f"{esc(f.get('city') or '')}, {de(mahnung.get('am'))}", ParagraphStyle("r", parent=st["k"], alignment=2)), Spacer(1, 4 * mm)]
+    story += [Paragraph(f"{esc(mahnung.get('name'))} – {esc(art_name)} {esc(rechnung.get('number'))}", st["h1"]), Spacer(1, 3 * mm)]
+    story += [Paragraph(f"{'Guten Tag ' + esc(kunde.get('contact')) + ',' if kunde.get('contact') else 'Sehr geehrte Damen und Herren,'}", st["n"]),
+              Paragraph(esc(mahnung.get("text")), st["n"]), Spacer(1, 4 * mm)]
+    zeilen = [[Paragraph("Beleg", st["z"]), Paragraph("Datum", st["z"]), Paragraph("Fällig", st["z"]), Paragraph("Betrag", st["z"]), Paragraph("Bezahlt", st["z"]), Paragraph("Offen", st["z"])],
+              [Paragraph(f"{esc(art_name)} {esc(rechnung.get('number'))}", st["z"]), Paragraph(de(rechnung.get("invoice_date")), st["z"]), Paragraph(de(faellig) if faellig else "–", st["z"]),
+               Paragraph(geld(rechnung.get("gross")), st["z"]), Paragraph(geld(rechnung.get("bezahlt_betrag")), st["z"]), Paragraph(geld(mahnung.get("offen_betrag")), st["z"])]]
+    if float(mahnung.get("gebuehr") or 0):
+        zeilen.append([Paragraph("Mahngebühr", st["z"]), "", "", "", "", Paragraph(geld(mahnung.get("gebuehr")), st["z"])])
+    zeilen.append([Paragraph("<b>Gesamtforderung</b>", st["z"]), "", "", "", "", Paragraph(f"<b>{geld(mahnung.get('gesamt'))}</b>", st["z"])])
+    story += [_tabelle(zeilen, [52 * mm, 24 * mm, 24 * mm, 26 * mm, 26 * mm, 26 * mm]), Spacer(1, 5 * mm)]
+    bank = " · ".join(t for t in [f"Bank {f['bank_name']}" if f.get("bank_name") else "", f"IBAN {f['iban']}" if f.get("iban") else "", f"BIC {f['bic']}" if f.get("bic") else ""] if t)
+    story += [Paragraph(f"Bitte überweisen Sie den Gesamtbetrag unter Angabe der Rechnungsnummer{(' auf: ' + esc(bank)) if bank else ''}.", st["n"]), Spacer(1, 6 * mm),
+              Paragraph("Mit freundlichen Grüßen", st["n"]), Spacer(1, 8 * mm), Paragraph(esc(f.get("owner") or f.get("name")), st["n"]), Paragraph(esc(f.get("name")), st["k"])]
+    doc.build(story)
+    return buf.getvalue()

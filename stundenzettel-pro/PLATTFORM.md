@@ -179,6 +179,32 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
 - Offen: Lager (Bestände, Ein-/Ausgang, Inventur, Reservierung), DATANORM-Import (Stufe F), Positionen der Eingangsrechnung einzeln erfassen, OCR für
   Bild-/PDF-Belege ohne E-Rechnung (Stufe H, Feature-Flag), Teilzahlungen (Stufe E).
 
+## 1i. Stufe E – Rechnungsprozesse (24.10.2026)
+
+- Alles in `invoices` mit `art` monat|pauschal|abschlag|schluss|storno|gutschrift; Nummern über `firmen.rechnungszaehler` wie bisher. Nicht-Monatsrechnungen
+  tragen `month = -seq` (der eindeutige Index Firma/Projekt/Jahr/Monat bleibt), ihre Zeilen liegen in `extras` (text, quantity, unit, unit_price, amount),
+  die PDF/XML schon kennen. Neue Felder: `faellig_am` (beim Festschreiben gesetzt), `zahlungen[]`, `bezahlt_betrag`, `mahnstufe`, `mahnungen[]`,
+  `versand[]`, `abschlag_nr`, `kumulativ`, `leistungsstand_prozent`, `vorherige[]`, `abschlaege_netto`, `storno_von`, `storno_id`/`storno_nummer`,
+  `leistung_von/bis`, `rechnungstext`, `auftrag_nummer`. Status zusätzlich `teilbezahlt` (aus den Zahlungen abgeleitet).
+- `rechnungslauf.py`: `zeilen_summen` (Netto/USt/Brutto freier Zeilen, § 19/§ 13b), `auftragsbasis` (Auftragswert + freigegebene Nachträge),
+  `abschlag_zeilen` (kumulativ: Leistungsstand × Basis − gestellte Abschläge; pauschal: Betrag), `schluss_zeilen` (Auftragspositionen + Nachträge −
+  Abschläge, informativ „offen aus Abschlägen“), `storno_zeilen` (Gegenbuchung), `zahlungsstand`, `faellig_am`, `mahn_regeln`/`mahn_vorschlag`
+  (Stufe, Frist, jetzt fällig), `mahn_text`, `mahn_gebuehr`. `erechnung.rechnungsdaten` kennt `art`, `art_name`, `typecode`, `vorherige`;
+  `cii_xml` schreibt den Typcode und `InvoiceReferencedDocument`; `rechnung_pdf` überschreibt Titel, Betragszeile und Zahlungssatz je Art.
+- API (`routes/rechnungslauf.py`): `GET /api/projekte/{id}/abrechnung`, `POST /api/rechnungen/auftrag` (art pauschal|abschlag|schluss,
+  `leistungsstand_prozent` oder `betrag_netto`, `nur_pruefen` für die Vorschau; 409 bei vorhandener Schlussrechnung, Abschlagsarten werden nicht
+  gemischt), `POST /api/rechnungen/{id}/storno` (nur ausgestellte, nie Storno vom Storno), `POST /api/rechnungen/gutschrift`,
+  `POST/DELETE /api/rechnungen/{id}/zahlungen[/{zid}]`, `POST /api/rechnungen/{id}/senden`, `GET /api/mahnwesen`, `POST /api/rechnungen/{id}/mahnung`
+  (stufe = nächste Stufe, `erzwingen` für die Frist, `per_email`, `gebuehr`, `text`), `GET /api/rechnungen/{id}/mahnung/{stufe}.pdf`. Bestehend
+  angepasst: Liste liefert `art_name`, `status_name`, `bezahlt_betrag`, `offen_betrag`, `mahnstufe`; `PUT /{id}` Status bezahlt legt die Restzahlung an;
+  `GET /{id}/daten` liefert für Nicht-Monatsrechnungen `server_pdf: true`. Firmenregeln `firmen.mahnwesen` (FirmaIn-Validator). Mail-Arten
+  `rechnung`, `mahnung`; Mahn-PDFs unter `DATA_DIR/mahnungen/<firma>/`.
+- Oberfläche: `RechnungenPage` (Art-Badges, vier Statuskacheln, Server-PDF für neue Arten, Zahlungen, Senden, formaler Storno, Gutschrift),
+  `components/rechnungen/{RechnungDialoge,AbrechnungTab}` (Projekt-Reiter „Abrechnung“ mit Abschlag-Dialog und Vorschau), `MahnwesenPage` mit Regeln.
+  Tests `tests/test_rechnungslauf_20261024.py` (3 Tests).
+- Bewusst nicht: automatische Mahnläufe, Verzugszinsen, Inkasso-Übergabe, Skonto-Automatik, Sammelrechnungen über mehrere Projekte, Zahlungsabgleich
+  per Kontoauszug (CAMT/MT940) – offen für spätere Stufen.
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

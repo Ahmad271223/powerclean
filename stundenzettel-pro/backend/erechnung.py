@@ -101,9 +101,18 @@ def rechnungsdaten(firma: dict, projekt: dict, kunde: dict | None, rechnung: dic
                    "leitweg_id": "", "customer_number": "", "vat_id": "", "contact": ""}
     kaeufer = {k: (v.strip() if isinstance(v, str) else v) for k, v in kaeufer.items()}
 
-    jahr, monat = int(rechnung["year"]), int(rechnung["month"])
-    von = date(jahr, monat, 1)
-    bis = (date(jahr + 1, 1, 1) if monat == 12 else date(jahr, monat + 1, 1)) - timedelta(days=1)
+    art = rechnung.get("art") or "monat"
+    if art == "monat":
+        jahr, monat = int(rechnung["year"]), int(rechnung["month"])
+        von = date(jahr, monat, 1)
+        bis = (date(jahr + 1, 1, 1) if monat == 12 else date(jahr, monat + 1, 1)) - timedelta(days=1)
+    else:
+        # Auftrags-, Abschlags-, Schluss-, Storno- und Gutschriftsrechnungen: Leistungszeitraum aus den Feldern, sonst das Rechnungsdatum
+        _rd = (rechnung.get("invoice_date") or date.today().isoformat())[:10]
+        von = date.fromisoformat((rechnung.get("leistung_von") or _rd)[:10])
+        bis = date.fromisoformat((rechnung.get("leistung_bis") or _rd)[:10])
+        monat = bis.month
+        jahr = bis.year
     rdatum = date.fromisoformat((rechnung.get("invoice_date") or date.today().isoformat())[:10])
     zahlungsziel = int(firma.get("payment_days") or 14)
     faellig = rdatum + timedelta(days=zahlungsziel)
@@ -130,7 +139,22 @@ def rechnungsdaten(firma: dict, projekt: dict, kunde: dict | None, rechnung: dic
     else:
         steuer = {"category": "S", "rate": ust_satz, "exemption_code": "", "exemption_text": ""}
 
-    notizen = [t for t in [(firma.get("invoice_text") or "").strip(), f"Leistungszeitraum {MONATE[monat - 1]} {jahr}. Die Stundenzettel der Kalenderwochen liegen dieser Rechnung bei."] if t]
+    if art == "monat":
+        notizen = [t for t in [(firma.get("invoice_text") or "").strip(), f"Leistungszeitraum {MONATE[monat - 1]} {jahr}. Die Stundenzettel der Kalenderwochen liegen dieser Rechnung bei."] if t]
+    else:
+        notizen = [t for t in [(rechnung.get("rechnungstext") or "").strip(),
+                               f"Leistungszeitraum {_de(von.isoformat())} – {_de(bis.isoformat())}." if rechnung.get("leistung_von") or rechnung.get("leistung_bis") else "",
+                               f"Bezug: Auftrag {rechnung['auftrag_nummer']}." if rechnung.get("auftrag_nummer") else "",
+                               f"Storno der Rechnung {rechnung['storno_von']['number']} vom {_de(rechnung['storno_von'].get('invoice_date'))}." if rechnung.get("storno_von") else "",
+                               f"Bereits gestellte Abschlagsrechnungen sind abgezogen; daraus noch offen: {rechnung['offen_aus_abschlaegen_brutto']:,.2f} € brutto.".replace(",", "X").replace(".", ",").replace("X", ".") if art == "schluss" and float(rechnung.get("offen_aus_abschlaegen_brutto") or 0) > 0 else ""] if t]
+    if art == "gutschrift":   # EN 16931: Gutschrift (381) mit positiven Beträgen
+        for z in zeilen:
+            z["price"], z["amount"] = abs(z["price"]), abs(z["amount"])
+        netto, ust, brutto = abs(netto), abs(ust), abs(brutto)
+    from rechnungslauf import ARTEN as _ARTEN, TYPECODES as _TYPECODES
+    vorherige = [{"nummer": v.get("number"), "datum": v.get("invoice_date")} for v in (rechnung.get("_vorherige_belege") or [])]
+    if rechnung.get("storno_von"):
+        vorherige.append({"nummer": rechnung["storno_von"].get("number"), "datum": rechnung["storno_von"].get("invoice_date")})
     return {
         "verkaeufer": verkaeufer, "kaeufer": kaeufer, "nummer": rechnung.get("number") or "", "datum": rdatum.isoformat(), "faellig": faellig.isoformat(),
         "zahlungsziel_tage": zahlungsziel, "von": von.isoformat(), "bis": bis.isoformat(), "monat_text": f"{MONATE[monat - 1]} {jahr}", "projekt": projekt.get("name") or "",
@@ -138,6 +162,8 @@ def rechnungsdaten(firma: dict, projekt: dict, kunde: dict | None, rechnung: dic
         "steuer": steuer, "notizen": notizen, "gesamt_minuten": int(rechnung.get("total_minutes") or 0), "status": rechnung.get("status") or "offen",
         "logo": firma.get("logo") or "", "stempel": firma.get("stamp") if firma.get("stamp_on_invoice") else "", "stempel_scale": int(firma.get("stamp_scale") or 100),
         "stempel_w": firma.get("stamp_w"), "stempel_h": firma.get("stamp_h"), "inhaber": firma.get("owner") or "",
+        "art": art, "art_name": _ARTEN.get(art, "Rechnung"), "typecode": _TYPECODES.get(art, "380"), "vorherige": vorherige,
+        "bezahlt_betrag": float(rechnung.get("bezahlt_betrag") or 0), "mahngebuehren": float(rechnung.get("mahngebuehren") or 0),
     }
 
 
@@ -253,7 +279,7 @@ def cii_xml(daten: dict, profil: str = "xrechnung") -> bytes:
 
     doc = _el(root, "rsm:ExchangedDocument")
     _el(doc, "ram:ID", daten["nummer"])
-    _el(doc, "ram:TypeCode", "380")
+    _el(doc, "ram:TypeCode", daten.get("typecode") or "380")
     _datumselement(doc, "ram:IssueDateTime", daten["datum"])
     for n in daten["notizen"]:
         _el(_el(doc, "ram:IncludedNote"), "ram:Content", n)
@@ -320,6 +346,13 @@ def cii_xml(daten: dict, profil: str = "xrechnung") -> bytes:
     _el(su, "ram:TaxTotalAmount", _geld(daten["ust"]), currencyID=daten["waehrung"])
     _el(su, "ram:GrandTotalAmount", _geld(daten["brutto"]))
     _el(su, "ram:DuePayableAmount", _geld(daten["brutto"]))
+    for v in daten.get("vorherige") or []:   # BG-3: vorausgegangene Rechnungen (Abschläge bei der Schlussrechnung, Original beim Storno)
+        if not v.get("nummer"):
+            continue
+        ref = _el(se, "ram:InvoiceReferencedDocument")
+        _el(ref, "ram:IssuerAssignedID", v["nummer"])
+        if v.get("datum"):
+            _datumselement(ref, "ram:FormattedIssueDateTime", v["datum"])
     return etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=True)
 
 
@@ -397,7 +430,7 @@ def rechnung_pdf(daten: dict) -> bytes:
     v, k = daten["verkaeufer"], daten["kaeufer"]
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4, initialFontName=SCHRIFT, initialFontSize=10)
-    c.setTitle(f"Rechnung {daten['nummer']}")
+    c.setTitle(f"{daten.get('art_name', 'Rechnung')} {daten['nummer']}")
     c.setAuthor(v["name"])
     c.setSubject(f"Rechnung {daten['nummer']} – {daten['projekt']}")
     c.setCreator(ERZEUGER)
@@ -420,7 +453,7 @@ def rechnung_pdf(daten: dict) -> bytes:
             pass
     b.text(b.rand, v["name"], 16, fett=True)
     b.y -= 7 * mm
-    b.text(b.rand, "Rechnung", 11, fett=True, farbe=grau)
+    b.text(b.rand, daten.get("art_name", "Rechnung"), 11, fett=True, farbe=grau)
     b.text(b.rand + 28 * mm, f"Nr. {daten['nummer']}", 11, farbe=grau)
     b.y -= 12 * mm
 
@@ -449,7 +482,7 @@ def rechnung_pdf(daten: dict) -> bytes:
         c.drawString(mx + 34 * mm, y0 - i * 4.8 * mm, str(wert or "–")[:38])
     b.y = y0 - max(len(meta), len(empfaenger)) * 4.8 * mm - 10 * mm
 
-    b.absatz(f"Rechnung Nr. {daten['nummer']}", 12, fett=True)
+    b.absatz(f"{daten.get('art_name', 'Rechnung')} Nr. {daten['nummer']}", 12, fett=True)
     b.y -= 1 * mm
     for n in daten["notizen"]:
         b.absatz(n, 9)
@@ -508,7 +541,8 @@ def rechnung_pdf(daten: dict) -> bytes:
     b.platz(30 * mm)
     b.y -= 3 * mm
     label_x = rechts - 38 * mm
-    b.text(b.rand, f"Gesamtstunden: {_dez(daten['gesamt_minuten'] / 60)} Std.", 8, farbe=grau)
+    if daten.get("art", "monat") == "monat":
+        b.text(b.rand, f"Gesamtstunden: {_dez(daten['gesamt_minuten'] / 60)} Std.", 8, farbe=grau)
     b.text(label_x, "Nettobetrag", 9, rechts=True)
     b.text(rechts, _eur(daten["netto"]), 9, rechts=True)
     b.y -= 6 * mm
@@ -521,15 +555,20 @@ def rechnung_pdf(daten: dict) -> bytes:
     c.setLineWidth(0.3)
     c.line(label_x - 45 * mm, b.y, rechts, b.y)
     b.y -= 5 * mm
-    b.text(label_x, "Rechnungsbetrag", 9.5, fett=True, rechts=True)
+    b.text(label_x, {"gutschrift": "Gutschriftsbetrag", "storno": "Stornobetrag"}.get(daten.get("art"), "Rechnungsbetrag"), 9.5, fett=True, rechts=True)
     b.text(rechts, _eur(daten["brutto"]), 9.5, fett=True, rechts=True)
     b.y -= 11 * mm
 
     if st["exemption_text"]:
         b.absatz(st["exemption_text"] + ".", 9)
         b.y -= 2 * mm
-    b.absatz(f"Bitte überweisen Sie den Rechnungsbetrag von {_eur(daten['brutto'])} bis zum {_de(daten['faellig'])} unter Angabe der Rechnungsnummer "
-             f"auf das unten genannte Konto. Vielen Dank für Ihren Auftrag.", 9)
+    if daten.get("art") == "gutschrift":
+        b.absatz(f"Der Gutschriftsbetrag von {_eur(daten['brutto'])} wird mit offenen Forderungen verrechnet oder auf Ihr Konto erstattet.", 9)
+    elif daten.get("art") == "storno":
+        b.absatz("Diese Stornorechnung hebt die genannte Rechnung vollständig auf. Bereits geleistete Zahlungen werden verrechnet oder erstattet.", 9)
+    else:
+        b.absatz(f"Bitte überweisen Sie den Rechnungsbetrag von {_eur(daten['brutto'])} bis zum {_de(daten['faellig'])} unter Angabe der Rechnungsnummer "
+                 f"auf das unten genannte Konto. Vielen Dank für Ihren Auftrag.", 9)
     b.y -= 5 * mm
     bank = [("Bank", v["bank_name"]), ("IBAN", v["iban"]), ("BIC", v["bic"]), ("Steuernummer", v["tax_number"]), ("USt-IdNr.", v["vat_id"])]
     bank = [(n, w) for n, w in bank if w]

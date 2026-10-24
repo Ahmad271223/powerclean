@@ -177,4 +177,8 @@ if r.status_code == 200:
     ok(c.post("/api/eingangsrechnungen", json={"lieferant": "Reinigungsbedarf Nord GmbH", "rechnungsnummer": "RN-2026-4471", "rechnungsdatum": heute, "faellig_am": frist, "netto": 420.0, "ust": 79.8,
                                                "zuordnungen": [{"project_id": p1["id"], "betrag_netto": 300.0, "kostenart": "material"}, {"project_id": p2["id"], "betrag_netto": 120.0, "kostenart": "material"}],
                                                "dokument_id": beleg_xml.get("dokument", {}).get("id"), "notiz": "Monatslieferung Reinigungsmittel"}, headers=H))
+    # Stufe E: kumulativer Abschlag auf den Auftrag der Sparkasse (30 %), teilweise bezahlt
+    ab = ok(c.post("/api/rechnungen/auftrag", json={"project_id": p1["id"], "art": "abschlag", "leistungsstand_prozent": 30, "text": "Abschlag nach Montage der ersten Etage"}, headers=H))["rechnung"]
+    c.get("/api/rechnungen/" + ab["id"] + "/rechnung.pdf", headers=H)   # stellt die Rechnung aus (PDF, kein JSON)
+    ok(c.post("/api/rechnungen/" + ab["id"] + "/zahlungen", json={"betrag": 300.0, "art": "ueberweisung", "notiz": "Teilzahlung"}, headers=H))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

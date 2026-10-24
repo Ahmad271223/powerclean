@@ -1,7 +1,7 @@
 /** Rahmen der App: Kopfzeile, Navigation (Seitenleiste am Rechner, Tab-Leiste am Handy), Lizenz- und Offline-Hinweis. */
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel, Bell, UserCog, BadgeEuro, FileArchive, CalendarRange, FileText, ReceiptText, Package, Calculator } from 'lucide-react';
+import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel, Bell, UserCog, BadgeEuro, FileArchive, CalendarRange, FileText, ReceiptText, Package, Calculator, BellRing } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { AppIcon, Sheet } from './ui';
 import { initials } from '../lib/utils';
@@ -16,6 +16,7 @@ const NAV_BETRIEB = [
   { to: '/rechnungen', label: 'Rechnungen', icon: Receipt, recht: 'rechnungen' },
   { to: '/angebote', label: 'Angebote', icon: FileText, recht: 'angebote' },
   { to: '/eingangsrechnungen', label: 'Eingangsrechnungen', icon: ReceiptText, recht: 'rechnungen' },
+  { to: '/mahnwesen', label: 'Mahnwesen', icon: BellRing, recht: 'rechnungen' },
   { to: '/artikel', label: 'Artikel & Material', icon: Package, recht: 'angebote' },
   { to: '/nachkalkulation', label: 'Nachkalkulation', icon: Calculator, recht: 'kalkulation' },
   { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },

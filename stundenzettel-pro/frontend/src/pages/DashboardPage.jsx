@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Timer, Users, FolderKanban, Receipt, CalendarOff, Plus, UserPlus, ChevronRight, Clock, AlertTriangle, Gauge, Lock, Gavel, Megaphone, Inbox, MessageCircleQuestion, BadgeCheck, Building2, BadgeEuro, ClipboardList, FileText, Calculator } from 'lucide-react';
+import { Timer, Users, FolderKanban, Receipt, CalendarOff, Plus, UserPlus, ChevronRight, Clock, AlertTriangle, Gauge, Lock, Gavel, Megaphone, Inbox, MessageCircleQuestion, BadgeCheck, Building2, BadgeEuro, ClipboardList, FileText, Calculator, BellRing } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
@@ -89,6 +89,7 @@ function BetriebBlock({ d, firma, heute, navigate, onWarnungen, onBeenden }) {
         <Kachel icon={Timer} label="Gerade im Einsatz" value={d.gestempelt} sub={`${d.heute_eintraege} Einträge heute`} to="/stempeluhr" accent={d.gestempelt > 0} />
         <Kachel icon={Clock} label={`Stunden ${MONTHS_DE[heute.getMonth()]}`} value={fmtDecimalHours(d.monat.minuten)} sub={`≈ ${fmtEur(d.monat.umsatz_netto)} netto`} to="/auswertung" />
         {firma?.art !== 'auftraggeber' && <Kachel icon={Receipt} label="Offene Rechnungen" value={d.rechnungen_offen.anzahl} sub={fmtEur(d.rechnungen_offen.summe)} to="/rechnungen" />}
+        {d.zahlungen_ueberfaellig && <Kachel icon={BellRing} label="Überfällige Zahlungen" value={d.zahlungen_ueberfaellig.anzahl} sub={d.zahlungen_ueberfaellig.anzahl ? `${fmtEur(d.zahlungen_ueberfaellig.summe)} · ${d.zahlungen_ueberfaellig.mahnungen_faellig} Mahnschritt${d.zahlungen_ueberfaellig.mahnungen_faellig === 1 ? '' : 'e'} fällig` : 'alles im Zahlungsziel'} to="/mahnwesen" warn={d.zahlungen_ueberfaellig.anzahl > 0} />}
         {d.kostenabweichungen && <Kachel icon={Calculator} label="Projekte mit Kostenabweichung" value={d.kostenabweichungen.anzahl} sub={d.kostenabweichungen.liste?.[0] ? `${d.kostenabweichungen.liste[0].name}` : `${d.kostenabweichungen.projekte} Projekte mit Auftragswert`} to="/nachkalkulation" warn={d.kostenabweichungen.anzahl > 0} />}
         {d.angebote_offen && <Kachel icon={FileText} label="Offene Angebote" value={d.angebote_offen.anzahl} sub={d.angebote_offen.anfragen ? `${fmtEur(d.angebote_offen.summe)} · ${d.angebote_offen.anfragen} neue Anfrage${d.angebote_offen.anfragen === 1 ? '' : 'n'}` : d.angebote_offen.ablaufend ? `${fmtEur(d.angebote_offen.summe)} · ${d.angebote_offen.ablaufend} laufen bald ab` : `${fmtEur(d.angebote_offen.summe)} netto`} to="/angebote" accent={d.angebote_offen.anfragen > 0} warn={d.angebote_offen.ablaufend > 0} />}
         <Kachel icon={CalendarOff} label="Offene Anträge" value={d.antraege_offen} sub={d.abwesend_heute.length ? `${d.abwesend_heute.length} heute abwesend` : 'niemand abwesend'} to="/abwesenheiten" accent={d.antraege_offen > 0} />

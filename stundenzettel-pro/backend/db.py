@@ -48,6 +48,8 @@ async def indizes_anlegen(d) -> None:
         ("signatures", [("firma_id", 1), ("project_id", 1), ("week_monday", 1)], {"name": "projekt_woche"}),
         ("invoices", [("firma_id", 1), ("year", 1), ("seq", 1)], {"unique": True, "name": "nummer_je_firma_jahr"}),
         ("invoices", [("firma_id", 1), ("project_id", 1), ("year", 1), ("month", 1)], {"unique": True, "name": "eine_je_projekt_monat"}),
+        ("invoices", [("firma_id", 1), ("status", 1), ("faellig_am", 1)], {"name": "mahnwesen"}),
+        ("invoices", [("firma_id", 1), ("project_id", 1), ("art", 1)], {"name": "projekt_art"}),
         ("protokoll", [("firma_id", 1), ("created_at", -1)], {"name": "firma_zeit"}),
         ("api_tokens", [("token_hash", 1)], {"unique": True, "name": "token"}),
         ("services", [("firma_id", 1), ("sort", 1)], {"name": "firma_sort"}),

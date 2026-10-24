@@ -283,6 +283,23 @@ Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berec
   wenn alle Zeiten freigegeben und alle Buchungen und Rechnungen geprüft sind; vorher zeigt die Seite die offenen Punkte. Personenkosten nur mit `kostensaetze`.
   Startseite: „Projekte mit Kostenabweichung“ (über 10 % oder negativer Deckungsbeitrag).
 
+## Rechnungsprozesse: Abschläge, Schlussrechnung, Storno, Gutschrift, Zahlungen, Mahnwesen (24.10.2026, Stufe E)
+
+- **Rechnungsarten** in einer Liste und einem Nummernkreis: Monatsrechnung aus Zeiten (wie bisher), Rechnung aus dem Auftrag (pauschal),
+  Abschlagsrechnung (pauschaler Betrag oder kumulativ nach Leistungsstand in Prozent der Auftragssumme, bereits gestellte Abschläge werden netto
+  abgezogen – Umsatzsteuer auf den Differenzbetrag), Schlussrechnung (Gesamtleistung plus freigegebene Nachträge abzüglich aller Abschläge; danach
+  keine weiteren Abschläge), Stornorechnung (Korrekturbeleg mit eigener Nummer und negativen Beträgen; das Original bleibt als Beleg und wird
+  „storniert“ – Entwürfe werden stattdessen zurückgesetzt) und Gutschrift. Projekt → „Abrechnung“ zeigt Auftragssumme, gestellt, bezahlt, offen.
+- **E-Rechnung je Art** ohne Bruch der Formate: Typcodes 380 (Rechnung/Schluss), 326 (Abschlag), 384 (Storno), 381 (Gutschrift, Beträge positiv);
+  Schlussrechnung und Storno verweisen auf die vorausgegangenen Belege (InvoiceReferencedDocument). PDFs der neuen Arten kommen vom Server.
+- **Zahlungen**: Teilzahlungen mit Datum, Art und Notiz je Rechnung; Status offen → teilweise bezahlt → bezahlt entsteht aus den Zahlungen, Überzahlung
+  wird abgelehnt. „Als bezahlt markieren“ legt die Zahlung über den Rest an. **Versand**: Rechnung per E-Mail mit PDF (ZUGFeRD-XML eingebettet,
+  wenn die Kundendaten vollständig sind) – mit Nachweis im E-Mail-Ausgang; das stellt die Rechnung aus.
+- **Mahnwesen** (Seite „Mahnwesen“, Recht `rechnungen`): überfällige, ausgestellte Rechnungen mit Tagen, offenem Betrag und Mahnstufe; drei Stufen
+  (Zahlungserinnerung, Mahnung, letzte Mahnung) mit Fristen, Gebühren und Texten je Firma (Standardgebühr 0 €). Nichts wird automatisch verschickt:
+  jede Stufe wird von Hand freigegeben, als PDF erzeugt und auf Wunsch per E-Mail mit Nachweis geschickt; Stufen werden nicht übersprungen, Fristen
+  nur ausdrücklich. Startseite: „Überfällige Zahlungen“ und der offene Punkt „Mahnschritt fällig“.
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).

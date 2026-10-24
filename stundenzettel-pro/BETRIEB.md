@@ -108,6 +108,16 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
 - Kostenmodell je Firma unter Firma → Angebote → Kalkulationssätze: interner Stundensatz (Rückfall), Lohnnebenkosten in Prozent (Aufschlag auf Stundenlohn
   oder Monatsgehalt aus den Lohndaten). Ohne Lohndaten und ohne Firmensatz werden Stunden als „ohne Lohnsatz“ ausgewiesen, nie geraten.
 
+## 4i. Rechnungsprozesse und Mahnwesen
+
+- Mahn-PDFs liegen unter `DATA_DIR/mahnungen/<firma_id>/<rechnung>_m<stufe>.pdf`, E-Mail-Anhänge unter `DATA_DIR/email_anhaenge/`; beides sichern.
+- Nichts mahnt automatisch: die Startseite zeigt fällige Mahnschritte, das Büro löst jede Stufe aus. Fristen/Gebühren/Texte unter Mahnwesen → Regeln
+  (`firmen.mahnwesen`); Gebühren nur, wenn AGB oder Gesetz sie erlauben.
+- Nummernkreis: Abschläge, Schluss-, Storno- und Gutschriftsbelege zählen im selben Kreis wie Monatsrechnungen (RE-JJJJ-0001 …); ausgestellte Belege
+  werden nie gelöscht oder nachberechnet – Korrekturen laufen über Storno und neuen Beleg.
+- Bestehende MongoDB-Installationen: der neue Index `invoices.mahnwesen` wird beim Start angelegt; der alte eindeutige Index bleibt gültig, weil
+  Nicht-Monatsrechnungen `month = -seq` tragen.
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

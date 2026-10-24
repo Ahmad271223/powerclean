@@ -30,6 +30,7 @@ FIRMA_DEFAULTS = {
     "angebot_schluss": "Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit zur Verfügung.",
     "angebot_zahlungsbedingungen": "Zahlbar innerhalb von 14 Tagen nach Rechnungsstellung ohne Abzug.",
     "kalkulation": None,
+    "mahnwesen": None,   # Fristen, Gebühren und Texte des Mahnwesens (siehe rechnungslauf.MAHNWESEN_STANDARD)
 }
 
 FIRMENARTEN = {"betrieb": "Ausführender Betrieb", "auftraggeber": "Auftraggeber / Generalunternehmer", "beides": "Beides"}

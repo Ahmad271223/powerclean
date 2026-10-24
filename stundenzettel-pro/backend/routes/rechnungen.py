@@ -55,6 +55,10 @@ async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), status: Opt
         r["customer_name"] = p.get("customer_name", "")
         r["project_color"] = p.get("color", "")
         r["extras_anzahl"] = len(r.get("extras") or [])
+        from rechnungslauf import ARTEN as _ARTEN, STATUS_NAMEN as _STATUS, zahlungsstand as _stand
+        st = _stand(r)
+        r.update({"art": r.get("art") or "monat", "art_name": _ARTEN.get(r.get("art") or "monat", "Rechnung"), "bezahlt_betrag": st["bezahlt_betrag"], "offen_betrag": st["offen_betrag"],
+                  "status_name": _STATUS.get(r.get("status"), r.get("status")), "mahnstufe": int(r.get("mahnstufe") or 0)})
         aus.append(r)
     hat_mehr = len(aus) > limit
     aus = aus[:limit]
@@ -88,6 +92,9 @@ async def _festschreiben(user: dict, r: dict, anlass: str) -> dict:
     if festgeschrieben(r) or r.get("status", "offen") != "offen":
         return r
     aenderung = {"festgeschrieben_at": jetzt_iso(), "festgeschrieben_von": user.get("name"), "festgeschrieben_anlass": anlass}
+    if not r.get("faellig_am"):
+        from rechnungslauf import faellig_am as _faellig
+        aenderung["faellig_am"] = _faellig(r, user.get("_firma") or await firma_laden(user["firma_id"]))
     await db().invoices.update_one({"id": r["id"]}, {"$set": aenderung})
     await protokollieren(user, "rechnung.ausgestellt", r["number"], details={"anlass": anlass, "brutto": r.get("gross")})
     return {**r, **aenderung}
@@ -117,7 +124,7 @@ async def anlegen(body: RechnungAnlegenIn, user: dict = Depends(firmenabo_noetig
         r = {"id": neue_id(), "firma_id": user["firma_id"], "project_id": p["id"], "customer_id": p.get("customer_id"),
              "year": body.year, "month": body.month, "seq": seq,
              "number": f"{firma.get('invoice_prefix') or 'RE-'}{body.year}-{seq:04d}",
-             "invoice_date": lokal_jetzt().date().isoformat(), "status": "offen", "paid_at": None,
+             "invoice_date": lokal_jetzt().date().isoformat(), "status": "offen", "paid_at": None, "art": "monat", "zahlungen": [], "bezahlt_betrag": 0.0, "mahnstufe": 0, "mahnungen": [],
              "created_by": user["id"], "created_at": jetzt_iso(), **_summen(calc)}
         try:
             await db().invoices.insert_one(dict(r))
@@ -142,8 +149,11 @@ async def daten(rechnung_id: str, user: dict = Depends(recht_noetig("rechnungen"
     """Alles für das PDF: Firma, Projekt, Rechnung, Einträge des Wochenrasters, Kunden-Unterschriften."""
     r = await _laden(user, rechnung_id)
     r = await _festschreiben(user, r, "pdf")
-    p = await projekt_laden(user, r["project_id"])
     firma = await firma_laden(user["firma_id"])
+    if (r.get("art") or "monat") != "monat":   # Auftrags-/Abschlags-/Schluss-/Storno-/Gutschriftsrechnung: kein Wochenraster, PDF kommt vom Server
+        p = await projekt_laden(user, r["project_id"]) if r.get("project_id") else None
+        return {"firma": firma_oeffentlich(firma, user), "projekt": p, "rechnung": r, "eintraege": [], "unterschriften": [], "fotos": [], "server_pdf": True}
+    p = await projekt_laden(user, r["project_id"])
     von, bis = rasterbereich(r["year"], r["month"])
     namen = await nutzernamen(user["firma_id"])
     eintraege = []
@@ -182,8 +192,19 @@ async def status(rechnung_id: str, body: RechnungStatusIn, user: dict = Depends(
             datum_pruefen(aenderung["paid_at"])
         except ValueError as exc:
             raise HTTPException(400, str(exc))
+        # „als bezahlt markiert“ = Zahlung über den offenen Rest, damit Zahlungsliste und Mahnwesen stimmen
+        from rechnungslauf import zahlungsstand as _stand
+        offen = _stand(r)["offen_betrag"]
+        zahlungen = list(r.get("zahlungen") or [])
+        if offen > 0.005:
+            zahlungen.append({"id": neue_id(), "am": aenderung["paid_at"], "betrag": round(offen, 2), "art": "ueberweisung", "notiz": "als bezahlt markiert", "erfasst_von": user.get("name"), "at": jetzt_iso()})
+        aenderung["zahlungen"] = zahlungen
+        aenderung["bezahlt_betrag"] = round(sum(float(z.get("betrag") or 0) for z in zahlungen), 2)
     else:
         aenderung["paid_at"] = None
+        if body.status == "offen":
+            aenderung["zahlungen"] = []
+            aenderung["bezahlt_betrag"] = 0.0
     if body.invoice_date:
         if r.get("status", "offen") != "offen":
             raise HTTPException(400, "Das Datum lässt sich nur bei offenen Rechnungen ändern.")
@@ -246,9 +267,11 @@ async def loeschen(rechnung_id: str, user: dict = Depends(schreibend_mit_recht("
 
 async def _erechnung(user: dict, rechnung_id: str) -> tuple[dict, dict, dict]:
     r = await _laden(user, rechnung_id)
-    p = await projekt_laden(user, r["project_id"])
+    p = await projekt_laden(user, r["project_id"]) if r.get("project_id") else {"name": "", "customer_name": "", "customer_address": "", "address": "", "reverse_charge": r.get("reverse_charge")}
     firma = await firma_laden(user["firma_id"])
     k = await kunde_laden(user["firma_id"], r.get("customer_id") or p.get("customer_id"))
+    if r.get("vorherige"):
+        r["_vorherige_belege"] = [v async for v in db().invoices.find({"id": {"$in": r["vorherige"]}}, {"_id": 0, "number": 1, "invoice_date": 1})]
     return erechnung.rechnungsdaten(firma, p, k, r), firma, r
 
 

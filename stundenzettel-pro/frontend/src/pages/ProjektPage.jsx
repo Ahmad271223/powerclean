@@ -26,6 +26,7 @@ import AusschreibungenTab from '../components/plattform/AusschreibungenTab';
 import AuftragTab from '../components/angebot/AuftragTab';
 import MaterialTab from '../components/material/MaterialTab';
 import NachkalkulationTab from '../components/material/NachkalkulationTab';
+import AbrechnungTab from '../components/rechnungen/AbrechnungTab';
 import NachtraegeTab from '../components/plattform/NachtraegeTab';
 import AbnahmenTab from '../components/plattform/AbnahmenTab';
 import ProjektakteKarte from '../components/ProjektakteKarte';
@@ -182,6 +183,7 @@ export default function ProjektPage() {
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
     ...(isBuero && !verknuepft ? [{ value: 'auftrag', label: 'Angebot & Auftrag', icon: FileText }] : []),
     { value: 'material', label: 'Material', icon: Package },
+    ...(isBuero && kann('rechnungen') ? [{ value: 'abrechnung', label: 'Abrechnung', icon: Receipt }] : []),
     ...(isBuero && kann('kalkulation') ? [{ value: 'nachkalkulation', label: 'Nachkalkulation', icon: Calculator }] : []),
   ];
 
@@ -359,6 +361,7 @@ export default function ProjektPage() {
       {tab === 'vertrag' && <><NachtraegeTab projectId={plattformId} /><AbnahmenTab projectId={plattformId} className="mt-6" /></>}
       {tab === 'auftrag' && <AuftragTab projekt={project} />}
       {tab === 'material' && <MaterialTab projekt={project} />}
+      {tab === 'abrechnung' && <AbrechnungTab projekt={project} kunde={data.kunde} />}
       {tab === 'nachkalkulation' && <NachkalkulationTab projekt={project} />}
 
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}

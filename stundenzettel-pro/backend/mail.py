@@ -33,7 +33,7 @@ ARTEN = {"mitarbeiter_einladung": "Einladung Mitarbeiter", "projekt_einladung": 
          "angebot_nachweis": "Einreichungsnachweis Angebot", "angebot_eingegangen": "Angebot eingegangen", "zuschlag": "Zuschlag", "absage": "Absage",
          "auftrag_angenommen": "Auftrag angenommen", "nachtrag": "Nachtrag", "abnahme": "Abnahme", "einsatz_erinnerung": "Einsatz morgen",
          "einsatz_aenderung": "Planänderung", "angebot_kunde": "Angebot an Kunden", "angebot_angenommen": "Angebot angenommen",
-         "angebot_abgelehnt": "Angebot abgelehnt", "allgemein": "Allgemein"}
+         "angebot_abgelehnt": "Angebot abgelehnt", "rechnung": "Rechnung an Kunden", "mahnung": "Zahlungserinnerung / Mahnung", "allgemein": "Allgemein"}
 SOFORT_ZUSTELLEN = True   # Tests schalten die sofortige Zustellung ab und arbeiten den Ausgang gezielt ab
 
 

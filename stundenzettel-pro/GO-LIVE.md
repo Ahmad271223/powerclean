@@ -120,6 +120,18 @@ Backend-Tests gesamt: 78 grün. Offen: echter E-Mail-Versand mit Anhang über SM
 
 Backend-Tests gesamt: 81 grün. Offen: ZUGFeRD-Auslesen mit echten Lieferanten-PDFs prüfen (nur mit erzeugten XML getestet), Lohnnebenkosten je Firma einstellen (Standard 0).
 
+## 1h. Stufe E – Rechnungsprozesse (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Kumulative Abschläge (30 % → 60 %), Abzug gestellter Abschläge, Teilzahlung/teilbezahlt/Überzahlung, Nachtrag in der Basis, Schlussrechnung mit Vorgängerbelegen in der XML, Sperren nach Schluss, pauschaler Abschlag, Server-PDF | `test_rechnungslauf_20261024.py::test_01` |
+| Storno nur ausgestellter Rechnungen (Gegenbuchung, 384, Verweis), Gutschrift (381, positive XML-Beträge), Rechnung aus Auftrag, Versand mit ZUGFeRD-Anhang, „als bezahlt“ legt Zahlung an | `test_02` |
+| Mahnwesen: nur ausgestellte und überfällige, Stufen in Reihenfolge, Fristen (409 / erzwingen), Gebühren aus Regeln, PDF-Snapshot, E-Mail-Nachweis, Startseite, Zahlung beendet den Vorgang | `test_03` |
+| Browser (24.10.2026): Rechnungsliste mit Abschlag/Teilzahlung, Zahlungsdialog, Projekt → Abrechnung, Mahnwesen mit Regeln | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 84 grün. Vor dem Go-live: Rechnungs-PDFs der neuen Arten vom Steuerberater prüfen lassen (Abschlag/Schluss-Darstellung, § 13b,
+Gutschrift), Mahnfristen und -gebühren mit den eigenen AGB abstimmen (Standard 0 €), XRechnung-Validator (KoSIT) gegen Abschlag/Storno laufen lassen.
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

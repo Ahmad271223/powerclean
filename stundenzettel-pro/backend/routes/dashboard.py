@@ -45,9 +45,19 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
                 warn_tage.add((e.get("user_id"), e.get("date")))
         offen_antraege = await db().absences.count_documents({"firma_id": f, "status": "beantragt"})
         rech_offen, rech_summe = 0, 0.0
-        async for r in db().invoices.find({"firma_id": f, "status": "offen"}, {"_id": 0, "gross": 1}):
+        ueberfaellig_n, ueberfaellig_summe, mahn_faellig = 0, 0.0, 0
+        from rechnungslauf import mahn_vorschlag as _mahn_vorschlag, zahlungsstand as _zstand
+        async for r in db().invoices.find({"firma_id": f, "status": {"$in": ["offen", "teilbezahlt"]}}, {"_id": 0, "positions": 0, "extras": 0}):
+            if r.get("art") in ("storno", "gutschrift"):
+                continue
             rech_offen += 1
-            rech_summe += float(r.get("gross") or 0)
+            rech_summe += _zstand(r)["offen_betrag"]
+            v = _mahn_vorschlag(r, firma, heute_d)
+            if v:
+                ueberfaellig_n += 1
+                ueberfaellig_summe += v["offen_betrag"]
+                if v["jetzt_faellig"]:
+                    mahn_faellig += 1
         namen = await nutzernamen(f)
         gestempelt, lange = 0, []
         async for s in db().stempel.find({"firma_id": f}, {"_id": 0}):
@@ -76,6 +86,7 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
             "heute_eintraege": tage_heute, "gestempelt": gestempelt, "mitarbeiter_aktiv": mitarbeiter, "projekte_aktiv": len(aktiv),
             "monat": {"minuten": minuten_monat, "umsatz_netto": round(umsatz, 2)},
             "antraege_offen": offen_antraege, "rechnungen_offen": {"anzahl": rech_offen, "summe": round(rech_summe, 2)},
+            "zahlungen_ueberfaellig": {"anzahl": ueberfaellig_n, "summe": round(ueberfaellig_summe, 2), "mahnungen_faellig": mahn_faellig},
             "angebote_offen": await _angebote_offen(f) if hat_recht(user, "angebote") else None,
             "kostenabweichungen": await _kostenabweichungen(firma) if hat_recht(user, "kalkulation") else None,
             "letzte_projekte": aktiv[:6], "abwesend_heute": abwesend,
@@ -199,6 +210,13 @@ async def aufgaben(user: dict = Depends(aktueller_nutzer)):
                   await db().kundenangebote.count_documents({"firma_id": f, "status": "gesendet", "gueltig_bis": {"$gte": heute, "$lte": (heute_d + timedelta(days=7)).isoformat()}}), "/angebote?status=gesendet", 2)
             punkt("auftraege_anlegen", "Angenommene Angebote als Auftrag anlegen", await db().kundenangebote.count_documents({"firma_id": f, "status": "angenommen", "auftrag": None}), "/angebote?status=angenommen", 1)
         if hat_recht(user, "rechnungen"):
+            from rechnungslauf import mahn_vorschlag as _mv
+            faellige = 0
+            async for r_ in db().invoices.find({"firma_id": f, "status": {"$in": ["offen", "teilbezahlt"]}}, {"_id": 0, "positions": 0, "extras": 0}):
+                v_ = _mv(r_, firma, heute_d)
+                if v_ and v_["jetzt_faellig"]:
+                    faellige += 1
+            punkt("mahnungen", "Überfällige Rechnungen: Zahlungserinnerung oder Mahnung schicken", faellige, "/mahnwesen", 1)
             punkt("eingangsrechnungen_pruefen", "Eingangsrechnungen prüfen", await db().eingangsrechnungen.count_documents({"firma_id": f, "status": "erfasst"}), "/eingangsrechnungen?status=erfasst", 2)
             punkt("eingangsrechnungen_faellig", "Überfällige Eingangsrechnungen bezahlen", await db().eingangsrechnungen.count_documents({"firma_id": f, "status": {"$in": ["erfasst", "geprueft"]}, "faellig_am": {"$lt": heute}}), "/eingangsrechnungen", 1)
         if hat_recht(user, "kalkulation"):
