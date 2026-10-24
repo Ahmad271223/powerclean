@@ -50,13 +50,16 @@ def test_01_stempeluhr_zeitstempel_24h_und_nachtarbeit(client):
     assert len(client.get(f"/api/projekte/{pid}/zeiten?von=2026-01-01&bis=2027-12-31", headers=s["chef"]).json()["eintraege"]) == 1
     # Nachtarbeit über Mitternacht: Start gestern 22:00, Ende jetzt → Datum = Starttag, Netto über Mitternacht korrekt
     assert client.post("/api/stempel/start", json={"project_id": pid}, headers=s["ma"]).status_code == 200
-    gestern_22 = (lokal_jetzt() - timedelta(days=1)).replace(hour=22, minute=0, second=0, microsecond=0)
-    asyncio.run(dbmodul.db().stempel.update_one({"user_id": s["ma_id"]}, {"$set": {"start_at": gestern_22.isoformat(), "pausen": []}}))
+    jetzt_l = lokal_jetzt()
+    start = (jetzt_l - timedelta(days=1)).replace(hour=22, minute=0, second=0, microsecond=0)
+    if jetzt_l - start >= timedelta(hours=24):   # Testlauf spät am Abend: 23 Stunden zurück, damit die 24-Stunden-Grenze nicht greift
+        start = (jetzt_l - timedelta(hours=23)).replace(second=0, microsecond=0)
+    asyncio.run(dbmodul.db().stempel.update_one({"user_id": s["ma_id"]}, {"$set": {"start_at": start.isoformat(), "pausen": []}}))
     r = client.post("/api/stempel/stop", json={}, headers=s["ma"])
     assert r.status_code == 200, r.text
     e = r.json()["eintrag"]
-    erwartet = int((lokal_jetzt().replace(tzinfo=None) - gestern_22.replace(tzinfo=None)).total_seconds() // 60)
-    assert e["date"] == gestern_22.date().isoformat() and e["start_time"] == "22:00" and abs(e["net_minutes"] - erwartet) <= 1 and e["pruefen"] is False
+    erwartet = int((lokal_jetzt().replace(tzinfo=None) - start.replace(tzinfo=None)).total_seconds() // 60)
+    assert e["date"] == start.date().isoformat() and e["start_time"] == start.strftime("%H:%M") and abs(e["net_minutes"] - erwartet) <= 1 and e["pruefen"] is False
     # Stop-Reihenfolge: Eintrag zuerst, Stempelung danach – nach einem Stop gibt es den Eintrag und keine Stempelung mehr
     assert client.get("/api/stempel/status", headers=s["ma"]).json()["aktiv"] is None
 
