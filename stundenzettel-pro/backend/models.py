@@ -130,6 +130,28 @@ class FirmaIn(BaseModel):
     workdays: Optional[list[int]] = Field(default=None, max_length=7)
     country: Optional[str] = Field(default=None, min_length=2, max_length=2)   # Land des Unternehmens (ISO), Standard DE
     lohn_export: Optional["LohnExportIn"] = None                                # DATEV/LODAS-Einstellungen für die Lohnvorbereitung
+    # Kundenangebote und Kalkulation (Stufe C)
+    angebot_prefix: Optional[str] = Field(default=None, max_length=20)
+    angebot_gueltig_tage: Optional[int] = Field(default=None, ge=1, le=365)
+    angebot_einleitung: Optional[str] = Field(default=None, max_length=4000)
+    angebot_schluss: Optional[str] = Field(default=None, max_length=4000)
+    angebot_zahlungsbedingungen: Optional[str] = Field(default=None, max_length=2000)
+    kalkulation: Optional[dict] = None   # {stundensatz, gemeinkosten_prozent, risiko_prozent, gewinn_prozent} – nur mit Recht „kostensaetze“
+
+    @field_validator("kalkulation")
+    @classmethod
+    def _kalkulation(cls, v):
+        if v is None:
+            return v
+        aus = {}
+        for k in ("stundensatz", "gemeinkosten_prozent", "risiko_prozent", "gewinn_prozent"):
+            if v.get(k) in (None, ""):
+                continue
+            try:
+                aus[k] = max(0.0, min(100000.0, float(v[k])))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Kalkulationswerte müssen Zahlen sein.") from exc
+        return aus
 
     @field_validator("logo", "stamp")
     @classmethod
@@ -254,10 +276,6 @@ class ProjektIn(BaseModel):
     lat: Optional[float] = Field(default=None, ge=-90, le=90)
     lon: Optional[float] = Field(default=None, ge=-180, le=180)
     kostenlos: bool = False   # bewusst ohne Stundensatz: 0 € bleibt 0 € (sonst gilt der Firmenstandard)
-    abrechnungsart_projekt: str = Field(default="stunden", pattern="^(stunden|pauschal)$")   # Grundlage der Kalkulation (Rechnung weiter nach Stunden)
-    pauschale_netto: float = Field(default=0, ge=0, le=1e12)
-    abrechnungsart_projekt: str = Field(default="stunden", pattern="^(stunden|pauschal)$")   # Grundlage der Kalkulation (Rechnung weiter nach Stunden)
-    pauschale_netto: float = Field(default=0, ge=0, le=1e12)
     abrechnungsart_projekt: str = Field(default="stunden", pattern="^(stunden|pauschal)$")   # Grundlage der Kalkulation (Rechnung weiter nach Stunden)
     pauschale_netto: float = Field(default=0, ge=0, le=1e12)
 
@@ -1087,3 +1105,117 @@ class VergabeAntwortIn(BaseModel):
 class PositionenTextIn(BaseModel):
     """Leistungsverzeichnis als Text (CSV: Nr;Leistung;Menge;Einheit[;Beschreibung])."""
     csv: str = Field(min_length=1, max_length=400000)
+
+
+# ---------------------------------------------------------------- Kundenangebote und Kalkulation (Stufe C)
+
+class ZuschlagIn(BaseModel):
+    text: str = Field(default="Zuschlag", max_length=120)
+    prozent: float = Field(default=0, ge=0, le=1000)
+
+
+class AngebotPositionKundeIn(BaseModel):
+    id: Optional[str] = Field(default=None, max_length=64)
+    art: str = Field(default="leistung", pattern="^(titel|leistung|stunden|material|pauschal|text)$")
+    text: str = Field(default="", max_length=300)
+    beschreibung: Optional[str] = Field(default="", max_length=4000)
+    menge: float = Field(default=1, ge=0, le=1e9)
+    einheit: str = Field(default="Stk.", max_length=20)
+    einzelpreis: float = Field(default=0, ge=-1e9, le=1e9)   # negative Zeilen = ausgewiesener Nachlass
+    rabatt_prozent: float = Field(default=0, ge=0, le=100)
+    alternativ: bool = False
+    eventual: bool = False
+    leistung_id: Optional[str] = Field(default=None, max_length=64)
+    kalkulation: Optional[dict] = None   # vertraulich: {stunden, stundensatz, material_ek, fremd, geraete, transport, sonstige, gemeinkosten_prozent, risiko_prozent, gewinn_prozent}
+
+
+KUNDE_FREI_FELDER = ("name", "contact", "street", "zip_code", "city", "email", "phone", "customer_number", "reverse_charge")
+ANFRAGE_FELDER = ("text", "eingegangen_am", "kanal")
+
+
+class AngebotKundeIn(BaseModel):
+    titel: Optional[str] = Field(default="", max_length=200)
+    status: Optional[str] = Field(default=None, pattern="^(anfrage|entwurf)$")
+    customer_id: Optional[str] = Field(default=None, max_length=64)
+    kunde_frei: Optional[dict] = None          # Kunde ohne Kundenstamm (Name, Anschrift, E-Mail)
+    project_id: Optional[str] = Field(default=None, max_length=64)
+    datum: Optional[str] = None
+    gueltig_bis: Optional[str] = None
+    anfrage: Optional[dict] = None             # {text, eingegangen_am, kanal}
+    einleitung: Optional[str] = Field(default=None, max_length=4000)
+    schluss: Optional[str] = Field(default=None, max_length=4000)
+    zahlungsbedingungen: Optional[str] = Field(default=None, max_length=2000)
+    positionen: list[AngebotPositionKundeIn] = Field(default_factory=list, max_length=500)
+    zuschlaege: list[ZuschlagIn] = Field(default_factory=list, max_length=20)
+    rabatt_prozent: float = Field(default=0, ge=0, le=100)
+    reverse_charge: Optional[bool] = None      # Standard: aus dem Kunden
+    intern: Optional[str] = Field(default="", max_length=4000)   # interne Notiz, nie im PDF
+    vorlage_id: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator("datum", "gueltig_bis")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return None
+        datum_pruefen(v)
+        return v
+
+    @field_validator("kunde_frei")
+    @classmethod
+    def _kunde_frei(cls, v):
+        if v is None:
+            return v
+        return {k: (bool(v[k]) if k == "reverse_charge" else str(v.get(k) or "")[:200]) for k in KUNDE_FREI_FELDER if k in v}
+
+    @field_validator("anfrage")
+    @classmethod
+    def _anfrage(cls, v):
+        if v is None:
+            return v
+        return {k: str(v.get(k) or "")[:4000] for k in ANFRAGE_FELDER if k in v}
+
+
+class AngebotSendenIn(BaseModel):
+    an: Optional[str] = Field(default=None, max_length=200)
+    nachricht: Optional[str] = Field(default="", max_length=4000)
+    ohne_email: bool = False   # gedruckt oder persönlich übergeben
+
+
+class AngebotAnnahmeIn(BaseModel):
+    von_name: str = Field(min_length=2, max_length=120)
+    art: Optional[str] = Field(default="schriftlich", pattern="^(schriftlich|unterschrift|telefonisch|persoenlich|online)$")
+    am: Optional[str] = None
+    text: Optional[str] = Field(default="", max_length=1000)
+
+
+class AngebotGrundIn(BaseModel):
+    grund: str = Field(min_length=1, max_length=1000)
+
+
+class AngebotAuftragIn(BaseModel):
+    project_id: Optional[str] = Field(default=None, max_length=64)   # bestehendes Projekt; sonst wird ein neues Kundenprojekt angelegt
+    name: Optional[str] = Field(default=None, max_length=160)
+    address: Optional[str] = Field(default=None, max_length=300)
+
+
+class AngebotVorlageIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    titel: Optional[str] = Field(default="", max_length=200)
+    einleitung: Optional[str] = Field(default="", max_length=4000)
+    schluss: Optional[str] = Field(default="", max_length=4000)
+    zahlungsbedingungen: Optional[str] = Field(default="", max_length=2000)
+    gueltig_tage: int = Field(default=30, ge=1, le=365)
+    positionen: list[AngebotPositionKundeIn] = Field(default_factory=list, max_length=500)
+    zuschlaege: list[ZuschlagIn] = Field(default_factory=list, max_length=20)
+    rabatt_prozent: float = Field(default=0, ge=0, le=100)
+
+
+class AngebotAntwortIn(BaseModel):
+    """Antwort des Kunden über den öffentlichen Angebotslink."""
+    entscheidung: str = Field(pattern="^(angenommen|abgelehnt)$")
+    name: str = Field(min_length=2, max_length=120)
+    text: Optional[str] = Field(default="", max_length=1000)
+
+
+class KalkulationIn(BaseModel):
+    positionen: dict[str, dict] = Field(default_factory=dict)   # Positions-ID → Kalkulationseingaben

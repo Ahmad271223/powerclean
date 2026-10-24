@@ -96,6 +96,19 @@ Alle Backend-Tests grün (75, davon 7 neu für Stufe A und B); Frontend-Build gr
 
 Offen: Erinnerungsdienst auf dem Zielserver beobachten (Protokoll `erinnerungen`), SMTP-Testmail, Serien- und Schichtvorlagen.
 
+## 1f. Stufe C – Kundenangebote und Kalkulation (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Routenkonflikt `/api/angebote/{id}` mit den GU-Bieterangeboten | gefunden beim Testlauf (PUT lief auf die GU-Route); Kundenangebote liegen unter `/api/kundenangebote` |
+| Dreifach eingefügte Blöcke aus dem Stufe-A-Patch (`auth.py` Rechte-Block, `gemeinsam.foto_fuer_nutzer`, zwei `ProjektIn`-Felder) | bereinigt, Suite unverändert grün |
+| Summen und Rundung (Zuschlag, Rabatt, USt, § 19, § 13b, Alternativ/Eventual) | `test_angebote_20261024.py::test_01` |
+| Senden mit PDF-Anhang und Antwortlink, Unveränderlichkeit, Versionen, Online-Annahme, Auftrag, Projektakte, Ablauf, Anfrage | `test_02` |
+| Kalkulation: Aufschlag ≠ Marge, Deckungsbeitrag, Unvollständigkeit, Assistent, Vertraulichkeit | `test_03` |
+| Browser (24.10.2026): Liste, Editor, Anlegen über Dialog, Position speichern, ohne E-Mail senden, Firma → Angebote, Projekt → Angebot & Auftrag, Antwortseite | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 78 grün. Offen: echter E-Mail-Versand mit Anhang über SMTP auf dem Zielserver prüfen (Anhangsgröße, Spam-Bewertung).
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

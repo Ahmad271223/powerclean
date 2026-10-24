@@ -97,6 +97,12 @@ async def indizes_anlegen(d) -> None:
         ("einsaetze", [("date", 1), ("status", 1)], {"name": "erinnerung_faellig"}),
         ("kolonnen", [("firma_id", 1), ("name", 1)], {"name": "firma_name"}),
         ("erinnerungen", [("id", 1)], {"unique": True, "name": "kennung"}),
+        # Kundenangebote (Stufe C)
+        ("kundenangebote", [("firma_id", 1), ("status", 1), ("jahr", -1), ("seq", -1)], {"name": "firma_status_nummer"}),
+        ("kundenangebote", [("firma_id", 1), ("nummer", 1), ("version", 1)], {"unique": True, "name": "nummer_version_je_firma"}),
+        ("kundenangebote", [("firma_id", 1), ("project_id", 1)], {"name": "projekt"}),
+        ("kundenangebote", [("token", 1)], {"name": "antwortlink"}),
+        ("angebotsvorlagen", [("firma_id", 1), ("name", 1)], {"name": "firma_name"}),
         ("benachrichtigungen", [("id", 1)], {"name": "kennung"}),
         ("webhook_ausgang", [("firma_id", 1), ("webhook_id", 1), ("status", 1)], {"name": "firma_hook"}),
     ]

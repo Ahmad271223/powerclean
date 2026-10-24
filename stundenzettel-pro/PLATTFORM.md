@@ -129,6 +129,31 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
   heute und morgen, Startseite „Plantafel: Mitarbeiter einteilen“. Tests `tests/test_plantafel_20261024.py` (4 Tests).
 - Offen: Serien (`serie_id` vorbereitet), Schichtvorlagen, Kapazitätsplanung über Wochenstunden, Push-Benachrichtigung.
 
+## 1g. Stufe C – Kundenangebote, Auftrag, Kalkulation (24.10.2026)
+
+- Sammlungen `kundenangebote` (getrennt von den GU-Bieterangeboten in `angebote`): {id, firma_id, nummer, jahr, seq, version, vorgaenger_id, ersetzt_durch,
+  status anfrage|entwurf|gesendet|angenommen|abgelehnt|zurueckgezogen|abgelaufen|ersetzt, titel, customer_id, kunde (Momentaufnahme), project_id,
+  datum, gueltig_bis, anfrage, einleitung, schluss, zahlungsbedingungen, positionen[], zuschlaege[], rabatt_prozent, reverse_charge, summen, token,
+  pdf_pfad, versand[], annahme, ablehnung, auftrag, verlauf[], intern}; `angebotsvorlagen`; Zähler `firmen.angebotszaehler.{jahr}`.
+- Positionsstruktur (`angebote.py`, auch für Rechnungen/Aufmaß gedacht): {id, art titel|leistung|stunden|material|pauschal|text, text, beschreibung, menge,
+  einheit, einzelpreis, rabatt_prozent, alternativ, eventual, leistung_id, kalkulation}. `nummerieren()` (1, 1.1 …), `summen()` (Positionen → Zuschläge →
+  Rabatt → USt), `steuer_bestimmen()` (S/E/AE), `kalkulation_position()`/`kalkulation_angebot()` (Selbstkosten, vk_vorschlag, gewinn, aufschlag_prozent,
+  marge_prozent, deckungsbeitrag, stundenverrechnungssatz, vollstaendig, hinweise), `oeffentlich()` (Kundensicht ohne Kalkulation/Verlauf).
+- API `/api/kundenangebote`: Liste (status, project_id, customer_id, alle), POST (auch `status: anfrage`, `vorlage_id`, `kunde_frei`), GET/PUT/DELETE (nur
+  anfrage/entwurf), `/kopieren`, `/als-vorlage`, `/angebot.pdf`, `/senden` (an, nachricht, ohne_email → Snapshot unter `DATA_DIR/angebote/<firma>/`,
+  Token, E-Mail mit Anhang), `/version`, `/annahme`, `/ablehnen`, `/zurueckziehen`, `/auftrag` (project_id oder neues Projekt: `projects.auftrag`,
+  `abrechnungsart_projekt`, `pauschale_netto`), `/kalkulation` GET/PUT (Recht kalkulation, auch nach dem Senden), `/kalkulation/uebernehmen`;
+  Vorlagen `/api/kundenangebote/vorlagen`. Öffentlich ohne Anmeldung: `GET /api/oeffentlich/angebot/{token}`, `…/angebot.pdf`, `POST …/antwort`.
+- Rechte: neues Recht `angebote` (Standard für Büro an); `kalkulation` für die interne Kalkulation; `kostensaetze` für `firmen.kalkulation`
+  (`firma_oeffentlich` blendet das Feld sonst aus, `PUT /api/firma` lehnt ab). E-Mail-Ausgang kann Anhänge (`email_ausgang.anhaenge`, Dateien unter
+  `DATA_DIR/email_anhaenge/<id>/`). Projektakte: `06_Angebote/` (PDF je Version, angebote.csv, auftrag.json). Startseite: Kachel „Offene Angebote“
+  und offene Punkte (Anfragen, bald ablaufende Angebote, Aufträge anlegen).
+- Oberfläche: `AngebotePage` (Liste, Filter, Neu-Dialog mit Kunde/Vorlage/Projekt oder nur Anfrage, Vorlagenverwaltung), `AngebotPage` (Editor,
+  Summen live, Senden-/Annahme-/Auftragsdialoge, Versionen, Verlauf), `components/angebot/{PositionenEditor,KalkulationPanel,AngeboteEinstellungenKarte,AuftragTab}`,
+  `AngebotOeffentlichPage` (`/angebot/:token`), `lib/angebot.js` (Summenrechnung wie der Server). Tests `tests/test_angebote_20261024.py` (3 Tests).
+- Offen: Aufmaß-Mengen in Positionen, Artikelstamm statt freier Materialpositionen (Stufe D/F), Rechnung aus dem Auftrag (Stufe E), Unterschrift
+  des Kunden auf dem Antwortlink, Erinnerung zum Nachfassen per E-Mail.
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

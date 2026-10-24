@@ -76,6 +76,7 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
             "heute_eintraege": tage_heute, "gestempelt": gestempelt, "mitarbeiter_aktiv": mitarbeiter, "projekte_aktiv": len(aktiv),
             "monat": {"minuten": minuten_monat, "umsatz_netto": round(umsatz, 2)},
             "antraege_offen": offen_antraege, "rechnungen_offen": {"anzahl": rech_offen, "summe": round(rech_summe, 2)},
+            "angebote_offen": await _angebote_offen(f) if hat_recht(user, "angebote") else None,
             "letzte_projekte": aktiv[:6], "abwesend_heute": abwesend,
             "arbzg_warnungen": len(warn_tage), "budget_warnungen": budgets, "lange_stempelungen": lange,
             "vormonat": {"jahr": vormonat.year, "monat": vormonat.month, "abgeschlossen": vormonat_zu},
@@ -102,6 +103,25 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
                     "antraege_offen": antraege, "projekte_sichtbar": sichtbar,
                     "saldo_minuten": konto["saldo_minuten"] if konto else None, "resturlaub": urlaub["rest"], "urlaub": urlaub})
     return aus
+
+
+async def _angebote_offen(firma_id: str) -> dict:
+    """Entwürfe und gesendete Kundenangebote: Anzahl, Netto, davon in den nächsten 7 Tagen ablaufend; neue Anfragen."""
+    from angebote import abgelaufen
+    heute = lokal_jetzt().date()
+    bald = (heute + timedelta(days=7)).isoformat()
+    n, summe, ablaufend, anfragen = 0, 0.0, 0, 0
+    async for a in db().kundenangebote.find({"firma_id": firma_id, "status": {"$in": ["anfrage", "entwurf", "gesendet"]}}, {"_id": 0, "status": 1, "gueltig_bis": 1, "summen.netto": 1}):
+        if a["status"] == "anfrage":
+            anfragen += 1
+            continue
+        if abgelaufen(a, heute.isoformat()):
+            continue
+        n += 1
+        summe += float((a.get("summen") or {}).get("netto") or 0)
+        if a["status"] == "gesendet" and (a.get("gueltig_bis") or "") <= bald:
+            ablaufend += 1
+    return {"anzahl": n, "summe": round(summe, 2), "ablaufend": ablaufend, "anfragen": anfragen}
 
 
 @router.get("/aufgaben")
@@ -154,6 +174,11 @@ async def aufgaben(user: dict = Depends(aktueller_nutzer)):
             punkt("zeiten_freigeben", "Arbeitszeiten prüfen und freigeben (Plantafel)",
                   await db().einsaetze.count_documents({"firma_id": f, "status": "geplant", "freigabe": None, "date": {"$gte": (heute_d - timedelta(days=30)).isoformat(), "$lt": heute}}), "/plantafel?abgleich=1", 2)
             punkt("heute_geplant", "Heute eingeplante Einsätze", await db().einsaetze.count_documents({"firma_id": f, "status": "geplant", "date": heute}), "/plantafel", 3)
+        if hat_recht(user, "angebote"):
+            punkt("anfragen", "Neue Kundenanfragen in Angebote umsetzen", await db().kundenangebote.count_documents({"firma_id": f, "status": "anfrage"}), "/angebote?status=anfrage", 2)
+            punkt("angebote_nachfassen", "Gesendete Angebote laufen in 7 Tagen ab – nachfassen",
+                  await db().kundenangebote.count_documents({"firma_id": f, "status": "gesendet", "gueltig_bis": {"$gte": heute, "$lte": (heute_d + timedelta(days=7)).isoformat()}}), "/angebote?status=gesendet", 2)
+            punkt("auftraege_anlegen", "Angenommene Angebote als Auftrag anlegen", await db().kundenangebote.count_documents({"firma_id": f, "status": "angenommen", "auftrag": None}), "/angebote?status=angenommen", 1)
         punkt("maengel_firma", "Überfällige Mängel beheben", await db().maengel.count_documents({"firma_id": f, "status": {"$nin": ["abgenommen"]}, "frist": {"$lt": heute}}), "/zusammenarbeit", 2)
         # Eigentümerseite: Vergaben, Angebote, Rückfragen, Fristen, Nachträge, Abnahmen, Berichte
         punkt("vergaben_freigeben", "Vergabevorschläge freigeben", await db().vergaben.count_documents({"owner_firma_id": f, "status": "vorgeschlagen"}), "/ausschreibungen", 1)

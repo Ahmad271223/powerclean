@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyRound, Copy, Trash2, Upload, Building2, BadgeCheck, Plug, Tag, Plus, Webhook, Send, Pencil } from 'lucide-react';
+import { KeyRound, Copy, Trash2, Upload, Building2, BadgeCheck, Plug, Tag, Plus, Webhook, Send, Pencil, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import CompanyForm from '../components/CompanyForm';
@@ -7,6 +7,7 @@ import { Btn, Card, Chip, Field, IconBtn, Segmented, TextInput, Toggle } from '.
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDate } from '../lib/dates';
+import AngeboteEinstellungenKarte from '../components/angebot/AngeboteEinstellungenKarte';
 import AbosKarte, { PreisListe } from '../components/AbosKarte';
 import { useDialoge } from '../components/Dialoge';
 
@@ -15,7 +16,7 @@ const fmtZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-
 export default function FirmaPage() {
   const { firma, setFirma, isInhaber } = useAuth();
   const [tab, setTab] = useState('firma');
-  const optionen = [{ value: 'firma', label: 'Firmendaten', icon: Building2 }, { value: 'leistungen', label: 'Leistungen', icon: Tag }, { value: 'lizenz', label: 'Lizenz', icon: BadgeCheck }];
+  const optionen = [{ value: 'firma', label: 'Firmendaten', icon: Building2 }, { value: 'leistungen', label: 'Leistungen', icon: Tag }, { value: 'angebote', label: 'Angebote', icon: FileText }, { value: 'lizenz', label: 'Lizenz', icon: BadgeCheck }];
   if (isInhaber) optionen.push({ value: 'api', label: 'Schnittstelle', icon: Plug }, { value: 'webhooks', label: 'Webhooks', icon: Webhook }, { value: 'import', label: 'Import', icon: Upload });
 
   const speichern = async (daten) => {
@@ -28,6 +29,7 @@ export default function FirmaPage() {
       <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar"><Segmented value={tab} onChange={setTab} options={optionen} /></div>
       {tab === 'firma' && <div className="max-w-3xl mx-auto space-y-5"><FirmenartKarte /><BenachrichtigungenKarte /><Card className="p-5 sm:p-8">{firma ? <CompanyForm company={firma} onSave={speichern} /> : <Ladeanzeige />}</Card></div>}
       {tab === 'leistungen' && <Leistungen />}
+      {tab === 'angebote' && <div className="max-w-3xl mx-auto space-y-5"><AngeboteEinstellungenKarte /></div>}
       {tab === 'lizenz' && <Lizenz />}
       {tab === 'api' && <Schnittstelle />}
       {tab === 'webhooks' && <Webhooks />}

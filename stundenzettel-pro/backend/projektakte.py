@@ -234,6 +234,25 @@ async def _eigene_daten(z: _Zip, user: dict, firma: dict, projekt: dict, namen: 
             except Exception as exc:  # noqa: BLE001
                 z.hinweise.append(f"Rechnung {r.get('number')} konnte nicht als PDF erzeugt werden: {exc}")
         z.schreiben("05_Rechnungen/rechnungen.csv", _csv(zeilen), "rechnungen_liste")
+    # Kundenangebote und Auftrag (Stufe C): jede Version als PDF (gesendete aus dem Snapshot), Liste, Auftrag des Projekts
+    angebote_k = [a async for a in db().kundenangebote.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("seq", 1), ("version", 1)])]
+    if angebote_k:
+        import angebote as ang_modul
+        zeilen = [["Nummer", "Version", "Status", "Titel", "Datum", "Gültig bis", "Netto", "USt", "Brutto", "Gesendet an", "Annahme durch", "Annahme am"]]
+        for a in angebote_k:
+            s = a.get("summen") or {}
+            an = a.get("annahme") or {}
+            zeilen.append([a.get("nummer"), a.get("version"), a.get("status"), a.get("titel"), a.get("datum"), a.get("gueltig_bis"), s.get("netto"), s.get("ust"), s.get("brutto"),
+                           "; ".join((v.get("an") or v.get("art") or "") for v in a.get("versand") or []), an.get("von_name") or "", an.get("am") or ""])
+            try:
+                pfad = a.get("pdf_pfad")
+                inhalt = (config.DATA_DIR / pfad).read_bytes() if pfad and (config.DATA_DIR / pfad).is_file() else pdfs.angebot_pdf(ang_modul.pdf_daten(firma, a))
+                z.schreiben(f"06_Angebote/{_name(a.get('nummer'))}_v{a.get('version') or 1}.pdf", inhalt, "angebote_kunde")
+            except Exception as exc:  # noqa: BLE001
+                z.hinweise.append(f"Angebot {a.get('nummer')} konnte nicht als PDF erzeugt werden: {exc}")
+        z.schreiben("06_Angebote/angebote.csv", _csv(zeilen), "angebote_kunde_liste")
+    if projekt.get("auftrag"):
+        z.schreiben("06_Angebote/auftrag.json", _json(projekt["auftrag"]), "auftrag")
 
 
 async def _angebot_schreiben(z: _Zip, ordner: str, a: dict, g: dict, namen_frei: bool) -> None:

@@ -27,6 +27,7 @@ import DokumenteTab from '../components/plattform/DokumenteTab';
 import MeilensteineKarte from '../components/plattform/MeilensteineKarte';
 import PlattformTag from '../components/plattform/PlattformTag';
 import AusschreibungenTab from '../components/plattform/AusschreibungenTab';
+import AuftragTab from '../components/angebot/AuftragTab';
 import NachtraegeTab from '../components/plattform/NachtraegeTab';
 import AbnahmenTab from '../components/plattform/AbnahmenTab';
 import ProjektakteKarte from '../components/ProjektakteKarte';
@@ -181,6 +182,7 @@ export default function ProjektPage() {
       : leitung
         ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, ...((eigeneFirma?.art || 'betrieb') !== 'betrieb' ? [{ value: 'ausschreibungen', label: 'Ausschreibungen', icon: Gavel }] : []), { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, vertragTab, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
+    ...(isBuero && !verknuepft ? [{ value: 'auftrag', label: 'Angebot & Auftrag', icon: FileText }] : []),
   ];
 
   return (
@@ -355,6 +357,7 @@ export default function ProjektPage() {
       {tab === 'berichte' && <BerichteTab projectId={plattformId} />}
       {tab === 'dokumente' && <DokumenteTab projectId={plattformId} />}
       {tab === 'vertrag' && <><NachtraegeTab projectId={plattformId} /><AbnahmenTab projectId={plattformId} className="mt-6" /></>}
+      {tab === 'auftrag' && <AuftragTab projekt={project} />}
 
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}
         entries={selectedDate ? (byDay[selectedDate] || []) : []} lastEntry={lastEntry} recentActivities={recentActivities}

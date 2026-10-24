@@ -115,109 +115,12 @@ RECHTE = {
     "personal": "Zeiten, Stempelungen, Konten, Personalakten und Fotografen aller Mitarbeiter sehen und korrigieren",
     "lohn": "Lohnvorbereitung, Lohndaten und DATEV-Export",
     "rechnungen": "Rechnungen, E-Rechnungen und Zahlungen",
+    "angebote": "Angebote an Kunden erstellen, senden, annehmen und als Auftrag anlegen",
     "plantafel": "Plantafel: Einsätze planen und Arbeitszeiten freigeben",
     "kalkulation": "Angebote kalkulieren, Nachkalkulation und Deckungsbeiträge sehen",
     "kostensaetze": "Interne Stundensätze, Einkaufspreise und Mitarbeiterkosten sehen",
 }
-RECHTE_BUERO_STANDARD = {"projekte": True, "personal": True, "lohn": True, "rechnungen": True, "plantafel": True, "kalkulation": False, "kostensaetze": False}
-
-
-def rechte_von(user: dict) -> dict:
-    """Wirksame Rechte eines Nutzers: Inhaber alles; Büro Standard plus vom Inhaber gesetzte Abweichungen; andere nichts."""
-    rolle = user.get("role")
-    if rolle == "inhaber":
-        return {k: True for k in RECHTE}
-    if rolle == "buero":
-        eigene = user.get("rechte") or {}
-        return {k: bool(eigene.get(k, RECHTE_BUERO_STANDARD[k])) for k in RECHTE}
-    return {k: False for k in RECHTE}
-
-
-def hat_recht(user: dict, recht: str) -> bool:
-    return bool(rechte_von(user).get(recht))
-
-
-def recht_fehlt(recht: str) -> str:
-    return f"Dafür fehlt das Recht „{RECHTE.get(recht, recht)}“ – der Inhaber vergibt es unter Mitarbeiter → Rechte."
-
-
-def recht_noetig(recht: str):
-    """Abhängigkeit: Nutzer braucht dieses Recht (Inhaber immer, Büro je Vergabe)."""
-    async def pruefen(user: dict = Depends(aktueller_nutzer)) -> dict:
-        if not hat_recht(user, recht):
-            raise HTTPException(403, recht_fehlt(recht))
-        return user
-    return pruefen
-
-
-def schreibend_mit_recht(recht: str):
-    async def pruefen(user: dict = Depends(schreibender_nutzer)) -> dict:
-        if not hat_recht(user, recht):
-            raise HTTPException(403, recht_fehlt(recht))
-        return user
-    return pruefen
-
-
-# ---------------------------------------------------------------- Vergebbare Rechte (nur für Büro-Konten; der Inhaber hat alle, Mitarbeiter keine)
-RECHTE = {
-    "projekte": "Projekte anlegen und ändern",
-    "personal": "Zeiten, Stempelungen, Konten, Personalakten und Fotografen aller Mitarbeiter sehen und korrigieren",
-    "lohn": "Lohnvorbereitung, Lohndaten und DATEV-Export",
-    "rechnungen": "Rechnungen, E-Rechnungen und Zahlungen",
-    "plantafel": "Plantafel: Einsätze planen und Arbeitszeiten freigeben",
-    "kalkulation": "Angebote kalkulieren, Nachkalkulation und Deckungsbeiträge sehen",
-    "kostensaetze": "Interne Stundensätze, Einkaufspreise und Mitarbeiterkosten sehen",
-}
-RECHTE_BUERO_STANDARD = {"projekte": True, "personal": True, "lohn": True, "rechnungen": True, "plantafel": True, "kalkulation": False, "kostensaetze": False}
-
-
-def rechte_von(user: dict) -> dict:
-    """Wirksame Rechte eines Nutzers: Inhaber alles; Büro Standard plus vom Inhaber gesetzte Abweichungen; andere nichts."""
-    rolle = user.get("role")
-    if rolle == "inhaber":
-        return {k: True for k in RECHTE}
-    if rolle == "buero":
-        eigene = user.get("rechte") or {}
-        return {k: bool(eigene.get(k, RECHTE_BUERO_STANDARD[k])) for k in RECHTE}
-    return {k: False for k in RECHTE}
-
-
-def hat_recht(user: dict, recht: str) -> bool:
-    return bool(rechte_von(user).get(recht))
-
-
-def recht_fehlt(recht: str) -> str:
-    return f"Dafür fehlt das Recht „{RECHTE.get(recht, recht)}“ – der Inhaber vergibt es unter Mitarbeiter → Rechte."
-
-
-def recht_noetig(recht: str):
-    """Abhängigkeit: Nutzer braucht dieses Recht (Inhaber immer, Büro je Vergabe)."""
-    async def pruefen(user: dict = Depends(aktueller_nutzer)) -> dict:
-        if not hat_recht(user, recht):
-            raise HTTPException(403, recht_fehlt(recht))
-        return user
-    return pruefen
-
-
-def schreibend_mit_recht(recht: str):
-    async def pruefen(user: dict = Depends(schreibender_nutzer)) -> dict:
-        if not hat_recht(user, recht):
-            raise HTTPException(403, recht_fehlt(recht))
-        return user
-    return pruefen
-
-
-# ---------------------------------------------------------------- Vergebbare Rechte (nur für Büro-Konten; der Inhaber hat alle, Mitarbeiter keine)
-RECHTE = {
-    "projekte": "Projekte anlegen und ändern",
-    "personal": "Zeiten, Stempelungen, Konten, Personalakten und Fotografen aller Mitarbeiter sehen und korrigieren",
-    "lohn": "Lohnvorbereitung, Lohndaten und DATEV-Export",
-    "rechnungen": "Rechnungen, E-Rechnungen und Zahlungen",
-    "plantafel": "Plantafel: Einsätze planen und Arbeitszeiten freigeben",
-    "kalkulation": "Angebote kalkulieren, Nachkalkulation und Deckungsbeiträge sehen",
-    "kostensaetze": "Interne Stundensätze, Einkaufspreise und Mitarbeiterkosten sehen",
-}
-RECHTE_BUERO_STANDARD = {"projekte": True, "personal": True, "lohn": True, "rechnungen": True, "plantafel": True, "kalkulation": False, "kostensaetze": False}
+RECHTE_BUERO_STANDARD = {"projekte": True, "personal": True, "lohn": True, "rechnungen": True, "angebote": True, "plantafel": True, "kalkulation": False, "kostensaetze": False}
 
 
 def rechte_von(user: dict) -> dict:

@@ -246,6 +246,24 @@ Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berec
   Zeit mit Begründung fest (`POST /api/einsatzplan/{id}/freigabe`), der Zeiteintrag behält die Stempelung als `original`; Lohn, Exporte und
   Projektakte rechnen mit der freigegebenen Zeit. Projekt-Stundenzettel aus freigegebenen Zeiten als PDF (`GET /api/einsatzplan/stundenzettel.pdf`).
 
+## Kundenangebote und Kalkulation (24.10.2026, Stufe C)
+
+- **Angebote an Kunden** (Seite „Angebote“, Recht `angebote`, API `/api/kundenangebote`): Kundenanfrage → Entwurf → gesendet → angenommen → Auftrag.
+  Editor mit Titeln/Gruppen, Leistungs-, Stunden-, Material- und Pauschalpositionen, Textzeilen, Alternativ- und Eventualpositionen (ausgewiesen,
+  nicht summiert), Nachlass je Position, Zuschläge und Rabatt auf die Summe, Steuerregeln (Regelsteuersatz, § 19 Kleinunternehmer, § 13b je Kunde),
+  Standardtexte und Gültigkeit aus Firma → Angebote, Vorlagen, Kopien, Positionen aus den Leistungen mit Stundensatz.
+- **Senden**: PDF-Snapshot wird festgeschrieben (gesendete Angebote ändern sich nie mehr), E-Mail mit PDF-Anhang und Antwortlink; alternativ „ohne
+  E-Mail übergeben“. Über den Antwortlink (`/#/angebot/<token>`) sieht der Kunde das Angebot, lädt das PDF und nimmt online an oder lehnt ab –
+  die Firma bekommt Mitteilung und E-Mail. Annahme lässt sich auch von Hand erfassen (schriftlich, telefonisch, unterschrieben).
+- **Versionen**: Änderungen nach dem Senden nur als neue Version (gleiche Nummer, Version 2 …); die alte bleibt als Nachweis. Angenommene Angebote
+  ändern sich über Nachträge, nicht über Versionen. Nummernkreis `AN-JJJJ-0001` je Firma und Jahr (Präfix einstellbar, Nummern werden nie wiederverwendet).
+- **Auftrag**: aus dem angenommenen Angebot entsteht ein Kundenprojekt (oder ein bestehendes wird verknüpft) mit Auftragswert, Positionen und
+  Abrechnungsart (pauschal oder nach Stunden) – Projekt → „Angebot & Auftrag“. Angebote und Auftrag liegen in der Projektakte (`06_Angebote/`).
+- **Interne Kalkulation** (Recht `kalkulation`; Kostensätze der Firma nur mit `kostensaetze`): je Position Stunden × interner Stundensatz, Material-Einkauf,
+  Fremdleistungen, Geräte, Transport, Sonstiges, Gemeinkosten-, Risiko- und Gewinnzuschlag → Selbstkosten, Preisvorschlag (Assistent „Preis übernehmen“),
+  Gewinn, **Aufschlag** (auf die Kosten), **Marge** (am Verkaufspreis) und **Deckungsbeitrag** (Verkauf minus direkte Kosten) – ausdrücklich getrennt.
+  Unvollständig kalkulierte Angebote zeigen keinen irreführenden Gewinn. Nichts davon erreicht Kunden, Mitarbeiter oder GU-Partner.
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).

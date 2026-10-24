@@ -24,6 +24,12 @@ FIRMA_DEFAULTS = {
     # Plattform: Firmenart – „betrieb“ führt Aufträge aus (Handwerk, Reinigung, Dienstleistung), „auftraggeber“ vergibt sie (GU, Bauherr,
     # Projektsteuerung), „beides“ kann beides. Bestimmt Menü, Startseite und die Ansicht unter „Ausschreibungen“.
     "art": "betrieb",
+    # Kundenangebote (Stufe C): Nummernkreis, Gültigkeit, Standardtexte; Kalkulationssätze nur mit Recht „kostensaetze“ sichtbar
+    "angebot_prefix": "AN-", "angebot_gueltig_tage": 30,
+    "angebot_einleitung": "vielen Dank für Ihre Anfrage. Gerne bieten wir Ihnen die folgenden Leistungen an:",
+    "angebot_schluss": "Wir freuen uns auf Ihren Auftrag und stehen für Rückfragen jederzeit zur Verfügung.",
+    "angebot_zahlungsbedingungen": "Zahlbar innerhalb von 14 Tagen nach Rechnungsstellung ohne Abzug.",
+    "kalkulation": None,
 }
 
 FIRMENARTEN = {"betrieb": "Ausführender Betrieb", "auftraggeber": "Auftraggeber / Generalunternehmer", "beides": "Beides"}
@@ -38,13 +44,14 @@ PROJEKT_DEFAULTS = {
     "projektnummer": "", "auftraggeber": "", "generalunternehmer": "", "projektart": "", "beschreibung": "", "baubeginn": None, "bauende": None,
     "phasen": [], "bauabschnitte": [], "gewerke": [], "projektstatus": "", "volumen": None, "kosten": None, "anforderungen": "", "lat": None, "lon": None,
     "kostenlos": False, "abrechnungsart_projekt": "stunden", "pauschale_netto": 0,
+    "auftrag": None,   # aus einem angenommenen Kundenangebot: {angebot_id, nummer, netto, brutto, abrechnungsart, am, positionen[]}
     "gu_abo": None,   # kostenpflichtiges GU-Projekt: {status, preis_monat, aktiviert_am, beendet_am, zeitraeume[]} (siehe abo.py)
 }
 
 # Felder, die Mitarbeiter und Vorarbeiter nicht sehen (Preise, Budgets, Kundendaten, interne Notizen)
 PROJEKT_FELDER_VERTRAULICH = {"hourly_rate", "kostenlos", "budget_hours_month", "budget_warn_percent", "budget", "notes", "customer_address",
                               "customer_id", "reverse_charge", "volumen", "kosten", "quelle_id", "employee_name", "gu_abo",
-                              "pauschale_netto", "abrechnungsart_projekt"}
+                              "pauschale_netto", "abrechnungsart_projekt", "auftrag"}
 
 # Mitarbeiter sehen keine Bank-/Steuerdaten; Logo und Stempel brauchen sie für den Stundenzettel beim Kunden
 FIRMA_FELDER_MITARBEITER = {"id", "name", "owner", "street", "zip_code", "city", "phone", "email", "website", "logo",
@@ -61,6 +68,10 @@ def firma_oeffentlich(f: dict, user: Optional[dict] = None) -> dict:
     aus = {**FIRMA_DEFAULTS, **{k: v for k, v in f.items() if k != "_id"}}
     if user is not None and not hat_rolle(user, "buero"):
         aus = {k: v for k, v in aus.items() if k in FIRMA_FELDER_MITARBEITER}
+    if user is not None:
+        from auth import hat_recht
+        if not hat_recht(user, "kostensaetze"):
+            aus.pop("kalkulation", None)   # interne Stundensätze und Zuschläge nur mit Recht „kostensaetze“
     aus.pop("plan", None)
     return aus
 
@@ -186,30 +197,6 @@ def budget_info(projekt: dict, verbraucht_minuten: int) -> Optional[dict]:
 
 def ohne_id(doc: Optional[dict]) -> Optional[dict]:
     return None if doc is None else {k: v for k, v in doc.items() if k != "_id"}
-
-
-def foto_fuer_nutzer(user: dict, doc: dict) -> dict:
-    """Fremde Projektfotos ohne Fotograf: Nur Inhaber, Büro mit Personalrecht und die hochladende Person sehen, wer ein Foto gemacht hat.
-    Bei Bildern wird auch der Originaldateiname ersetzt (Handys schreiben oft Namen oder Kennungen hinein)."""
-    from auth import hat_recht
-    if hat_recht(user, "personal") or doc.get("uploaded_by") == user.get("id"):
-        return doc
-    aus = {k: v for k, v in doc.items() if k not in ("uploaded_by", "uploaded_by_name", "created_by", "created_by_name")}
-    if str(aus.get("mime") or "").startswith("image/"):
-        aus["filename"] = "Projektfoto.jpg"
-    return aus
-
-
-def foto_fuer_nutzer(user: dict, doc: dict) -> dict:
-    """Fremde Projektfotos ohne Fotograf: Nur Inhaber, Büro mit Personalrecht und die hochladende Person sehen, wer ein Foto gemacht hat.
-    Bei Bildern wird auch der Originaldateiname ersetzt (Handys schreiben oft Namen oder Kennungen hinein)."""
-    from auth import hat_recht
-    if hat_recht(user, "personal") or doc.get("uploaded_by") == user.get("id"):
-        return doc
-    aus = {k: v for k, v in doc.items() if k not in ("uploaded_by", "uploaded_by_name", "created_by", "created_by_name")}
-    if str(aus.get("mime") or "").startswith("image/"):
-        aus["filename"] = "Projektfoto.jpg"
-    return aus
 
 
 def foto_fuer_nutzer(user: dict, doc: dict) -> dict:

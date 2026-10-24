@@ -33,6 +33,10 @@ async def firma_aendern(body: FirmaIn, user: dict = Depends(schreibend("buero"))
         aenderung.pop("art", None)
     elif not hat_rolle(user, "inhaber"):
         raise HTTPException(403, "Die Firmenart ändert nur der Inhaber.")
+    if "kalkulation" in aenderung:
+        from auth import hat_recht, recht_fehlt
+        if not hat_recht(user, "kostensaetze"):
+            raise HTTPException(403, recht_fehlt("kostensaetze"))
     if not aenderung:
         return await firma_lesen(user)
     aenderung["updated_at"] = jetzt_iso()

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Timer, Users, FolderKanban, Receipt, CalendarOff, Plus, UserPlus, ChevronRight, Clock, AlertTriangle, Gauge, Lock, Gavel, Megaphone, Inbox, MessageCircleQuestion, BadgeCheck, Building2, BadgeEuro, ClipboardList } from 'lucide-react';
+import { Timer, Users, FolderKanban, Receipt, CalendarOff, Plus, UserPlus, ChevronRight, Clock, AlertTriangle, Gauge, Lock, Gavel, Megaphone, Inbox, MessageCircleQuestion, BadgeCheck, Building2, BadgeEuro, ClipboardList, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
@@ -89,6 +89,7 @@ function BetriebBlock({ d, firma, heute, navigate, onWarnungen, onBeenden }) {
         <Kachel icon={Timer} label="Gerade im Einsatz" value={d.gestempelt} sub={`${d.heute_eintraege} Einträge heute`} to="/stempeluhr" accent={d.gestempelt > 0} />
         <Kachel icon={Clock} label={`Stunden ${MONTHS_DE[heute.getMonth()]}`} value={fmtDecimalHours(d.monat.minuten)} sub={`≈ ${fmtEur(d.monat.umsatz_netto)} netto`} to="/auswertung" />
         {firma?.art !== 'auftraggeber' && <Kachel icon={Receipt} label="Offene Rechnungen" value={d.rechnungen_offen.anzahl} sub={fmtEur(d.rechnungen_offen.summe)} to="/rechnungen" />}
+        {d.angebote_offen && <Kachel icon={FileText} label="Offene Angebote" value={d.angebote_offen.anzahl} sub={d.angebote_offen.anfragen ? `${fmtEur(d.angebote_offen.summe)} · ${d.angebote_offen.anfragen} neue Anfrage${d.angebote_offen.anfragen === 1 ? '' : 'n'}` : d.angebote_offen.ablaufend ? `${fmtEur(d.angebote_offen.summe)} · ${d.angebote_offen.ablaufend} laufen bald ab` : `${fmtEur(d.angebote_offen.summe)} netto`} to="/angebote" accent={d.angebote_offen.anfragen > 0} warn={d.angebote_offen.ablaufend > 0} />}
         <Kachel icon={CalendarOff} label="Offene Anträge" value={d.antraege_offen} sub={d.abwesend_heute.length ? `${d.abwesend_heute.length} heute abwesend` : 'niemand abwesend'} to="/abwesenheiten" accent={d.antraege_offen > 0} />
         <Kachel icon={AlertTriangle} label="ArbZG-Hinweise im Monat" value={d.arbzg_warnungen} sub={d.arbzg_warnungen ? 'Tage mit Verstoß-Hinweis' : 'alles im Rahmen'} onClick={onWarnungen} warn={d.arbzg_warnungen > 0} />
         <Kachel icon={Gauge} label="Budget-Warnungen" value={d.budget_warnungen.length} sub={d.budget_warnungen[0] ? `${d.budget_warnungen[0].name}: ${d.budget_warnungen[0].prozent} %` : 'kein Objekt über der Grenze'} to="/projekte" warn={d.budget_warnungen.length > 0} />
@@ -130,6 +131,7 @@ function BetriebBlock({ d, firma, heute, navigate, onWarnungen, onBeenden }) {
             <h2 className="text-[17px] mb-2 flex items-center gap-2"><FolderKanban size={17} /> Schnell erledigt</h2>
             <div className="flex flex-col gap-2">
               <Btn variant="soft" size="sm" onClick={() => navigate('/plantafel')}><ClipboardList size={15} /> Plantafel: Mitarbeiter einteilen</Btn>
+              <Btn variant="soft" size="sm" onClick={() => navigate('/angebote?neu=1')}><FileText size={15} /> Angebot erstellen</Btn>
               <Btn variant="soft" size="sm" onClick={() => navigate('/stempeluhr')}><Timer size={15} /> Selbst stempeln</Btn>
               <Btn variant="soft" size="sm" onClick={() => navigate('/ausschreibungen')}><Gavel size={15} /> Aufträge finden &amp; Angebote</Btn>
               <Btn variant="soft" size="sm" onClick={() => navigate('/exporte')}>Lohnexport, Abschluss &amp; Archiv</Btn>

@@ -91,6 +91,15 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
   wird nichts erneut verschickt. Verschobene Einsätze (neue Version) erzeugen eine neue Erinnerung – gewollt.
 - Prüfung im Betrieb: `db.erinnerungen.find().sort({at:-1}).limit(5)` und `db.email_ausgang.find({art:"einsatz_erinnerung"})`.
 
+## 4g. Kundenangebote
+
+- Gesendete Angebote liegen als PDF-Snapshot unter `DATA_DIR/angebote/<firma_id>/<angebot>_v<version>.pdf`, E-Mail-Anhänge unter
+  `DATA_DIR/email_anhaenge/<email_id>/`; beides gehört in die Sicherung (`backup.sh` sichert `DATA_DIR`). Fehlt ein Snapshot, erzeugt der Server das PDF
+  aus den gespeicherten Daten neu.
+- Der Antwortlink (`BASE_URL/#/angebot/<token>`) braucht keine Anmeldung; `BASE_URL` muss auf die öffentliche Adresse der Oberfläche zeigen.
+  Der Token ist 32 Zeichen lang und zufällig; abgelaufene Angebote lassen sich darüber nicht mehr annehmen.
+- Nummernkreis `firmen.angebotszaehler.{jahr}` zählt nie zurück (gelöschte Entwürfe hinterlassen Lücken – gewollt, wie bei Rechnungen).
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

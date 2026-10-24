@@ -133,4 +133,29 @@ if r.status_code == 200:
     ok(c.post("/api/nachtraege/" + n["id"] + "/einreichen", headers=HE))
     ok(c.post("/api/projekte/" + p1["id"] + "/abnahmen", json={"art": "teilabnahme", "gewerk": "Elektro", "datum": meilenstein, "bemerkung": "Foyer ist fertig, bitte Teilabnahme"}, headers=HE))
     c.post("/api/admin/verifizieren", json={"email": "chef@elektro-mustermann.de", "verifiziert": True, "hinweis": "Handelsregister geprüft (Demo)"}, headers={"X-Admin-Token": "dev-betreiber"})
+    # Stufe C: Kundenangebote – Vorlage, gesendetes Angebot mit interner Kalkulation (aus Vorlage), neue Kundenanfrage
+    ok(c.put("/api/firma", json={"kalkulation": {"stundensatz": 22, "gemeinkosten_prozent": 12, "risiko_prozent": 2, "gewinn_prozent": 12}}, headers=H))
+    vorlage = ok(c.post("/api/kundenangebote/vorlagen", json={"name": "Unterhaltsreinigung Büro", "titel": "Unterhaltsreinigung", "gueltig_tage": 30, "positionen": [
+        {"art": "titel", "text": "Regelmäßige Reinigung"},
+        {"art": "stunden", "text": "Unterhaltsreinigung Büroflächen", "beschreibung": "Mo–Fr, Böden, Sanitär, Teeküchen, Abfallentsorgung", "menge": 40, "einheit": "Std.", "einzelpreis": 32.5},
+        {"art": "material", "text": "Reinigungsmittel und Verbrauchsmaterial", "menge": 1, "einheit": "Psch.", "einzelpreis": 45},
+        {"art": "titel", "text": "Zusatzleistungen"},
+        {"art": "pauschal", "text": "Grundreinigung bei Vertragsbeginn", "beschreibung": "einmalig, inkl. Maschinenreinigung der Hartböden", "menge": 1, "einheit": "Psch.", "einzelpreis": 480},
+        {"art": "leistung", "text": "Glasreinigung innen und außen", "menge": 120, "einheit": "m²", "einzelpreis": 2.2, "alternativ": True}]}, headers=H))["vorlage"]
+    ag = ok(c.post("/api/kundenangebote", json={"vorlage_id": vorlage["id"], "customer_id": kunde["id"], "project_id": p1["id"], "titel": "Unterhaltsreinigung Hauptstelle"}, headers=H))["angebot"]
+    kalk = {}
+    for p in ag["positionen"]:
+        if p["art"] == "stunden":
+            kalk[p["id"]] = {"stunden": 40}
+        elif p["art"] == "material":
+            kalk[p["id"]] = {"material_ek": 28}
+        elif p["art"] == "pauschal":
+            kalk[p["id"]] = {"stunden": 10, "material_ek": 60, "geraete": 40}
+        elif p["art"] == "leistung":
+            kalk[p["id"]] = {"stunden": 5, "material_ek": 15}
+    ok(c.put("/api/kundenangebote/" + ag["id"] + "/kalkulation", json={"positionen": kalk}, headers=H))
+    ok(c.post("/api/kundenangebote/" + ag["id"] + "/senden", json={"ohne_email": True}, headers=H))
+    ok(c.post("/api/kundenangebote", json={"status": "anfrage", "titel": "Treppenhausreinigung Wohnanlage Nord",
+                                      "kunde_frei": {"name": "Hausverwaltung Nord GmbH", "contact": "Frau Schulz", "email": "schulz@hv-nord.example", "street": "Nordring 5", "zip_code": "12345", "city": "Musterstadt"},
+                                      "anfrage": {"text": "Bitte Angebot für die wöchentliche Treppenhausreinigung: 3 Aufgänge, je 4 Etagen, inkl. Fenster im Treppenhaus.", "kanal": "Telefon"}}, headers=H))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

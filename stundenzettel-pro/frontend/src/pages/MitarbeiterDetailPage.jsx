@@ -372,6 +372,7 @@ const RECHTE = [
   ['personal', 'Personal und Zeiten', 'Zeiten, Stempelungen, Konten, Personalakten und Fotografen aller Mitarbeiter sehen und korrigieren'],
   ['lohn', 'Lohn', 'Lohnvorbereitung, Lohndaten und DATEV-Export'],
   ['rechnungen', 'Rechnungen', 'Rechnungen, E-Rechnungen und Zahlungen'],
+  ['angebote', 'Angebote', 'Angebote an Kunden erstellen, senden, annehmen und als Auftrag anlegen'],
   ['plantafel', 'Plantafel', 'Einsätze planen und Arbeitszeiten freigeben'],
   ['kalkulation', 'Kalkulation', 'Angebote kalkulieren, Nachkalkulation und Deckungsbeiträge sehen'],
   ['kostensaetze', 'Kostensätze', 'Interne Stundensätze, Einkaufspreise und Mitarbeiterkosten sehen'],
