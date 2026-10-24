@@ -94,6 +94,41 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
   E-Mail-Nachweisen belegt; alle Entscheidungen tragen Name und Zeitstempel.
 - Offen: Chat/Nachrichten-Threads, Zahlungsdienst, Hintergrundjob für große Projektakten, Zwei-Faktor-Anmeldung, automatische Verifizierung.
 
+## 1e. Stufe A – Rechte je Büro-Nutzer, Fotoschutz, GU-Freischaltung (24.10.2026)
+
+- Rechte (`auth.py`: `RECHTE`, `RECHTE_BUERO_STANDARD`, `rechte_von`, `hat_recht`, `recht_noetig`, `schreibend_mit_recht`,
+  `firmenabo_noetig(…, recht)`): Inhaber alles; Büro Standard (Projekte, Personal, Lohn, Rechnungen, Plantafel) plus `users.rechte`;
+  Vorarbeiter/Mitarbeiter nichts. Nur der Inhaber setzt `rechte`, nur an Büro-Konten. Betroffene Routen: Projekte anlegen/ändern (projekte),
+  Mitarbeiter einladen/ändern/deaktivieren, fremde Zeiten, Warnungen, laufende Stempelungen, Konten, Protokoll/MiLoG-Export (personal),
+  Lohndaten/Lohnvorbereitung/Lohnexporte (lohn), Rechnungen (rechnungen), Plantafel (plantafel). Kalkulation und Kostensätze sind
+  vorbereitet und standardmäßig nicht vergeben.
+- Fotoschutz: `gemeinsam.foto_fuer_nutzer` entfernt Hochlader und Dateiname für Kollegen ohne Personal-Recht; `GET /api/dokumente/{id}/datei`
+  liefert Projektfotos anderer ohne EXIF; Löschen nur Hochlader oder Personal-Recht.
+- GU-Freischaltung: `abo.gu_freigeschaltet` (Testphase oder `firmen.freischaltungen.gu`), gesetzt über `POST /api/admin/plan` mit `gu`;
+  Auftraggeber-Routen antworten sonst 403 „GU-Freischaltung“.
+- Bestandsaudit mit Befunden A1–A7 und PR-#8-Bewertung: `AUDIT_20261024.md`. Tests `tests/test_stufe_a_20261024.py`.
+
+## 1f. Stufe B – Plantafel, Arbeitszeitabgleich, Erinnerungen (24.10.2026)
+
+- Datenmodell: `einsaetze` {id, firma_id, project_id, user_id, date, start_time, end_time, pause_minutes, planned_minutes, address, note,
+  taetigkeit, kolonne_id, status geplant|abgesagt, version, verlauf[], freigabe, serie_id}, `kolonnen` {id, firma_id, name, mitglieder[]},
+  `erinnerungen` (eindeutige `id` je Einsatz und Version). Nachtschichten über Mitternacht erlaubt (Ende < Beginn).
+- API `/api/einsatzplan`: `GET` (Zeitraum, Filter; Planer bekommen Mitarbeiter, Kolonnen, Projekte, Kapazität; alle bekommen Abwesenheiten,
+  Feiertage, Erinnerungseinstellung), `GET /meine`, `POST` (409 bei Überschneidung oder Abwesenheit, `erzwingen` übersteuert), `PUT /{id}`,
+  `POST /{id}/kopieren`, `DELETE /{id}?grund=` (Absage, nicht Löschung), `POST /{id}/wiederherstellen`, `POST /{id}/rueckgaengig`,
+  Kolonnen CRUD, `GET /abgleich`, `POST /{id}/freigabe`, `POST /{id}/freigabe-zuruecknehmen`, `GET /stundenzettel.pdf`.
+- Abgleich: je Einsatz Status `passt` (± 15 Minuten), `abweichung` (mit Hinweisen: zu früh/spät, Pause, fehlende Pause), `fehlt` (keine
+  Stempelung), `offen` (Zukunft), `freigegeben`. Freigabe schreibt die anrechenbare Zeit in den Zeiteintrag, hebt die Stempelung als
+  `original` auf und vermerkt Name, Zeit und Begründung; ohne Stempelung entsteht ein Eintrag mit Quelle `freigabe`. Zurücknehmen stellt
+  `original` wieder her. Lohn, Exporte (zeiten.csv mit Spalten „Freigegeben“, „Ursprünglich …“) und Projektakte rechnen mit dem Eintrag.
+- Erinnerungen (`erinnerungen.py`): Dienst prüft minütlich; je Firma `firmen.erinnerung = {uhrzeit, email}` (Standard 18:00, E-Mail an);
+  Benachrichtigung und E-Mail für Einsätze des Folgetags, einmal je Einsatz und Version. Planänderungen für heute/morgen melden sofort
+  (`_planaenderung_melden`, Art `einsatz_aenderung`). Im Speicher-Modus läuft der Dienst nur mit `EINSATZ_DIENST=1`.
+- Oberfläche: `PlantafelPage.jsx` (Raster, Drag & Drop, Kopiermodus, Kolonnen, Abgesagte einblenden, Abgleich-Bereich, PDF), `MeinEinsatzplanPage.jsx`
+  (Heute, Morgen, Diese Woche, Nächste Woche, Später, Letzte Tage; Navigation, Einstempeln), Stempeluhr „Mein Tag“ mit den Einsätzen von
+  heute und morgen, Startseite „Plantafel: Mitarbeiter einteilen“. Tests `tests/test_plantafel_20261024.py` (4 Tests).
+- Offen: Serien (`serie_id` vorbereitet), Schichtvorlagen, Kapazitätsplanung über Wochenstunden, Push-Benachrichtigung.
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:
@@ -277,7 +312,7 @@ Vergabe zurückziehen, CSV-Import, GAEB 501, Dokumentversionen, Speichergrenze 4
 
 - GAEB (X83/X84, GAEB 90): nur Erkennung und ehrliche Ablehnung (`gaeb.py`); Austausch des LV über CSV.
 - Umkreissuche mit Geokoordinaten (Projekte können lat/lon tragen; der Marktplatz filtert nach Ortstext); Karte nur als OpenStreetMap-Link.
-- Benachrichtigungen nur In-App; „bald endende Frist“ ohne Zeitplaner; keine E-Mail/Push.
+- Benachrichtigungen In-App und (für Einladungen, Nachweise, Einsatz-Erinnerungen) per E-Mail; „bald endende Frist“ ohne Zeitplaner; kein Push.
 - Tabellenimport nur CSV (kein XLSX); Angebots-PDF wird vom Bieter hochgeladen, nicht erzeugt.
 - Vergaberecht für öffentliche Auftraggeber nicht abgedeckt (siehe 8.3).
 

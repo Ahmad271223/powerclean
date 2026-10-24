@@ -79,6 +79,23 @@ E-Mail-Ausgang mit Nachweisen und Wiederholung, Nachträge mit Freigabe, Abnahme
 
 Offen: echter SMTP-Versand auf dem Zielserver (Testmail), Projektakte bei sehr großen Projekten (Laufzeit, Speicher), Chat.
 
+## 1e. Stufe A und B (24.10.2026, Branch `handwerker-plattform`)
+
+| Befund (`AUDIT_20261024.md`) | Geprüft | Ergebnis |
+|---|---|---|
+| A1 Büro sieht Löhne, Rechnungen, Personalakten ohne Abstufung | bestätigt (alle Büro-Routen nur `rolle_noetig("buero")`) | vergebbare Rechte je Büro-Nutzer, jede Route prüft ihr Recht, Navigation blendet aus (`test_stufe_a_20261024.py::test_02`) |
+| A2 Kollegen sehen Hochlader und Dateinamen fremder Projektfotos | bestätigt | `foto_fuer_nutzer`, EXIF-freie Auslieferung, Löschrecht eingeschränkt (`test_01`) |
+| A3 Firmenart „Auftraggeber“ selbst wählbar → Ausschreibungen ohne Freigabe | bestätigt | `gu_freigeschaltet` (Testphase oder Betreiber-Freischaltung), 403 sonst (`test_03`) |
+| A4 CSV-Import kippt bei Anführungszeichen und Dezimalkomma | bestätigt | robuster Parser (`lib/ausschreibung.js`), aus PR #8 übernommen |
+| A5 Exporte-Seite meldet „Nicht gefunden“ gegen alten Server | bestätigt | Klartext „Server veraltet“ statt 404-Toast |
+| A6 Angebotsart (Pauschal/Stunden) ohne Rückmeldung | bestätigt | gesperrte Preisart sichtbar, eigene Dialoge |
+| A7 Keine Einsatzplanung, Lohn rechnet mit roher Stempelung | bestätigt | Plantafel mit Abgleich und Freigabe (`test_plantafel_20261024.py`, 4 Tests) |
+
+Alle Backend-Tests grün (75, davon 7 neu für Stufe A und B); Frontend-Build grün; Browser-Prüfung Plantafel (Ziehen, Kopieren, Abgleich, Freigabe) und
+„Meine Einsätze“/„Mein Tag“ am 24.10.2026.
+
+Offen: Erinnerungsdienst auf dem Zielserver beobachten (Protokoll `erinnerungen`), SMTP-Testmail, Serien- und Schichtvorlagen.
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

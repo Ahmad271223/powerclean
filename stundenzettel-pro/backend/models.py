@@ -17,6 +17,13 @@ def _trim(v: Any) -> Any:
     return v.strip() if isinstance(v, str) else v
 
 
+def _uhrzeit_pruefen(wert):
+    from zeiten import zeit_pruefen
+    if wert is not None:
+        zeit_pruefen(wert)
+    return wert
+
+
 class RegistrierungIn(BaseModel):
     firma_name: str = Field(min_length=1, max_length=120)
     name: str = Field(min_length=1, max_length=120)
@@ -76,6 +83,16 @@ class FirmaIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
     art: Optional[str] = Field(default=None, pattern="^(betrieb|auftraggeber|beides)$")
     email_benachrichtigungen: Optional[bool] = None   # E-Mails zu Einladungen, Angeboten, Zuschlägen, Nachträgen, Abnahmen (Standard: an)
+    erinnerung: Optional[dict] = None                 # Einsatz-Erinnerung am Vorabend: {"uhrzeit": "18:00", "email": true}
+
+    @field_validator("erinnerung")
+    @classmethod
+    def _erinnerung(cls, v):
+        if v is None:
+            return v
+        uhrzeit = str(v.get("uhrzeit") or "18:00")
+        _uhrzeit_pruefen(uhrzeit)
+        return {"uhrzeit": uhrzeit, "email": bool(v.get("email", True))}
     owner: Optional[str] = Field(default=None, max_length=120)
     street: Optional[str] = Field(default=None, max_length=200)
     zip_code: Optional[str] = Field(default=None, max_length=20)
@@ -539,6 +556,79 @@ class AbnahmeIn(BaseModel):
 class AbnahmeAntwortIn(BaseModel):
     bestaetigen: bool
     kommentar: Optional[str] = Field(default="", max_length=2000)
+
+
+# ---------------------------------------------------------------- Plantafel: Einsätze, Kolonnen, Freigabe
+class EinsatzIn(BaseModel):
+    project_id: str
+    user_ids: list[str] = Field(min_length=1, max_length=100)
+    dates: list[str] = Field(default_factory=list, max_length=120)          # ausdrückliche Tage …
+    from_date: Optional[str] = None                                          # … oder Zeitraum mit Wochentagen
+    to_date: Optional[str] = None
+    weekdays: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4], max_length=7)
+    start_time: str
+    end_time: str
+    pause_minutes: int = Field(default=30, ge=0, le=600)
+    address: Optional[str] = Field(default="", max_length=300)
+    note: Optional[str] = Field(default="", max_length=500)
+    taetigkeit: Optional[str] = Field(default="", max_length=500)
+    kolonne_id: Optional[str] = None
+    erzwingen: bool = False   # trotz Abwesenheit planen
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _zeit(cls, v):
+        return _uhrzeit_pruefen(v)
+
+    @field_validator("weekdays")
+    @classmethod
+    def _tage(cls, v):
+        return sorted({int(t) for t in v if 0 <= int(t) <= 6})
+
+
+class EinsatzUpdateIn(BaseModel):
+    project_id: Optional[str] = None
+    user_id: Optional[str] = None
+    date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    pause_minutes: Optional[int] = Field(default=None, ge=0, le=600)
+    address: Optional[str] = Field(default=None, max_length=300)
+    note: Optional[str] = Field(default=None, max_length=500)
+    taetigkeit: Optional[str] = Field(default=None, max_length=500)
+    kolonne_id: Optional[str] = None
+    erzwingen: bool = False
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _zeit(cls, v):
+        return _uhrzeit_pruefen(v)
+
+
+class EinsatzKopierenIn(BaseModel):
+    dates: list[str] = Field(default_factory=list, max_length=120)
+    user_ids: list[str] = Field(default_factory=list, max_length=100)
+    erzwingen: bool = False
+
+
+class KolonneIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    user_ids: list[str] = Field(default_factory=list, max_length=100)
+    vorarbeiter_id: Optional[str] = None
+    farbe: Optional[str] = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class EinsatzFreigabeIn(BaseModel):
+    start_time: str
+    end_time: str
+    pause_minutes: int = Field(ge=0, le=600)
+    grund: str = Field(default="", max_length=500)
+    arbeitsleistung_bestaetigt: bool = False
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def _zeit(cls, v):
+        return _uhrzeit_pruefen(v)
 
 
 class ApiTokenIn(BaseModel):

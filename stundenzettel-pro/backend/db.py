@@ -91,6 +91,13 @@ async def indizes_anlegen(d) -> None:
         ("abnahmen", [("project_id", 1), ("firma_id", 1), ("status", 1)], {"name": "projekt_firma_status"}),
         ("abnahmen", [("owner_firma_id", 1), ("status", 1)], {"name": "eigentuemer_status"}),
         ("projektakten", [("firma_id", 1), ("project_id", 1), ("created_at", -1)], {"name": "firma_projekt_zeit"}),
+        # Plantafel
+        ("einsaetze", [("firma_id", 1), ("date", 1), ("user_id", 1)], {"name": "firma_datum_person"}),
+        ("einsaetze", [("firma_id", 1), ("user_id", 1), ("date", 1), ("status", 1)], {"name": "person_datum"}),
+        ("einsaetze", [("date", 1), ("status", 1)], {"name": "erinnerung_faellig"}),
+        ("kolonnen", [("firma_id", 1), ("name", 1)], {"name": "firma_name"}),
+        ("erinnerungen", [("id", 1)], {"unique": True, "name": "kennung"}),
+        ("benachrichtigungen", [("id", 1)], {"name": "kennung"}),
         ("webhook_ausgang", [("firma_id", 1), ("webhook_id", 1), ("status", 1)], {"name": "firma_hook"}),
     ]
     for sammlung, schluessel, optionen in aufgaben:

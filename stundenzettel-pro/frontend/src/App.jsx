@@ -28,6 +28,8 @@ import AuswertungPage from './pages/AuswertungPage';
 import MitteilungenPage from './pages/MitteilungenPage';
 import ProjektleiterPage from './pages/ProjektleiterPage';
 import AbosPage from './pages/AbosPage';
+import PlantafelPage from './pages/PlantafelPage';
+import MeinEinsatzplanPage from './pages/MeinEinsatzplanPage';
 
 function CrashScreen({ error }) {
   return (
@@ -114,6 +116,8 @@ export default function App() {
             <Route path="/mitteilungen" element={<Geschuetzt><MitteilungenPage /></Geschuetzt>} />
             <Route path="/projektleiter" element={<Geschuetzt buero><ProjektleiterPage /></Geschuetzt>} />
             <Route path="/abos" element={<Geschuetzt buero><AbosPage /></Geschuetzt>} />
+            <Route path="/plantafel" element={<Geschuetzt buero><PlantafelPage /></Geschuetzt>} />
+            <Route path="/einsaetze" element={<Geschuetzt><MeinEinsatzplanPage /></Geschuetzt>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </DialogProvider>

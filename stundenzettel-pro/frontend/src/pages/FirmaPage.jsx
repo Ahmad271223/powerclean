@@ -83,7 +83,31 @@ function BenachrichtigungenKarte() {
       <h2 className="text-[17px]">E-Mails an eure Firma</h2>
       <p className="text-[14px] text-[#6E6E73] mt-1 mb-2">Büro und Inhaber bekommen E-Mails zu Projekteinladungen, Ausschreibungen, Einreichungsnachweisen, Zuschlägen, Nachträgen und Abnahmen. Jede E-Mail steht als Nachweis unter „Protokoll → E-Mail-Nachweise“.</p>
       <div className="rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={an} onChange={(v) => { if (!busy && isInhaber) setzen(v); }} label="E-Mail-Benachrichtigungen" hint={isInhaber ? 'Nur der Inhaber ändert das.' : 'Ändern kann das nur der Inhaber.'} /></div>
+      <ErinnerungEinstellung firma={firma} isInhaber={isInhaber} refresh={refresh} />
     </Card>
+  );
+}
+
+/** Einsatz-Erinnerung am Vorabend: Uhrzeit und ob zusätzlich zur App-Mitteilung eine E-Mail geht. */
+function ErinnerungEinstellung({ firma, isInhaber, refresh }) {
+  const e = firma?.erinnerung || { uhrzeit: '18:00', email: true };
+  const [uhrzeit, setUhrzeit] = useState(e.uhrzeit || '18:00');
+  const [email, setEmail] = useState(e.email !== false);
+  const [busy, setBusy] = useState(false);
+  const speichern = async () => {
+    setBusy(true);
+    try { await api.put('/api/firma', { erinnerung: { uhrzeit, email } }); await refresh(); toast.success('Erinnerung gespeichert'); } catch (err) { toast.error(err.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-4 rounded-2xl bg-[#F5F5F7] px-4 py-3 space-y-2">
+      <div className="text-[14px] font-medium">Einsatz-Erinnerung am Vorabend</div>
+      <p className="text-[13px] text-[#6E6E73]">Jede eingeplante Person bekommt am Abend eine Mitteilung für den nächsten Tag (Projekt, Zeit, Adresse, Hinweis) – einmal je Einsatz, bei Planänderungen erneut.</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Uhrzeit"><TextInput type="time" value={uhrzeit} onChange={(ev) => setUhrzeit(ev.target.value)} disabled={!isInhaber} /></Field>
+        <div className="flex-1 min-w-[220px]"><Toggle checked={email} onChange={(v) => isInhaber && setEmail(v)} label="Zusätzlich per E-Mail" hint="In der App immer" /></div>
+        {isInhaber && <Btn size="sm" onClick={speichern} loading={busy}>Speichern</Btn>}
+      </div>
+    </div>
   );
 }
 

@@ -63,6 +63,13 @@ ok(c.post("/api/rechnungen/anlegen", json={"project_id": p1["id"], "year": 2026,
 ok(c.post("/api/rechnungen/anlegen", json={"project_id": p2["id"], "year": 2026, "month": 10}, headers=H))
 ok(c.post(f"/api/projekte/{p1['id']}/checklisten", json={"name": "Unterhaltsreinigung EG", "items": [{"text": "Böden wischen"}, {"text": "Mülleimer leeren"}, {"text": "Sanitär reinigen"}]}, headers=H))
 ok(c.post(f"/api/projekte/{p1['id']}/kommentare", json={"text": "Schlüssel liegt beim Hausmeister (Herr Kurt)."}, headers=HM))
+# Plantafel: Kolonne und Einsätze für Mia (heute bis übermorgen plus letzte zwei Werktage für den Abgleich)
+_heute = __import__("datetime").date.today()
+_tage = [(_heute + __import__("datetime").timedelta(days=i)).isoformat() for i in range(-3, 3) if (_heute + __import__("datetime").timedelta(days=i)).weekday() < 5]
+kol = ok(c.post("/api/einsatzplan/kolonnen", json={"name": "Team Sparkasse", "user_ids": [mia_id], "vorarbeiter_id": mia_id, "farbe": "#1D4ED8"}, headers=H))["kolonne"]
+ok(c.post("/api/einsatzplan", json={"project_id": p1["id"], "user_ids": [mia_id], "dates": _tage, "start_time": "06:00", "end_time": "09:30", "pause_minutes": 15,
+                                    "taetigkeit": "Unterhaltsreinigung EG und Treppenhaus", "note": "Schlüssel beim Hausmeister, Treffpunkt Hof", "kolonne_id": kol["id"]}, headers=H))
+ok(c.post("/api/einsatzplan", json={"project_id": p2["id"], "user_ids": [mia_id], "dates": [_tage[-1]], "start_time": "10:00", "end_time": "12:00", "pause_minutes": 0, "taetigkeit": "Glasreinigung"}, headers=H))
 print(f"Testdaten angelegt unter {BASIS}. Anmelden als Inhaber ({CHEF_EMAIL}) oder Mitarbeiterin ({MIA_EMAIL}), Passwörter stehen in dieser Datei.")
 
 # ---- Plattform: zweite Firma im Verzeichnis, Einladung zum Sparkassen-Projekt, Aufgabe ----

@@ -150,6 +150,10 @@ async def aufgaben(user: dict = Depends(aktueller_nutzer)):
         punkt("vergaben_annehmen", "Erhaltene Aufträge verbindlich annehmen", await db().vergaben.count_documents({"firma_id": f, "status": "mitgeteilt"}), "/ausschreibungen", 1)
         punkt("nachtraege_angefragt", "Angefragte Nachträge bepreisen und einreichen", await db().nachtraege.count_documents({"firma_id": f, "status": "angefragt"}), "/zusammenarbeit", 2)
         punkt("abnahmen_bestaetigen", "Abnahmeprotokolle bestätigen oder widersprechen", await db().abnahmen.count_documents({"firma_id": f, "status": "erstellt"}), "/zusammenarbeit", 1)
+        if hat_recht(user, "plantafel"):
+            punkt("zeiten_freigeben", "Arbeitszeiten prüfen und freigeben (Plantafel)",
+                  await db().einsaetze.count_documents({"firma_id": f, "status": "geplant", "freigabe": None, "date": {"$gte": (heute_d - timedelta(days=30)).isoformat(), "$lt": heute}}), "/plantafel?abgleich=1", 2)
+            punkt("heute_geplant", "Heute eingeplante Einsätze", await db().einsaetze.count_documents({"firma_id": f, "status": "geplant", "date": heute}), "/plantafel", 3)
         punkt("maengel_firma", "Überfällige Mängel beheben", await db().maengel.count_documents({"firma_id": f, "status": {"$nin": ["abgenommen"]}, "frist": {"$lt": heute}}), "/zusammenarbeit", 2)
         # Eigentümerseite: Vergaben, Angebote, Rückfragen, Fristen, Nachträge, Abnahmen, Berichte
         punkt("vergaben_freigeben", "Vergabevorschläge freigeben", await db().vergaben.count_documents({"owner_firma_id": f, "status": "vorgeschlagen"}), "/ausschreibungen", 1)

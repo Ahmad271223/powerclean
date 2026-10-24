@@ -66,4 +66,6 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export const useAuth = () => useContext(AuthContext);
+// Während eines Hot-Reloads (Vite HMR) kann der Kontext kurz fehlen – dann lieber „lädt“ als ein Absturz der Seite.
+const AUTH_LEER = { ready: false, user: null, firma: null, plan: null, rechte: {}, kann: () => false, isBuero: false, isInhaber: false, isVorarbeiter: false, refresh: async () => {}, setFirma: () => {}, logout: () => {} };
+export const useAuth = () => useContext(AuthContext) || AUTH_LEER;

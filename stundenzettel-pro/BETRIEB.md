@@ -82,6 +82,15 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
 - Mahnlauf ohne Zahlungsdienst: 1. Rechnung aus `/api/admin/abos`; 2. nach 14 Tagen `POST /api/admin/plan` mit `hinweis` („Rechnung … offen“);
   3. nach 30 Tagen `status: gesperrt` (Lesen und Export bleiben); nach Zahlung wieder `status: aktiv`.
 
+## 4f. Einsatz-Erinnerungen (Plantafel)
+
+- Der Dienst (`erinnerungen.py`) läuft im Server mit echter MongoDB automatisch; im Speicher-Modus nur mit `EINSATZ_DIENST=1`.
+  Er prüft jede Minute, ob für eine Firma die Erinnerungszeit (Firma → Benachrichtigungen, Standard 18:00 Uhr) erreicht ist, und legt je
+  Einsatz des Folgetags genau eine Benachrichtigung (und bei eingeschalteter E-Mail eine Nachricht im `email_ausgang`) an.
+- Doppelte Erinnerungen verhindert die eindeutige `id` in `erinnerungen` (`einsatz-erinnerung-<einsatz>-v<version>`); nach einem Neustart
+  wird nichts erneut verschickt. Verschobene Einsätze (neue Version) erzeugen eine neue Erinnerung – gewollt.
+- Prüfung im Betrieb: `db.erinnerungen.find().sort({at:-1}).limit(5)` und `db.email_ausgang.find({art:"einsatz_erinnerung"})`.
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

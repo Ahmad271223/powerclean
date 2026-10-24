@@ -9,6 +9,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { addDays, fmtDate, fmtHours, fmtDecimalHours, fmtSigned, fromKey, toKey } from '../lib/dates';
 import { OffenePunkte } from './MitteilungenPage';
+import { EinsatzKarte } from './MeinEinsatzplanPage';
 import { initials } from '../lib/utils';
 
 const GPS_KEY = 'szpro-gps';
@@ -324,13 +325,23 @@ export default function StempeluhrPage() {
 function MeinTag() {
   const [d, setD] = useState(null);
   const [punkte, setPunkte] = useState(null);
+  const [einsaetze, setEinsaetze] = useState(null);
   useEffect(() => {
     api.get('/api/dashboard').then(setD).catch(() => setD(null));
     api.get('/api/dashboard/aufgaben').then((r) => setPunkte(r.punkte)).catch(() => setPunkte([]));
+    api.get('/api/einsatzplan/meine?tage=2').then(setEinsaetze).catch(() => setEinsaetze(null));
   }, []);
   if (!d) return null;
+  const heuteKey = new Date().toISOString().slice(0, 10);
   return (
     <>
+      {einsaetze && (einsaetze.heute.length > 0 || einsaetze.morgen.length > 0) && (
+        <div className="space-y-2">
+          {einsaetze.heute.map((e) => <EinsatzKarte key={e.id} e={e} heute={heuteKey} kompakt />)}
+          {einsaetze.heute.length === 0 && einsaetze.morgen.map((e) => <EinsatzKarte key={e.id} e={e} heute={heuteKey} kompakt />)}
+          <Link to="/einsaetze" className="block text-[13px] text-[#C41E3A] font-medium">Alle meine Einsätze</Link>
+        </div>
+      )}
       <Card className="p-5">
         <h2 className="text-[16px] mb-2 flex items-center gap-2"><Clock size={16} /> Mein Tag</h2>
         <div className="grid grid-cols-2 gap-2 text-[13px]">

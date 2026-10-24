@@ -226,6 +226,26 @@ Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berec
 - **GU-Projektabo**: Kündigung zum Monatsende, bis dahin voll nutzbar; danach Lesen, Export und Projektakte. Geprüfte Firmen tragen
   ein Kennzeichen (Betreiber-Verifizierung).
 
+## Rechte je Büro-Nutzer und Plantafel (24.10.2026, Branch `handwerker-plattform`)
+
+- **Vergebbare Rechte** (`backend/auth.py`, `RECHTE`): Projekte, Personal, Lohn, Rechnungen, Plantafel, Kalkulation, Kostensätze. Der Inhaber
+  hat alles; ein Büro-Konto bekommt beim Anlegen die Standardrechte (alles außer Kalkulation und Kostensätze) und der Inhaber kann einzelne
+  Rechte entziehen oder vergeben (Mitarbeiter → Büro-Konto → Reiter „Rechte“, `PUT /api/mitarbeiter/{id}` mit `rechte`). Jede Route prüft
+  ihr Recht (403 mit Klartext), die Navigation blendet Punkte ohne Recht aus.
+- **Fotoschutz**: Projektfotos anderer Mitarbeiter sind für Kollegen ohne Personal-Recht anonym (kein Name, kein Dateiname, keine EXIF-Daten);
+  Löschen nur durch den Hochladenden oder mit Personal-Recht.
+- **GU-Freischaltung**: Ausschreibungen und Vergaben setzen eine Freischaltung durch den Betreiber voraus (`freischaltungen.gu`, in der
+  Testphase automatisch); die Firmenart allein reicht nicht.
+- **Plantafel** (`backend/routes/einsatzplan.py`, Seite „Plantafel“, Recht `plantafel`): Mitarbeiter × Tage (Tag/Woche/2 Wochen/Monat),
+  Projekte auf Mitarbeiter ziehen, Einsätze verschieben oder kopieren (Alt oder Kopiermodus), Kolonnen (Teams in einem Zug einplanen),
+  Nachtschichten über Mitternacht, Konflikte (Überschneidung, Abwesenheit, Feiertag) mit Rückfrage, Absagen mit Grund und Wiederherstellen,
+  Rückgängig je Einsatz, Verlauf mit Name und Zeit. Mitarbeiter sehen unter „Einsätze“ und in der Stempeluhr („Mein Tag“) nur ihre eigenen
+  Einsätze mit Adresse, Navigation, Tätigkeit und Hinweis; Planänderungen für heute/morgen werden gemeldet, am Vorabend kommt eine Erinnerung
+  (Uhrzeit und E-Mail je Firma unter Firma → Benachrichtigungen).
+- **Arbeitszeitabgleich und Freigabe**: Plan gegen Stempelung je Einsatz (passt, weicht ab, fehlt, offen); das Büro legt die anrechenbare
+  Zeit mit Begründung fest (`POST /api/einsatzplan/{id}/freigabe`), der Zeiteintrag behält die Stempelung als `original`; Lohn, Exporte und
+  Projektakte rechnen mit der freigegebenen Zeit. Projekt-Stundenzettel aus freigegebenen Zeiten als PDF (`GET /api/einsatzplan/stundenzettel.pdf`).
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).
@@ -242,7 +262,7 @@ git checkout main && git merge --ff-only go-live-fixes && git push origin main
 ## Offen / nächste Schritte
 
 - Zahlung (Stripe oder Lemon Squeezy) statt Freischaltung von Hand; Stufe Pro/Plus im Code durchsetzen.
-- E-Mail-Versand der Einladungen und Erinnerungen per Web-Push (heute: Link kopieren und per WhatsApp schicken).
+- Web-Push für Einladungen und Erinnerungen (E-Mail gibt es; heute zusätzlich: Link kopieren und per WhatsApp schicken).
 - Lexware Office / sevdesk: Rechnungsliste übergeben (Webhooks sind der erste Schritt).
 - Mehrsprachige Oberfläche für Mitarbeiter (Türkisch, Polnisch, Rumänisch, Arabisch).
 - KI-Texte (Beschreibungen verbessern, Rechnungstexte) über die Claude-API, sobald ein Schlüssel hinterlegt wird.

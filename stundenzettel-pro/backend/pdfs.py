@@ -220,3 +220,31 @@ def tagesbericht_pdf(b: dict, projekt: dict, fotos: list[tuple[bytes, str]]) -> 
     teile += [Spacer(1, 8 * mm), Paragraph("Erstellt mit Stundenzettel Pro · Freigabe: " + ("erteilt" if b.get("status") == "freigegeben" else "offen"), st["k"])]
     doc.build(teile)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------- Projekt-Stundenzettel aus freigegebenen Zeiten (Plantafel)
+
+def freigegebene_zeiten_pdf(firma: dict, projekt: dict, von: str, bis: str, einsaetze: list[dict], offen: int, namen: dict) -> bytes:
+    """Nur ausdrücklich freigegebene Einsatzzeiten; ungeprüfte Einsätze werden oben als fehlend genannt."""
+    st = _stile()
+    buf = io.BytesIO()
+    doc = _doc(buf, f"Projekt-Stundenzettel {projekt.get('name')} {von}–{bis}", firma.get("name") or "")
+    teile = [Paragraph("Projekt-Stundenzettel – freigegebene Arbeitszeiten", st["h1"]),
+             Paragraph(f"{esc(projekt.get('name'))}{' · ' + esc(projekt.get('address')) if projekt.get('address') else ''} · Zeitraum {de(von)} bis {de(bis)}", st["n"]),
+             Paragraph(f"{esc(firma.get('name'))} · Nur vom Betrieb geprüfte und freigegebene Zeiten – nicht identisch mit den ursprünglichen Stempelungen, die gesondert erhalten bleiben.", st["k"]), Spacer(1, 4 * mm)]
+    if offen:
+        teile += [Paragraph(f"Hinweis: {offen} Einsätze im Zeitraum sind noch nicht geprüft und fehlen in diesem Nachweis.", st["n"]), Spacer(1, 2 * mm)]
+    zeilen = [["Datum", "Mitarbeiter", "Beginn", "Ende", "Pause", "Netto", "Freigegeben von", "Vermerk"]]
+    gesamt = 0
+    for e in einsaetze:
+        f = e.get("freigabe") or {}
+        netto = int(f.get("net_minutes") or 0)
+        gesamt += netto
+        vermerk = ("Stempelung korrigiert" if f.get("abweichung") and f.get("hat_stempel") else "ohne Stempelung bestätigt" if not f.get("hat_stempel") else "")
+        zeilen.append([de(e.get("date")), Paragraph(esc(namen.get(e.get("user_id"), "")), st["z"]), f.get("start_time", ""), f.get("end_time", ""), f"{int(f.get('pause_minutes') or 0)} min",
+                       f"{netto // 60}:{netto % 60:02d}", Paragraph(esc(f.get("von_name")), st["z"]), Paragraph(esc(vermerk), st["z"])])
+    zeilen.append(["Summe", "", "", "", "", f"{gesamt // 60}:{gesamt % 60:02d}", "", Paragraph(f"{gesamt / 60:.2f} Stunden".replace(".", ","), st["z"])])
+    teile.append(_tabelle(zeilen, [20 * mm, 36 * mm, 14 * mm, 14 * mm, 14 * mm, 14 * mm, 32 * mm, 34 * mm]))
+    teile += [Spacer(1, 6 * mm), Paragraph("Grundlage: Freigaben in der Plantafel mit Name, Zeitstempel und Begründung (Sicherheitsprotokoll). Erstellt mit Stundenzettel Pro.", st["k"])]
+    doc.build(teile)
+    return buf.getvalue()

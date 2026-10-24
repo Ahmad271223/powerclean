@@ -178,11 +178,13 @@ async def _eigene_daten(z: _Zip, user: dict, firma: dict, projekt: dict, namen: 
     eintraege = [e async for e in db().entries.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("date", 1), ("start_time", 1)])]
     unterschriften = [u async for u in db().signatures.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("week_monday", 1), ("version", 1)])]
     if eintraege:
-        zeilen = [["Datum", "Mitarbeiter", "Beginn", "Ende", "Pause (Min)", "Anzahl", "Netto (Min)", "Mitarbeiterstunden (dezimal)", "Tätigkeit", "Leistung", "Quelle", "Prüfen", "Hinweise", "Stempel Start", "Stempel Ende"]]
+        zeilen = [["Datum", "Mitarbeiter", "Beginn", "Ende", "Pause (Min)", "Anzahl", "Netto (Min)", "Mitarbeiterstunden (dezimal)", "Tätigkeit", "Leistung", "Quelle", "Prüfen", "Hinweise", "Stempel Start", "Stempel Ende",
+                   "Freigegeben", "Freigegeben von", "Ursprünglich Beginn", "Ursprünglich Ende", "Ursprünglich Netto (Min)"]]
         for e in eintraege:
+            f, o = e.get("freigabe") or {}, e.get("original") or {}
             zeilen.append([e.get("date"), namen.get(e.get("user_id") or "", ""), e.get("start_time"), e.get("end_time"), e.get("pause_minutes", 0), e.get("workers", 1), e.get("net_minutes", 0),
                            _dez(eintrag_minuten(e)), e.get("activity", ""), e.get("service_name", ""), e.get("source", "manuell"), "ja" if e.get("pruefen") else "", "; ".join(h.get("text", "") for h in e.get("hinweise") or []),
-                           e.get("clock_start_at") or "", e.get("clock_end_at") or ""])
+                           e.get("clock_start_at") or "", e.get("clock_end_at") or "", "ja" if f else "", f.get("von_name") or "", o.get("start_time") or "", o.get("end_time") or "", o.get("net_minutes") if o else ""])
         z.schreiben("02_Zeiten/zeiten.csv", _csv(zeilen), "zeiten")
         monate = sorted({(e["date"][:7]) for e in eintraege if e.get("date")})
         for ym in monate:

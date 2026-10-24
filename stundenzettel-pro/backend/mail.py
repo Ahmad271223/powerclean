@@ -29,7 +29,8 @@ STATUS_NAMEN = {"offen": "Wartet auf Versand", "gesendet": "Gesendet", "fehlgesc
                 "nicht_konfiguriert": "Kein E-Mail-Versand eingerichtet (nur Nachweis)"}
 ARTEN = {"mitarbeiter_einladung": "Einladung Mitarbeiter", "projekt_einladung": "Einladung zum Projekt", "ausschreibung_einladung": "Einladung zur Ausschreibung",
          "angebot_nachweis": "Einreichungsnachweis Angebot", "angebot_eingegangen": "Angebot eingegangen", "zuschlag": "Zuschlag", "absage": "Absage",
-         "auftrag_angenommen": "Auftrag angenommen", "nachtrag": "Nachtrag", "abnahme": "Abnahme", "allgemein": "Allgemein"}
+         "auftrag_angenommen": "Auftrag angenommen", "nachtrag": "Nachtrag", "abnahme": "Abnahme", "einsatz_erinnerung": "Einsatz morgen",
+         "einsatz_aenderung": "Planänderung", "allgemein": "Allgemein"}
 SOFORT_ZUSTELLEN = True   # Tests schalten die sofortige Zustellung ab und arbeiten den Ausgang gezielt ab
 
 

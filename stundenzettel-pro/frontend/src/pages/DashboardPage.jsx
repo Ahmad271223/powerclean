@@ -129,6 +129,7 @@ function BetriebBlock({ d, firma, heute, navigate, onWarnungen, onBeenden }) {
           <Card className="p-5">
             <h2 className="text-[17px] mb-2 flex items-center gap-2"><FolderKanban size={17} /> Schnell erledigt</h2>
             <div className="flex flex-col gap-2">
+              <Btn variant="soft" size="sm" onClick={() => navigate('/plantafel')}><ClipboardList size={15} /> Plantafel: Mitarbeiter einteilen</Btn>
               <Btn variant="soft" size="sm" onClick={() => navigate('/stempeluhr')}><Timer size={15} /> Selbst stempeln</Btn>
               <Btn variant="soft" size="sm" onClick={() => navigate('/ausschreibungen')}><Gavel size={15} /> Aufträge finden &amp; Angebote</Btn>
               <Btn variant="soft" size="sm" onClick={() => navigate('/exporte')}>Lohnexport, Abschluss &amp; Archiv</Btn>

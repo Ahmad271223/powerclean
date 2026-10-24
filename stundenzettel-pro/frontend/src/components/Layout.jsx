@@ -1,7 +1,7 @@
 /** Rahmen der App: Kopfzeile, Navigation (Seitenleiste am Rechner, Tab-Leiste am Handy), Lizenz- und Offline-Hinweis. */
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel, Bell, UserCog, BadgeEuro, FileArchive } from 'lucide-react';
+import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel, Bell, UserCog, BadgeEuro, FileArchive, CalendarRange } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { AppIcon, Sheet } from './ui';
 import { initials } from '../lib/utils';
@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 const NAV_BETRIEB = [
   { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
+  { to: '/plantafel', label: 'Plantafel', icon: CalendarRange, recht: 'plantafel' },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
   { to: '/rechnungen', label: 'Rechnungen', icon: Receipt, recht: 'rechnungen' },
   { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
@@ -37,15 +38,17 @@ const NAV_AUFTRAGGEBER = [
   { to: '/abos', label: 'Projektabos', icon: BadgeEuro },
   { to: '/exporte', label: 'Archiv & Berichte', icon: FileArchive },
   { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users, recht: 'personal' },
+  { to: '/plantafel', label: 'Plantafel', icon: CalendarRange, recht: 'plantafel' },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
   { to: '/abwesenheiten', label: 'Abwesenheiten', icon: CalendarOff },
   { to: '/firma', label: 'Firma', icon: Building2 },
   { to: '/protokoll', label: 'Protokoll', icon: ShieldCheck },
 ];
 /** Beides: das Betriebsmenü plus Projektleiter und Projektabos. */
-const NAV_BEIDES = [...NAV_BETRIEB.slice(0, 13), { to: '/projektleiter', label: 'Projektleiter & Rechte', icon: UserCog }, { to: '/abos', label: 'Projektabos', icon: BadgeEuro }, ...NAV_BETRIEB.slice(13)];
+const NAV_BEIDES = [...NAV_BETRIEB.filter((n) => !['/firma', '/protokoll'].includes(n.to)), { to: '/projektleiter', label: 'Projektleiter & Rechte', icon: UserCog }, { to: '/abos', label: 'Projektabos', icon: BadgeEuro }, ...NAV_BETRIEB.filter((n) => ['/firma', '/protokoll'].includes(n.to))];
 const NAV_MITARBEITER = [
   { to: '/', label: 'Stempeluhr', icon: Timer, end: true },
+  { to: '/einsaetze', label: 'Einsätze', icon: CalendarRange },
   { to: '/meine-zeiten', label: 'Meine Zeiten', icon: Clock },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
   { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
