@@ -6,6 +6,7 @@ import { Btn, Chip, Sheet, TextInput } from '../ui';
 import { api, openFile } from '../../lib/api';
 import { fmtDate, fromKey } from '../../lib/dates';
 import { fotoZeit } from '../../lib/fotos';
+import ChatKnopf from '../nachrichten/ChatKnopf';
 
 const PRIO = { niedrig: 'Niedrig', normal: 'Normal', hoch: 'Hoch', dringend: 'Dringend' };
 const STATUS_CLS = { geplant: 'bg-black/[0.06] text-[#6E6E73]', zugewiesen: 'bg-[#E8F0FE] text-[#1D4ED8]', in_bearbeitung: 'bg-[#FFF4E5] text-[#B25E00]', blockiert: 'bg-[#FDE8E8] text-[#C41E3A]',
@@ -54,6 +55,7 @@ export default function AufgabeDialog({ aufgabeId, onOpenChange, onChanged }) {
             {statusChip(a.status, a.status_name)}
             <span className="text-[12px] text-[#6E6E73]">Priorität {PRIO[a.prioritaet] || a.prioritaet}</span>
             <span className="text-[12px] text-[#6E6E73]">· {a.firma_name}{a.gewerk ? ` · ${a.gewerk}` : ''}</span>
+            <span className="ml-auto"><ChatKnopf koerper={{ art: 'aufgabe', aufgabe_id: a.id }}>Chat zur Aufgabe</ChatKnopf></span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[14px]">
             <div className="flex items-center gap-2"><Clock size={15} className="text-[#86868B]" /> {fmtDate(fromKey(a.datum))}{a.start_time ? ` · ${a.start_time}${a.end_time ? ` – ${a.end_time}` : ''}` : ''}</div>

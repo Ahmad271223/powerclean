@@ -917,8 +917,27 @@ class MangelStatusIn(BaseModel):
     kommentar: Optional[str] = Field(default="", max_length=500)
 
 
+class RegieStundeIn(BaseModel):
+    name: str = Field(default="", max_length=120)
+    taetigkeit: Optional[str] = Field(default="", max_length=200)
+    stunden: float = Field(default=0, ge=0, le=24)
+
+
+class RegieMaterialIn(BaseModel):
+    bezeichnung: str = Field(default="", max_length=200)
+    menge: float = Field(default=0, ge=0, le=1e9)
+    einheit: Optional[str] = Field(default="", max_length=20)
+
+
+class RegieGeraetIn(BaseModel):
+    bezeichnung: str = Field(default="", max_length=200)
+    stunden: float = Field(default=0, ge=0, le=24)
+
+
 class TagesberichtIn(BaseModel):
     datum: str
+    art: str = Field(default="tagesbericht", pattern="^(tagesbericht|regiebericht)$")   # Stufe G: Regiebericht mit Stunden/Material/Geräten und Kundenunterschrift
+    vorlage_id: Optional[str] = Field(default=None, max_length=64)
     bereich: Optional[str] = Field(default="", max_length=160)
     wetter: Optional[str] = Field(default="", max_length=80)
     firmen: list[str] = Field(default_factory=list, max_length=50)
@@ -930,6 +949,10 @@ class TagesberichtIn(BaseModel):
     maengel: Optional[str] = Field(default="", max_length=2000)
     besondere_vorkommnisse: Optional[str] = Field(default="", max_length=2000)
     notizen: Optional[str] = Field(default="", max_length=2000)
+    auftraggeber_name: Optional[str] = Field(default="", max_length=160)
+    regie_stunden: list[RegieStundeIn] = Field(default_factory=list, max_length=100)
+    regie_material: list[RegieMaterialIn] = Field(default_factory=list, max_length=200)
+    regie_geraete: list[RegieGeraetIn] = Field(default_factory=list, max_length=100)
 
 
 class TagesberichtStatusIn(BaseModel):
@@ -1429,3 +1452,49 @@ class PositionenUebernahmeIn(BaseModel):
     """Vorschau-Ergebnis eines Dateiimports übernehmen: anhängen oder ersetzen."""
     positionen: list = Field(default_factory=list, max_length=1000)
     modus: str = Field(default="ersetzen", pattern="^(ersetzen|anhaengen)$")
+
+
+# ---------------------------------------------------------------- Stufe G: Nachrichten, Berichtsvorlagen, Unterschrift
+
+class ChatOeffnenIn(BaseModel):
+    art: str = Field(pattern="^(projekt_intern|projekt_gu|bieter|kontakt|aufgabe)$")
+    project_id: Optional[str] = Field(default=None, max_length=64)
+    ausschreibung_id: Optional[str] = Field(default=None, max_length=64)
+    bieter_firma_id: Optional[str] = Field(default=None, max_length=64)
+    firma_id: Optional[str] = Field(default=None, max_length=64)
+    aufgabe_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class NachrichtIn(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class ProjektChatIn(BaseModel):
+    chat_intern: bool = True
+
+
+class TagesberichtUnterschriftIn(BaseModel):
+    signer_name: str = Field(min_length=1, max_length=120)
+    image: str = Field(min_length=50, max_length=800_000)
+
+    @field_validator("image")
+    @classmethod
+    def _bild(cls, v):
+        if not v.startswith("data:image/png"):
+            raise ValueError("Unterschrift muss ein PNG sein.")
+        return v
+
+
+class BerichtsvorlageIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    art: str = Field(default="tagesbericht", pattern="^(tagesbericht|regiebericht)$")
+    felder: dict = Field(default_factory=dict)
+
+    @field_validator("felder")
+    @classmethod
+    def _felder(cls, v):
+        erlaubt = {"bereich", "wetter", "firmen", "mitarbeiter_anzahl", "taetigkeiten", "fortschritt", "lieferungen", "behinderungen", "maengel",
+                   "besondere_vorkommnisse", "notizen", "auftraggeber_name", "regie_stunden", "regie_material", "regie_geraete"}
+        aus = {k: val for k, val in (v or {}).items() if k in erlaubt}
+        TagesberichtIn(datum="2026-01-01", **aus)   # dieselben Grenzen wie der Bericht selbst
+        return aus

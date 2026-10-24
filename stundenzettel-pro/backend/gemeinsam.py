@@ -40,7 +40,7 @@ PROJEKT_DEFAULTS = {
     "employee_name": "", "employee_ids": [], "hourly_rate": 0, "notes": "", "archived": False, "default_workers": 1,
     "reverse_charge": False, "schedule": "", "budget_hours_month": 0, "budget_warn_percent": 80,
     "total_minutes": 0, "entry_count": 0, "last_activity_at": None,
-    "leiter_ids": [], "verknuepft": None,   # Plattform: Projektleiter der Eigentümerfirma; Verknüpfung mit dem Projekt eines Auftraggebers
+    "leiter_ids": [], "verknuepft": None, "chat_intern": True,   # Plattform: Projektleiter der Eigentümerfirma; Verknüpfung mit dem Projekt eines Auftraggebers
     # Bauvorhaben (Ausschreibungsplattform): alles optional, nur für Projekte mit Ausschreibungen/Beteiligungen relevant
     "projektnummer": "", "auftraggeber": "", "generalunternehmer": "", "projektart": "", "beschreibung": "", "baubeginn": None, "bauende": None,
     "phasen": [], "bauabschnitte": [], "gewerke": [], "projektstatus": "", "volumen": None, "kosten": None, "anforderungen": "", "lat": None, "lon": None,

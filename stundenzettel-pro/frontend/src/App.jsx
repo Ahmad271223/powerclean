@@ -37,6 +37,7 @@ import ArtikelPage from './pages/ArtikelPage';
 import EingangsrechnungenPage from './pages/EingangsrechnungenPage';
 import NachkalkulationPage from './pages/NachkalkulationPage';
 import MahnwesenPage from './pages/MahnwesenPage';
+import NachrichtenPage from './pages/NachrichtenPage';
 
 function CrashScreen({ error }) {
   return (
@@ -132,6 +133,7 @@ export default function App() {
             <Route path="/eingangsrechnungen" element={<Geschuetzt buero><EingangsrechnungenPage /></Geschuetzt>} />
             <Route path="/nachkalkulation" element={<Geschuetzt buero><NachkalkulationPage /></Geschuetzt>} />
             <Route path="/mahnwesen" element={<Geschuetzt buero><MahnwesenPage /></Geschuetzt>} />
+            <Route path="/nachrichten" element={<Geschuetzt><NachrichtenPage /></Geschuetzt>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </DialogProvider>

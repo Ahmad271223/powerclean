@@ -14,10 +14,10 @@ import { useDialoge } from '../components/Dialoge';
 const fmtZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–');
 
 export default function FirmaPage() {
-  const { firma, setFirma, isInhaber } = useAuth();
+  const { firma, setFirma, isInhaber, features, featureBeschreibung } = useAuth();
   const [tab, setTab] = useState('firma');
   const optionen = [{ value: 'firma', label: 'Firmendaten', icon: Building2 }, { value: 'leistungen', label: 'Leistungen', icon: Tag }, { value: 'angebote', label: 'Angebote', icon: FileText }, { value: 'lizenz', label: 'Lizenz', icon: BadgeCheck }];
-  if (isInhaber) optionen.push({ value: 'api', label: 'Schnittstelle', icon: Plug }, { value: 'webhooks', label: 'Webhooks', icon: Webhook }, { value: 'import', label: 'Import', icon: Upload });
+  if (isInhaber) optionen.push({ value: 'api', label: 'Schnittstelle', icon: Plug }, { value: 'webhooks', label: 'Webhooks', icon: Webhook }, { value: 'import', label: 'Import', icon: Upload }, { value: 'module', label: 'Module', icon: Tag });
 
   const speichern = async (daten) => {
     const r = await api.put('/api/firma', daten);
@@ -34,6 +34,15 @@ export default function FirmaPage() {
       {tab === 'api' && <Schnittstelle />}
       {tab === 'webhooks' && <Webhooks />}
       {tab === 'import' && <Import />}
+      {tab === 'module' && (
+        <div className="max-w-3xl mx-auto"><Card className="p-5 space-y-3">
+          <h2 className="text-[17px]">Module dieser Installation</h2>
+          <p className="text-[13px] text-[#6E6E73]">Unfertige oder optionale Module schaltet der Betreiber je Installation über die Umgebung frei (FEATURE_&lt;NAME&gt;=1|0, siehe BETRIEB.md). Abgeschaltete Module sind weder im Menü noch über die Schnittstelle erreichbar.</p>
+          <ul className="divide-y divide-black/[0.06] text-[14px]" data-testid="module-liste">
+            {Object.entries(features || {}).map(([name, an]) => <li key={name} className="py-2 flex items-center gap-3"><span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${an ? 'bg-[#E8F8EC] text-[#1B7F3B]' : 'bg-black/[0.06] text-[#6E6E73]'}`}>{an ? 'an' : 'aus'}</span><span className="font-medium">{name}</span><span className="text-[#6E6E73] flex-1 min-w-0 truncate">{featureBeschreibung?.[name] || ''}</span></li>)}
+          </ul>
+        </Card></div>
+      )}
     </Layout>
   );
 }

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 import config
+import features
 import projektakte
 from auth import firmenabo_pruefen, plan_status, rolle_noetig, schreibend
 from db import db
@@ -20,6 +21,7 @@ router = APIRouter(tags=["Projektarchiv"])
 
 def _oeffentlich(a: dict) -> dict:
     aus = {k: v for k, v in a.items() if k != "pfad"}
+    aus["status"] = a.get("status") or "fertig"   # Akten vor Stufe G haben keinen Status
     aus["ablauf_erreicht"] = bool(a.get("aufbewahren_bis") and a["aufbewahren_bis"] <= date.today().isoformat())
     return aus
 
@@ -30,8 +32,8 @@ async def projektakte_erstellen(project_id: str, user: dict = Depends(schreibend
     p = await projekt_laden(user, project_id)
     if plan_status(user["_firma"]).get("stufe") == "teilnahme" and not p.get("gu_abo"):
         firmenabo_pruefen(user["_firma"])
-    akte = await projektakte.erstellen(user, p)
-    await protokollieren(user, "projektakte.erstellt", p.get("name", ""), details={"akte_id": akte["id"], "size": akte["size"], "inhalt": akte["inhalt"]})
+    akte = await projektakte.erstellen(user, p, hintergrund=features.aktiv("projektakte_async"))
+    await protokollieren(user, "projektakte.erstellt", p.get("name", ""), details={"akte_id": akte["id"], "status": akte.get("status"), "size": akte.get("size"), "inhalt": akte.get("inhalt")})
     return {"projektakte": _oeffentlich(akte)}
 
 
@@ -51,10 +53,25 @@ async def projektakten_liste(user: dict = Depends(rolle_noetig("buero"))):
 @router.get("/api/projektakten/{akte_id}.zip")
 async def projektakte_herunterladen(akte_id: str, user: dict = Depends(rolle_noetig("buero"))):
     a = await db().projektakten.find_one({"id": akte_id, "firma_id": user["firma_id"]}, {"_id": 0})
-    if not a or not os.path.isfile(a.get("pfad") or ""):
+    if not a:
+        raise HTTPException(404, "Projektakte nicht gefunden.")
+    if a.get("status") == "laeuft":
+        raise HTTPException(409, "Die Projektakte wird noch erstellt – bitte gleich noch einmal versuchen.")
+    if a.get("status") == "fehler":
+        raise HTTPException(409, f"Die Projektakte konnte nicht erstellt werden: {a.get('fehler') or 'unbekannter Fehler'}")
+    if not os.path.isfile(a.get("pfad") or ""):
         raise HTTPException(404, "Projektakte nicht gefunden.")
     await protokollieren(user, "projektakte.heruntergeladen", a.get("project_name", ""), details={"akte_id": akte_id})
     return FileResponse(a["pfad"], media_type="application/zip", filename=a.get("dateiname") or "Projektakte.zip")
+
+
+@router.get("/api/projektakten/{akte_id}")   # nach der .zip-Route registriert, sonst fängt {akte_id} auch "….zip"
+async def projektakte_status(akte_id: str, user: dict = Depends(rolle_noetig("buero"))):
+    """Stand einer Projektakte (laeuft | fertig | fehler) – die Oberfläche fragt bis `fertig` nach."""
+    a = await db().projektakten.find_one({"id": akte_id, "firma_id": user["firma_id"]}, {"_id": 0})
+    if not a:
+        raise HTTPException(404, "Projektakte nicht gefunden.")
+    return {"projektakte": _oeffentlich(a)}
 
 
 @router.delete("/api/projektakten/{akte_id}")

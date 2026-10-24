@@ -2,6 +2,7 @@
 Alle Funktionen sind reine Funktionen über Dictionaries, damit Routen und die ZIP-Projektakte dieselben Dokumente erzeugen."""
 from __future__ import annotations
 
+import base64
 import io
 from datetime import date
 
@@ -12,6 +13,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from auth import jetzt_iso
 from pdfbasis import SCHRIFT, SCHRIFT_FETT, schrift_registrieren
 
 MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
@@ -188,8 +190,9 @@ def tagesbericht_pdf(b: dict, projekt: dict, fotos: list[tuple[bytes, str]]) -> 
     """Bautagesbericht (A4, bis zu sechs Fotos als JPEG-Bytes mit Notiz)."""
     st = _stile()
     buf = io.BytesIO()
-    doc = _doc(buf, f"Bautagesbericht {b.get('datum')} – {projekt.get('name')}", b.get("firma_name") or "")
-    teile = [Paragraph(f"Bautagesbericht {esc(b.get('datum'))}", st["h1"]), Paragraph(f"{esc(projekt.get('name'))}{' · ' + esc(projekt.get('address')) if projekt.get('address') else ''}", st["n"]),
+    titel = "Regiebericht" if b.get("art") == "regiebericht" else "Bautagesbericht"
+    doc = _doc(buf, f"{titel} {b.get('datum')} – {projekt.get('name')}", b.get("firma_name") or "")
+    teile = [Paragraph(f"{titel} {esc(de(b.get('datum')))}", st["h1"]), Paragraph(f"{esc(projekt.get('name'))}{' · ' + esc(projekt.get('address')) if projekt.get('address') else ''}", st["n"]),
              Paragraph(f"Verfasser: {esc(b.get('verfasser'))} ({esc(b.get('firma_name'))}) · Status: {esc(b.get('status_name'))}{' · Bauabschnitt ' + esc(b.get('bereich')) if b.get('bereich') else ''}{' · Wetter: ' + esc(b.get('wetter')) if b.get('wetter') else ''}", st["k"]), Spacer(1, 4 * mm)]
     kopf = [["Beteiligte Firmen", esc(", ".join(b.get("firmen") or []))], ["Mitarbeiter vor Ort", str(b.get("mitarbeiter_anzahl") or 0)], ["Fortschritt", esc(b.get("fortschritt"))]]
     t = Table([[Paragraph(k, st["h2"]), Paragraph(v, st["n"])] for k, v in kopf], colWidths=[45 * mm, 125 * mm])
@@ -199,6 +202,18 @@ def tagesbericht_pdf(b: dict, projekt: dict, fotos: list[tuple[bytes, str]]) -> 
                         ("Besondere Vorkommnisse", "besondere_vorkommnisse"), ("Notizen", "notizen")):
         if b.get(feld):
             teile += [Paragraph(titel, st["h2"]), Paragraph(esc(b[feld]), st["n"])]
+    if b.get("auftraggeber_name"):
+        teile.append(Paragraph(f"Auftraggeber / Ansprechpartner: {esc(b.get('auftraggeber_name'))}", st["n"]))
+    if b.get("regie_stunden"):
+        zeilen = [["Mitarbeiter", "Tätigkeit", "Stunden"]] + [[Paragraph(esc(r.get("name")), st["z"]), Paragraph(esc(r.get("taetigkeit")), st["z"]), f"{float(r.get('stunden') or 0):.2f}".replace(".", ",")] for r in b["regie_stunden"]]
+        zeilen.append(["Summe", "", f"{sum(float(r.get('stunden') or 0) for r in b['regie_stunden']):.2f}".replace(".", ",")])
+        teile += [Paragraph("Regiestunden", st["h2"]), _tabelle(zeilen, [60 * mm, 85 * mm, 25 * mm])]
+    if b.get("regie_material"):
+        zeilen = [["Material", "Menge", "Einheit"]] + [[Paragraph(esc(r.get("bezeichnung")), st["z"]), f"{float(r.get('menge') or 0):g}".replace(".", ","), esc(r.get("einheit"))] for r in b["regie_material"]]
+        teile += [Paragraph("Material", st["h2"]), _tabelle(zeilen, [110 * mm, 30 * mm, 30 * mm])]
+    if b.get("regie_geraete"):
+        zeilen = [["Gerät", "Stunden"]] + [[Paragraph(esc(r.get("bezeichnung")), st["z"]), f"{float(r.get('stunden') or 0):.2f}".replace(".", ",")] for r in b["regie_geraete"]]
+        teile += [Paragraph("Geräte", st["h2"]), _tabelle(zeilen, [140 * mm, 30 * mm])]
     if fotos:
         teile.append(Paragraph("Fotos", st["h2"]))
         zellen = []
@@ -217,7 +232,35 @@ def tagesbericht_pdf(b: dict, projekt: dict, fotos: list[tuple[bytes, str]]) -> 
             while len(zeile) < 2:
                 zeile.append("")
             teile.append(Table([[z_[0] if z_ else "" for z_ in zeile], [z_[1] if z_ else "" for z_ in zeile]], colWidths=[88 * mm, 88 * mm]))
+    u = b.get("unterschrift") or {}
+    if u.get("image"):
+        try:
+            roh = base64.b64decode(u["image"].split(",", 1)[1])
+            bild = ImageReader(io.BytesIO(roh))
+            bw, bh = bild.getSize()
+            teile += [Spacer(1, 6 * mm), Paragraph("Unterschrift Auftraggeber", st["h2"]), Image(io.BytesIO(roh), width=60 * mm, height=60 * mm * bh / bw),
+                      Paragraph(f"{esc(u.get('signer_name'))} · {esc(zeit(u.get('at')))} · aufgenommen von {esc(u.get('von'))}", st["k"])]
+        except Exception:  # noqa: BLE001 – defekte Unterschrift auslassen, aber benennen
+            teile += [Paragraph(f"Unterschrift von {esc(u.get('signer_name'))} ({esc(zeit(u.get('at')))}) – Bild nicht lesbar", st["k"])]
     teile += [Spacer(1, 8 * mm), Paragraph("Erstellt mit Stundenzettel Pro · Freigabe: " + ("erteilt" if b.get("status") == "freigegeben" else "offen"), st["k"])]
+    doc.build(teile)
+    return buf.getvalue()
+
+
+def projektakte_index_pdf(firma: dict, projekt: dict, user: dict, rolle: str, zaehler: dict, ordner: list[tuple[str, str]], manifest: list[dict], hinweise: list[str]) -> bytes:
+    """Inhaltsverzeichnis der Projektakte: Ordner mit Erklärung, Anzahl je Art, Prüfsummenhinweis."""
+    st = _stile()
+    buf = io.BytesIO()
+    doc = _doc(buf, f"Projektakte {projekt.get('name')} – Inhalt", firma.get("name") or "")
+    teile = [Paragraph(f"Projektakte – {esc(projekt.get('name'))}", st["h1"]),
+             Paragraph(f"{esc(firma.get('name'))} · erstellt am {esc(zeit(jetzt_iso()))} von {esc(user.get('name'))} · Rolle: {'Eigentümerfirma' if rolle == 'eigentuemer' else 'Beteiligte Firma'}", st["n"]), Spacer(1, 4 * mm),
+             Paragraph("Ordner", st["h2"]), _tabelle([["Ordner", "Inhalt"]] + [[Paragraph(esc(o), st["z"]), Paragraph(esc(t), st["z"])] for o, t in ordner], [48 * mm, 122 * mm]),
+             Paragraph("Anzahl je Art", st["h2"]), _tabelle([["Art", "Anzahl"]] + [[esc(k), str(v)] for k, v in sorted(zaehler.items())], [120 * mm, 30 * mm])]
+    gesamt = sum(int(m.get("bytes") or 0) for m in manifest)
+    teile += [Paragraph("Prüfsummen", st["h2"]),
+              Paragraph(f"{len(manifest)} Dateien, {gesamt / 1024 / 1024:.1f} MB. Die Datei manifest.json enthält für jede Datei die SHA-256-Prüfsumme; damit lässt sich später nachweisen, dass die Akte unverändert ist.".replace(".1f", ""), st["n"])]
+    if hinweise:
+        teile += [Paragraph("Hinweise", st["h2"])] + [Paragraph(f"– {esc(h)}", st["k"]) for h in hinweise[:50]]
     doc.build(teile)
     return buf.getvalue()
 

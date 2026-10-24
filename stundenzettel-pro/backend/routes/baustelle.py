@@ -13,6 +13,8 @@ from fastapi.responses import Response
 from auth import aktueller_nutzer, hat_rolle, jetzt_iso, schreibend
 from dateien import bild_verkleinern, datei_speichern, version_verknuepfen
 from db import db
+from features import feature_noetig
+from models import BerichtsvorlageIn, TagesberichtUnterschriftIn
 from gemeinsam import neue_id
 from models import (DokumentFreigabeIn, KommentarIn, LieferungIn, LieferungStatusIn, LieferungUpdateIn, MangelIn, MangelStatusIn, MangelUpdateIn,
                     MeilensteinIn, TagesberichtIn, TagesberichtStatusIn)
@@ -291,13 +293,19 @@ async def mangel_foto(mangel_id: str, datei: UploadFile = File(...), note: str =
 # ================================================================ Bautagesberichte
 
 BERICHT_STATUS_NAMEN = {"entwurf": "Entwurf", "eingereicht": "Zur Freigabe eingereicht", "freigegeben": "Freigegeben"}
+BERICHT_ARTEN = {"tagesbericht": "Bautagesbericht", "regiebericht": "Regiebericht"}
 
 
 async def _bericht_anreichern(b: dict) -> dict:
     b = dict(b)
     b["firma_name"] = (await firma_kurz(b.get("firma_id")))["name"]
     b["status_name"] = BERICHT_STATUS_NAMEN.get(b.get("status"), b.get("status"))
+    b["art"] = b.get("art") or "tagesbericht"
+    b["art_name"] = BERICHT_ARTEN.get(b["art"], "Bautagesbericht")
     b["fotos_anzahl"] = await db().documents.count_documents({"scope": "tagesbericht", "ref_id": b["id"]})
+    if b.get("unterschrift"):
+        b["unterschrift"] = {k: v for k, v in b["unterschrift"].items() if k != "image"}   # Bild nur im PDF
+        b["unterschrieben"] = True
     return b
 
 
@@ -328,8 +336,22 @@ async def bericht_vorschlag(project_id: str, datum: str, user: dict = Depends(ak
     firmen = sorted({namen[a.get("firma_id")] for a in aufgaben if a.get("firma_id") in namen})
     taetigkeiten = "\n".join(f"- {a['titel']}{' (' + a['bereich'] + ')' if a.get('bereich') else ''} – {namen.get(a.get('firma_id'), '')} [{STATUS_NAMEN.get(a.get('status'), a.get('status'))}]" for a in aufgaben)
     liefer_text = "\n".join(f"- {l['material']}{' von ' + l['lieferant'] if l.get('lieferant') else ''} [{LIEFERUNG_STATUS_NAMEN.get(l.get('status'), l.get('status'))}]" for l in lieferungen)
-    anwesend = len({e.get("user_id") async for e in db().entries.find({"project_id": (z["lokal"] or z["projekt"])["id"], "date": datum}, {"_id": 0, "user_id": 1}) if e.get("user_id")})
-    return {"firmen": firmen, "taetigkeiten": taetigkeiten, "lieferungen": liefer_text, "mitarbeiter_anzahl": anwesend, "maengel_offen": maengel_offen}
+    lokal = z["lokal"] or z["projekt"]
+    anwesend = len({e.get("user_id") async for e in db().entries.find({"project_id": lokal["id"], "date": datum}, {"_id": 0, "user_id": 1}) if e.get("user_id")})
+    # Stufe G: Arbeitsanweisungen aus den Auftragspositionen des eigenen Projekts und den Aufgaben des Tages, Materialliste aus Buchungen und Lieferungen
+    anweisungen = []
+    for pos in ((lokal.get("auftrag") or {}).get("positionen") or []):
+        if (pos.get("art") or "leistung") in ("titel", "text"):
+            continue
+        text = pos.get("text") or pos.get("leistung") or pos.get("bezeichnung") or ""
+        if text:
+            anweisungen.append(f"{pos.get('nr') or ''} {text}".strip() + (f" – {pos.get('menge')} {pos.get('einheit') or ''}".rstrip() if pos.get("menge") else ""))
+    anweisungen += [f"{a['titel']}: {a['beschreibung']}" for a in await db().aufgaben.find({"project_id": project_id, "datum": datum, **filt_firma}, {"_id": 0, "titel": 1, "beschreibung": 1}).to_list(100) if a.get("beschreibung")]
+    materialliste = [{"bezeichnung": v.get("bezeichnung"), "menge": v.get("menge"), "einheit": v.get("einheit")}
+                     async for v in db().materialverbrauch.find({"project_id": lokal["id"], "date": datum, "firma_id": user["firma_id"]}, {"_id": 0, "bezeichnung": 1, "menge": 1, "einheit": 1})]
+    materialliste += [{"bezeichnung": l.get("material"), "menge": None, "einheit": l.get("menge") or ""} for l in lieferungen if l.get("status") in ("eingetroffen", "abgeschlossen")]
+    return {"firmen": firmen, "taetigkeiten": taetigkeiten, "lieferungen": liefer_text, "mitarbeiter_anzahl": anwesend, "maengel_offen": maengel_offen,
+            "arbeitsanweisungen": anweisungen[:100], "materialliste": materialliste[:200]}
 
 
 @router.post("/api/projekte/{project_id}/tagesberichte")
@@ -358,7 +380,8 @@ async def bericht_lesen(bericht_id: str, user: dict = Depends(aktueller_nutzer))
         erlaubt += ["freigegeben", "entwurf"]
     if leitung and b.get("status") == "entwurf" and b.get("firma_id") == user["firma_id"]:
         erlaubt = ["eingereicht", "freigegeben"]
-    return {"bericht": await _bericht_anreichern(b), "fotos": await _fotos("tagesbericht", bericht_id), "status_erlaubt": sorted(set(erlaubt)), "bearbeiten": eigener and b.get("status") != "freigegeben"}
+    return {"bericht": await _bericht_anreichern(b), "fotos": await _fotos("tagesbericht", bericht_id), "status_erlaubt": sorted(set(erlaubt)),
+            "bearbeiten": eigener and b.get("status") != "freigegeben" and not b.get("unterschrift"), "unterschreiben": eigener and b.get("status") != "freigegeben"}
 
 
 @router.put("/api/tagesberichte/{bericht_id}")
@@ -368,6 +391,8 @@ async def bericht_aendern(bericht_id: str, body: TagesberichtIn, user: dict = De
         raise HTTPException(403, "Nur die verfassende Firma darf den Bericht ändern.")
     if b.get("status") == "freigegeben":
         raise HTTPException(400, "Freigegebene Berichte lassen sich nicht mehr ändern.")
+    if b.get("unterschrift"):
+        raise HTTPException(400, "Vom Auftraggeber unterschriebene Berichte lassen sich nicht mehr ändern – Unterschrift zuerst entfernen.")
     daten = body.model_dump()
     datum_pruefen(daten["datum"])
     daten["updated_at"] = jetzt_iso()
@@ -421,9 +446,75 @@ async def bericht_pdf(bericht_id: str, user: dict = Depends(aktueller_nutzer)):
             fotos.append((bild_verkleinern(d["path"], 700), f.get("note") or f.get("uploaded_by_name") or ""))
         except Exception:  # noqa: BLE001 – defektes Bild auslassen
             continue
-    pdf = pdfs.tagesbericht_pdf(b, z["projekt"], fotos)
+    voll = await db().tagesberichte.find_one({"id": bericht_id}, {"_id": 0, "unterschrift": 1})
+    pdf = pdfs.tagesbericht_pdf({**b, "unterschrift": (voll or {}).get("unterschrift")}, z["projekt"], fotos)
     await protokollieren(user, "tagesbericht.pdf", b["datum"])
-    return _datei(pdf, f"Bautagesbericht_{b['datum']}.pdf", "application/pdf")
+    return _datei(pdf, f"{b.get('art_name', 'Bautagesbericht').replace(' ', '_')}_{b['datum']}.pdf", "application/pdf")
+
+
+# ================================================================ Stufe G: Kundenunterschrift und Berichtsvorlagen
+
+@router.post("/api/tagesberichte/{bericht_id}/unterschrift")
+async def bericht_unterschrift(bericht_id: str, body: TagesberichtUnterschriftIn, user: dict = Depends(aktueller_nutzer)):
+    """Unterschrift des Auftraggebers/Kunden auf dem Gerät (z. B. Regiebericht) – danach ist der Bericht inhaltlich fest."""
+    daten = await bericht_lesen(bericht_id, user)
+    if not daten["unterschreiben"]:
+        raise HTTPException(403, "Dafür fehlt die Berechtigung.")
+    u = {"signer_name": body.signer_name.strip(), "image": body.image, "at": jetzt_iso(), "von": user.get("name"), "von_id": user["id"]}
+    await db().tagesberichte.update_one({"id": bericht_id}, {"$set": {"unterschrift": u, "updated_at": jetzt_iso()}, "$push": {"verlauf": _schritt(user, "unterschrieben", f"Unterschrift: {u['signer_name']}")}})
+    await protokollieren(user, "tagesbericht.unterschrieben", daten["bericht"]["datum"], details={"signer": u["signer_name"]})
+    return {"bericht": await _bericht_anreichern({**daten["bericht"], "unterschrift": u})}
+
+
+@router.delete("/api/tagesberichte/{bericht_id}/unterschrift")
+async def bericht_unterschrift_entfernen(bericht_id: str, grund: str = Query("", max_length=300), user: dict = Depends(schreibend("buero"))):
+    """Nur das Büro der verfassenden Firma, mit Grund im Protokoll (z. B. falscher Name)."""
+    b, z = await eintrag_laden("tagesberichte", user, bericht_id)
+    if b.get("firma_id") != user["firma_id"] or b.get("status") == "freigegeben":
+        raise HTTPException(403, "Nur die verfassende Firma darf die Unterschrift entfernen, solange der Bericht nicht freigegeben ist.")
+    if not grund.strip():
+        raise HTTPException(400, "Bitte einen Grund angeben.")
+    await db().tagesberichte.update_one({"id": bericht_id}, {"$set": {"unterschrift": None, "updated_at": jetzt_iso()}, "$push": {"verlauf": _schritt(user, "unterschrift_entfernt", grund.strip())}})
+    await protokollieren(user, "tagesbericht.unterschrift_entfernt", b["datum"], details={"grund": grund.strip()})
+    return {"ok": True}
+
+
+def _vorlage_oeffentlich(v: dict) -> dict:
+    return {**v, "art_name": BERICHT_ARTEN.get(v.get("art") or "tagesbericht", "Bautagesbericht")}
+
+
+@router.get("/api/berichtsvorlagen", dependencies=[feature_noetig("berichtsvorlagen")])
+async def vorlagen_liste(user: dict = Depends(aktueller_nutzer)):
+    aus = [_vorlage_oeffentlich(v) async for v in db().berichtsvorlagen.find({"firma_id": user["firma_id"]}, {"_id": 0}).sort("name", 1)]
+    return {"vorlagen": aus, "arten": BERICHT_ARTEN}
+
+
+@router.post("/api/berichtsvorlagen", dependencies=[feature_noetig("berichtsvorlagen")])
+async def vorlage_anlegen(body: BerichtsvorlageIn, user: dict = Depends(schreibend("buero"))):
+    if await db().berichtsvorlagen.count_documents({"firma_id": user["firma_id"]}) >= 100:
+        raise HTTPException(400, "Höchstens 100 Vorlagen je Firma.")
+    v = {**body.model_dump(), "id": neue_id(), "firma_id": user["firma_id"], "created_by": user.get("name"), "created_at": jetzt_iso(), "updated_at": jetzt_iso()}
+    await db().berichtsvorlagen.insert_one(dict(v))
+    await protokollieren(user, "berichtsvorlage.angelegt", v["name"])
+    return {"vorlage": _vorlage_oeffentlich(v)}
+
+
+@router.put("/api/berichtsvorlagen/{vorlage_id}", dependencies=[feature_noetig("berichtsvorlagen")])
+async def vorlage_aendern(vorlage_id: str, body: BerichtsvorlageIn, user: dict = Depends(schreibend("buero"))):
+    v = await db().berichtsvorlagen.find_one({"id": vorlage_id, "firma_id": user["firma_id"]}, {"_id": 0})
+    if not v:
+        raise HTTPException(404, "Vorlage nicht gefunden.")
+    daten = {**body.model_dump(), "updated_at": jetzt_iso()}
+    await db().berichtsvorlagen.update_one({"id": vorlage_id}, {"$set": daten})
+    return {"vorlage": _vorlage_oeffentlich({**v, **daten})}
+
+
+@router.delete("/api/berichtsvorlagen/{vorlage_id}", dependencies=[feature_noetig("berichtsvorlagen")])
+async def vorlage_loeschen(vorlage_id: str, user: dict = Depends(schreibend("buero"))):
+    r = await db().berichtsvorlagen.delete_one({"id": vorlage_id, "firma_id": user["firma_id"]})
+    if not r.deleted_count:
+        raise HTTPException(404, "Vorlage nicht gefunden.")
+    return {"ok": True}
 
 
 # ================================================================ Meilensteine

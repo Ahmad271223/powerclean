@@ -227,6 +227,38 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
 - Grenzen (dokumentiert): GAEB-Teilmenge (keine Zuschlags-/Bedarfs-/Alternativkennzeichen, keine Textergänzungen, keine XSD-Validierung offline),
   DATANORM ohne Dimensions-/Rabattgruppensätze, Aufmaß ohne Zeichnungsbezug/Raumbuch.
 
+## 1k. Stufe G – Nachrichten, Berichtsvorlagen/Regieberichte, Projektakte asynchron, Feature-Flags (24.10.2026)
+
+- `features.py`: `STANDARD` (chat, berichtsvorlagen, projektakte_async = nicht im Speicher-Modus, ki aus, lager aus), Umgebung `FEATURE_<NAME>`,
+  `feature_noetig(name)` als Router-Dependency (404 mit Klartext), `GET /api/features` (öffentlich, ohne Geheimnisse). Oberfläche: `useAuth().feature(name)`,
+  Menüeinträge mit `feature:` werden gefiltert; unbekannt = anzeigen (älterer Server).
+- `nachrichten.py`: Sammlungen `chats` {id, art projekt_intern|projekt_gu|bieter|kontakt|aufgabe, project_id, ausschreibung_id, bieter_firma_id, aufgabe_id,
+  firma_id, firma_ids[], titel, letzte_nachricht_at, letzter_text, nachrichten_anzahl} und `nachrichten` {chat_id, firma_id, user_id, text, anhaenge[], gelesen_von[],
+  angekuendigt_at}. `chat_zugang(user, chat)` prüft je Art über `projekt_sichtbar`/`chat_intern`, `plattform.zugang`+`partner_leitung`, `ausschreibung_zugang`
+  (+ Bieterfirma = eigene), Verzeichnis (Kontakt, nur Büro) und `aufgabe_laden`; jeder Fehler wird zu 404 (kein Rückschluss auf fremde Chats).
+  `chat_oeffnen` findet oder legt an (Leitung eröffnet Bieterchats nur mit eingeladenen/bietenden Firmen). `meine_chats` prüft jeden Kandidaten einzeln.
+  `teilnehmer(chat)` liefert Empfängergruppen (Projektleitung je Firma wie `projekt_leitung`, zugeteilte Mitarbeiter bei Aufgaben) für In-App-Mitteilungen
+  (`benachrichtigen`, art `nachricht`) und für die E-Mail-Ankündigung. `einmal_pruefen(jetzt)`: ungelesene, noch nicht angekündigte Nachrichten älter als
+  `WARTEZEIT_MINUTEN` (2) je Chat und Person gesammelt per E-Mail (`mail.senden`, art `nachricht`, Link `/nachrichten?chat=…`), danach `angekuendigt_at`;
+  `dienst()` läuft im Lebenszyklus (nicht im Speicher-Modus, dort `NACHRICHTEN_DIENST=1`). Routen (`routes/nachrichten.py`, alle hinter `chat`):
+  `GET /api/chats`, `GET /api/chats/ungelesen`, `POST /api/chats/oeffnen`, `GET /api/chats/{id}`, `POST /api/chats/{id}/nachrichten`, `POST /api/chats/{id}/anhaenge`
+  (Dokument scope `chat`, Zugriff über `_dokument_zugriff` → `chat_laden`), `PUT /api/projekte/{id}/chat` (Büro: `chat_intern`).
+- Berichte (`routes/baustelle.py`): `TagesberichtIn` += art, vorlage_id, auftraggeber_name, regie_stunden/material/geraete (Untermodelle); `tagesbericht-vorschlag`
+  liefert `arbeitsanweisungen` (Auftragspositionen des lokalen Projekts + Aufgaben mit Beschreibung) und `materialliste` (Materialbuchungen des Tages, eingetroffene
+  Lieferungen). `POST/DELETE /api/tagesberichte/{id}/unterschrift` (PNG-Data-URL, Verlaufsschritte `unterschrieben`/`unterschrift_entfernt`, Entfernen nur Büro der
+  verfassenden Firma mit `grund`); unterschriebene Berichte sind nicht änderbar (`bearbeiten` false). Vorlagen `berichtsvorlagen` {firma_id, name, art, felder}
+  (`GET/POST /api/berichtsvorlagen`, `PUT/DELETE /{id}`, Büro, hinter `berichtsvorlagen`; Felder werden mit `TagesberichtIn` geprüft). `pdfs.tagesbericht_pdf`
+  titelt nach Art, druckt Regietabellen und die Unterschrift.
+- Projektakte (`projektakte.py`): `_Zip.manifest` (Name, Bytes, SHA-256 je Datei); `erstellen(user, projekt, hintergrund)` legt den Datensatz mit Status `laeuft`
+  an und baut synchron oder als `asyncio.Task` (`LAUFEND`), `_bauen` setzt `fortschritt`, schreibt `12_Nachrichten/` (`_nachrichten`), `00_LIESMICH.txt`,
+  `00_Index.pdf` (`pdfs.projektakte_index_pdf`) und zuletzt `manifest.json`; Fehler landen als Status `fehler` + Text im Datensatz (und im Serverlog).
+  Routen: `GET /api/projektakten/{id}` (Stand; nach der `.zip`-Route registriert), Download nur bei `fertig` (409 sonst). Oberfläche fragt alle 1,5 s nach.
+- Dashboard: Punkt `nachrichten` (ungelesen) für alle Rollen, wenn `chat` an. Oberfläche: `pages/NachrichtenPage`, `components/nachrichten/{ChatPanel,ChatKnopf,
+  ProjektChatTab,BieterChats,VerzeichnisSuche}`, Projekt-Reiter „Chat“, Ausschreibung „Nachrichten“, Aufgabe „Chat zur Aufgabe“, Zusammenarbeit „Firmen finden“,
+  Firma „Module“. Tests `tests/test_stufe_g_20261024.py` (4 Tests).
+- Grenzen (dokumentiert): kein Push/WebSocket (Nachladen alle 20 s im Chat, 60 s Zähler), keine Lesebestätigung je Person in der Oberfläche, keine Suche in Chats;
+  Projektakten im Hintergrund laufen im Serverprozess (bei Neustart bleibt Status `laeuft` stehen – Akte neu erstellen).
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

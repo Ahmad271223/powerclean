@@ -169,6 +169,10 @@ async def aufgaben(user: dict = Depends(aktueller_nutzer)):
         if anzahl:
             punkte.append({"art": art, "text": text, "anzahl": int(anzahl), "link": link, "prio": prio})
 
+    import features
+    if features.aktiv("chat"):
+        from nachrichten import ungelesen_gesamt
+        punkt("nachrichten", "Ungelesene Nachrichten", await ungelesen_gesamt(user), "/nachrichten", 3)
     if hat_rolle(user, "buero"):
         firma = await firma_laden(f)
         art = firma.get("art") or "betrieb"

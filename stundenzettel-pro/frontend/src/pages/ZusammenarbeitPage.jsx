@@ -6,6 +6,7 @@ import Layout, { Ladeanzeige } from '../components/Layout';
 import { Btn, Card, Chip, Empty, Field, TextArea, TextInput, Toggle } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import VerzeichnisSuche from '../components/nachrichten/VerzeichnisSuche';
 
 const TOKEN_KEY = 'szpro-projekteinladung';
 const fmtZeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -91,6 +92,7 @@ export default function ZusammenarbeitPage() {
           <div className="rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={verz.verzeichnis.ausschreibungen_benachrichtigen !== false} onChange={(v) => setVerz((x) => ({ ...x, verzeichnis: { ...x.verzeichnis, ausschreibungen_benachrichtigen: v } }))} label="Über neue passende Ausschreibungen benachrichtigen" /></div>
           {isInhaber ? <Btn onClick={verzSpeichern} loading={busy === 'verz'}>Speichern</Btn> : <p className="text-[12px] text-[#86868B]">Ändern kann das nur der Inhaber.</p>}
         </Card>
+        <VerzeichnisSuche />
 
         <Card className="p-5 space-y-3">
           <div className="flex items-center justify-between gap-2"><h2 className="text-[16px] flex items-center gap-2"><Bell size={16} /> Benachrichtigungen {ben.ungelesen > 0 && <span className="text-[11px] font-semibold rounded-full bg-[#C41E3A] text-white px-2 py-0.5">{ben.ungelesen}</span>}</h2>{ben.ungelesen > 0 && <Btn size="sm" variant="ghost" onClick={alleGelesen}>Alle gelesen</Btn>}</div>

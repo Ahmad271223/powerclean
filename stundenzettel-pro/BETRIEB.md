@@ -124,6 +124,16 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
 - Importe laufen synchron mit Vorschau; Dateigrenzen: Positionen 20 MB/1000 Positionen, Artikel 10 MB. Excel braucht `openpyxl` (requirements.txt).
 - GAEB: Dateien von Auftraggebern, die der Import ablehnt, bitte aufbewahren und als Beispiel für die Erweiterung einreichen (Meldung nennt den Grund).
 
+## 4k. Nachrichten, Projektakten im Hintergrund, Module
+
+- Feature-Flags über die Umgebung: `FEATURE_CHAT`, `FEATURE_BERICHTSVORLAGEN`, `FEATURE_PROJEKTAKTE_ASYNC`, `FEATURE_KI`, `FEATURE_LAGER` (`1|0`). Ohne Angabe gelten die
+  Standardwerte aus `features.py` (Chat und Vorlagen an, Hintergrund-Projektakten mit Datenbank an, KI und Lager aus). Stand: `GET /api/features` oder „Firma → Module“.
+- Der Nachrichten-Dienst (`nachrichten.dienst`) läuft im Serverprozess und prüft jede Minute; E-Mails erscheinen im E-Mail-Ausgang (art „Neue Nachricht“). Bei mehreren
+  Serverprozessen nur einen mit Diensten starten (siehe 4b) – sonst doppelte Ankündigungen.
+- Chat-Anhänge liegen wie alle Dokumente unter `DATA_DIR/dateien/<firma>` (scope `chat`) und zählen zum Speicherkontingent der hochladenden Firma.
+- Projektakten im Hintergrund: Status `laeuft` bleibt nach einem Serverneustart stehen – die Akte dann einfach neu erstellen (Datensatz kann der Inhaber löschen).
+  Prüfsummen: `manifest.json` in der ZIP; Nachweis mit `sha256sum` gegen die entpackten Dateien.
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

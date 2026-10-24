@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, FileText, Gavel, Megaphone, MessageCircleQuestion, Paperclip, Pencil, Scale, Send, Trash2, Users, X, Upload, FileCode } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Gavel, Megaphone, MessageCircleQuestion, Paperclip, Pencil, Scale, Send, Trash2, Users, X, Upload, FileCode, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import PositionenImportDialog from '../components/angebot/PositionenImportDialog';
 import Layout, { Ladeanzeige } from '../components/Layout';
@@ -10,8 +10,10 @@ import FirmenEinladenDialog from '../components/ausschreibung/FirmenEinladenDial
 import AngebotBereich from '../components/ausschreibung/AngebotBereich';
 import AngeboteVergleich from '../components/ausschreibung/AngeboteVergleich';
 import VergabeBereich from '../components/ausschreibung/VergabeBereich';
+import BieterChats from '../components/nachrichten/BieterChats';
 import { Btn, Card, Empty, Field, IconBtn, Segmented, Select, TextArea, TextInput, Toggle } from '../components/ui';
 import { api, download, openFile } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useDialoge } from '../components/Dialoge';
 import { ANFORDERUNGEN, STATUS_CLS, fmtGeld, fmtTag, fmtZeit, fristText } from '../lib/ausschreibung';
 
@@ -25,6 +27,7 @@ export default function AusschreibungPage() {
   const navigate = useNavigate();
   const [d, setD] = useState(null);
   const [tab, setTab] = useState('uebersicht');
+  const { feature } = useAuth();
   const [edit, setEdit] = useState(false);
   const [lvImport, setLvImport] = useState(false);
   const [einladen, setEinladen] = useState(false);
@@ -46,6 +49,7 @@ export default function AusschreibungPage() {
     { value: 'fragen', label: `Rückfragen (${d.fragen.length})`, icon: MessageCircleQuestion },
     ...(leitung ? [{ value: 'angebote', label: `Angebote (${d.zaehler?.angebote ?? 0})`, icon: Gavel }] : [{ value: 'angebot', label: d.angebot ? `Mein Angebot` : 'Angebot abgeben', icon: Send }]),
     ...(d.vergabe ? [{ value: 'vergabe', label: 'Vergabe', icon: Gavel }] : []),
+    ...(feature('chat') && (leitung || d.kann_bieten || d.angebot) ? [{ value: 'nachrichten', label: 'Nachrichten', icon: MessageSquare }] : []),
   ];
   return (
     <Layout wide title={d.titel} subtitle={`${d.nummer} · ${d.auftraggeber?.name || ''}${d.projekt?.name ? ` · ${d.projekt.name}` : ''} · Angebotsfrist ${fristText(d)}`}
@@ -126,6 +130,7 @@ export default function AusschreibungPage() {
       {tab === 'angebot' && !leitung && <AngebotBereich ausschreibung={d} onChanged={laden} />}
       {tab === 'angebote' && leitung && <AngeboteVergleich ausschreibung={d} onChanged={laden} />}
       {tab === 'vergabe' && d.vergabe && <VergabeBereich ausschreibung={d} rolle={d.rolle} onChanged={laden} kategorien={d.kategorien?.vergabe} />}
+      {tab === 'nachrichten' && <BieterChats ausschreibung={d} leitung={leitung} />}
 
       <AusschreibungDialog open={edit} onOpenChange={setEdit} ausschreibung={d} gewerke={d.gewerke} onSaved={laden} />
       <FirmenEinladenDialog open={einladen} onOpenChange={setEinladen} ausschreibungId={d.id} bereits={(d.einladungen || []).map((e) => e.firma_id)} gewerk={d.gewerk} onDone={laden} />

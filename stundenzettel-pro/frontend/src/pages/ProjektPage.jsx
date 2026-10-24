@@ -30,6 +30,7 @@ import AbrechnungTab from '../components/rechnungen/AbrechnungTab';
 import AufmassTab from '../components/aufmass/AufmassTab';
 import NachtraegeTab from '../components/plattform/NachtraegeTab';
 import AbnahmenTab from '../components/plattform/AbnahmenTab';
+import ProjektChatTab from '../components/nachrichten/ProjektChatTab';
 import ProjektakteKarte from '../components/ProjektakteKarte';
 import { AppIcon, Btn, Card, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Field } from '../components/ui';
 import { api, openFile } from '../lib/api';
@@ -46,7 +47,7 @@ const fmtZeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit',
 export default function ProjektPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { isBuero, isVorarbeiter, firma: eigeneFirma, kann } = useAuth();
+  const { isBuero, isVorarbeiter, firma: eigeneFirma, kann, feature } = useAuth();
   const today = useMemo(() => new Date(), []);
   const [{ year, month }, setYm] = useState(() => clampMonth(today.getFullYear(), today.getMonth()));
   const [tab, setTab] = useState('kalender');
@@ -187,6 +188,7 @@ export default function ProjektPage() {
     { value: 'aufmass', label: 'Aufmaß', icon: Ruler },
     ...(isBuero && kann('rechnungen') ? [{ value: 'abrechnung', label: 'Abrechnung', icon: Receipt }] : []),
     ...(isBuero && kann('kalkulation') ? [{ value: 'nachkalkulation', label: 'Nachkalkulation', icon: Calculator }] : []),
+    ...(feature('chat') ? [{ value: 'chat', label: 'Chat', icon: MessageSquare }] : []),
   ];
 
   return (
@@ -366,6 +368,7 @@ export default function ProjektPage() {
       {tab === 'aufmass' && <AufmassTab projekt={project} />}
       {tab === 'abrechnung' && <AbrechnungTab projekt={project} kunde={data.kunde} />}
       {tab === 'nachkalkulation' && <NachkalkulationTab projekt={project} />}
+      {tab === 'chat' && <ProjektChatTab projekt={project} plattformId={plattformId} leitung={leitung} />}
 
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}
         entries={selectedDate ? (byDay[selectedDate] || []) : []} lastEntry={lastEntry} recentActivities={recentActivities}

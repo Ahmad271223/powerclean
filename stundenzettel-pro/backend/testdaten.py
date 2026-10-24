@@ -185,4 +185,27 @@ if r.status_code == 200:
     auf = ok(c.post("/api/projekte/" + p1["id"] + "/aufmasse", json={"bezeichnung": "Glasfläche Schalterhalle", "raum": "EG Schalterhalle", "typ": "flaeche", "formel": "3,20 x 2,60; 1,10 x 2,60", "position_nr": "2.1", "messdatum": heute}, headers=HM))["aufmass"]
     ok(c.post("/api/projekte/" + p1["id"] + "/aufmasse", json={"bezeichnung": "Sockelleisten Flur", "raum": "EG Flur", "typ": "laenge", "formel": "12,4 + 8,75 + 3,1", "messdatum": heute, "note": "ohne Türen"}, headers=HM))
     ok(c.post("/api/aufmasse/" + auf["id"] + "/pruefen", headers=H))
+    # Stufe G: Projektchat intern (Chef ↔ Mia), Partnerchat mit Elektro Mustermann, Kontaktanfrage, Berichtsvorlage + Regiebericht mit Kundenunterschrift
+    ch = ok(c.post("/api/chats/oeffnen", json={"art": "projekt_intern", "project_id": p1["id"]}, headers=H))["chat"]
+    ok(c.post("/api/chats/" + ch["id"] + "/nachrichten", json={"text": "Bitte morgen zuerst die Glasflächen in der Schalterhalle, danach den Flur."}, headers=H))
+    ok(c.post("/api/chats/" + ch["id"] + "/nachrichten", json={"text": "Alles klar, ich fange um 7 Uhr an. Reicht das Material für die Fenster?"}, headers=HM))
+    gu_chat = ok(c.post("/api/chats/oeffnen", json={"art": "projekt_gu", "project_id": p1["id"]}, headers=H))["chat"]
+    ok(c.post("/api/chats/" + gu_chat["id"] + "/nachrichten", json={"text": "Guten Tag Frau Mustermann, wann kommen die restlichen Panels für das Foyer?"}, headers=H))
+    ok(c.post("/api/chats/" + gu_chat["id"] + "/nachrichten", json={"text": "Die Lieferung ist für Donnerstag 7 Uhr bestätigt."}, headers=HE))
+    kt = ok(c.post("/api/chats/oeffnen", json={"art": "kontakt", "firma_id": el["firma"]["id"]}, headers=H))["chat"]
+    ok(c.post("/api/chats/" + kt["id"] + "/nachrichten", json={"text": "Hätten Sie im November Kapazität für ein weiteres Objekt in Musterstadt?"}, headers=H))
+    vorlage = ok(c.post("/api/berichtsvorlagen", json={"name": "Regiebericht Elektro", "art": "regiebericht", "felder": {"bereich": "Foyer", "taetigkeiten": "Regiearbeiten nach Anweisung der Bauleitung",
+                                                        "regie_geraete": [{"bezeichnung": "Hubarbeitsbühne", "stunden": 4}]}}, headers=HE))["vorlage"]
+    from PIL import Image as _Bild, ImageDraw as _Zeichnen
+    import base64 as _b64, io as _io
+    _u = _Bild.new("RGBA", (400, 140), (255, 255, 255, 0))
+    _Zeichnen.Draw(_u).line([(20, 100), (80, 40), (140, 110), (200, 50), (260, 100), (330, 60), (380, 90)], fill=(20, 20, 60, 255), width=4)
+    _puffer = _io.BytesIO()
+    _u.save(_puffer, "PNG")
+    unterschrift_png = "data:image/png;base64," + _b64.b64encode(_puffer.getvalue()).decode()
+    rb = ok(c.post("/api/projekte/" + p1["id"] + "/tagesberichte", json={"datum": heute, "art": "regiebericht", "vorlage_id": vorlage["id"], "bereich": "Foyer", "firmen": ["Elektro Mustermann GmbH"], "mitarbeiter_anzahl": 2,
+                                                                       "taetigkeiten": "Zusätzliche Leuchten im Windfang montiert (Regie, auf Wunsch der Hausverwaltung)", "auftraggeber_name": "Sparkasse – Herr Berger",
+                                                                       "regie_stunden": [{"name": "Erika Mustermann", "taetigkeit": "Montage", "stunden": 3.5}, {"name": "Milan Monteur", "taetigkeit": "Montage", "stunden": 3.5}],
+                                                                       "regie_material": [{"bezeichnung": "LED-Panel 60×60", "menge": 2, "einheit": "Stück"}], "regie_geraete": vorlage["felder"]["regie_geraete"]}, headers=HE))["bericht"]
+    ok(c.post("/api/tagesberichte/" + rb["id"] + "/unterschrift", json={"signer_name": "Herr Berger (Sparkasse)", "image": unterschrift_png}, headers=HE))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

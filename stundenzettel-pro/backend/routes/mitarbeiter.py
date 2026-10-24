@@ -223,6 +223,11 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
             if not ((z["eigentuemer"] and z["leitung"]) or d.get("firma_id") == user["firma_id"] or d.get("freigabe_alle")):
                 raise HTTPException(404, "Dokument nicht gefunden.")
         return d
+    if d["scope"] == "chat":
+        # Chat-Anhänge: dieselben Rechte wie der Chat (firmenübergreifend, nie über firma_id der Datei)
+        from routes.nachrichten import dokument_zugang as chat_dokument_zugang
+        await chat_dokument_zugang(user, d["ref_id"])
+        return d
     if d.get("firma_id") != user["firma_id"]:
         raise HTTPException(404, "Dokument nicht gefunden.")
     if d["scope"] == "aufmass":

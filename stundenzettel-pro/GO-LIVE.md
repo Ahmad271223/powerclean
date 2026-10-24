@@ -144,6 +144,19 @@ Gutschrift), Mahnfristen und -gebühren mit den eigenen AGB abstimmen (Standard 
 Backend-Tests gesamt: 87 grün. Vor dem Go-live: GAEB-Dateien echter Auftraggeber (X83 aus AVA-Programmen) und DATANORM-Kataloge echter Lieferanten
 durch den Import laufen lassen; X84-Ausgabe mit einem GAEB-Prüfprogramm validieren (keine XSD-Prüfung im Server).
 
+## 1j. Stufe G – Nachrichten, Regieberichte, Projektakte, Module (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Feature-Flags lesen, Projektchat intern (Rechte je Rolle und Firma, Schließen durch das Büro), Partnerchat (Leitung/Partnerleitung, nie Mitarbeiter), Anhänge mit Chat-Rechten, Ungelesen-Zähler und Dashboard-Punkt, E-Mail-Ankündigung (Wartezeit, nur fremde ungelesene, einmal je Nachricht), Modul aus → 404 | `test_stufe_g_20261024.py::test_01` |
+| Bieterchats getrennt je Bieter, Leitung nur mit beteiligten Firmen, Kontaktanfrage nur über Verzeichnis und nur Büro, Aufgabenchat (Leitung, Firma, zugeteilter Monteur; GU-Mitarbeiter/Fremde nie) | `test_02` |
+| Vorlagen (Prüfung der Felder, nur Büro, je Firma), Vorschlag mit Arbeitsanweisungen und Materialliste, Regiebericht mit Stunden/Material/Geräten, Unterschrift (PNG-Pflicht, Rechte, sperrt Änderungen, PDF), Entfernen mit Grund, Verlauf, Modul aus | `test_03` |
+| Projektakte: Manifest mit stimmenden SHA-256-Summen, Index-PDF, Nachrichten je Rolle (beteiligte Firma sieht keinen fremden internen Chat), Hintergrundlauf mit Status und Download erst bei fertig | `test_04` |
+| Browser (24.10.2026): Nachrichten-Seite mit Zähler, Senden; Projekt → Chat (intern/Partner, Schalter fürs Büro), Regiebericht-Dialog mit Regietabellen und Unterschrift, Projektakte mit Prüfsummen-Kennzeichen, Ausschreibung → Nachrichten (Bieterchat eröffnen, senden), Zusammenarbeit → Firmen finden → Kontakt, Firma → Module; Mitarbeiterin: Zähler, interner Chat ohne Partner-Bereich und ohne Schalter | ohne Konsolenfehler nach Abschluss |
+
+Backend-Tests gesamt: 91 grün. Vor dem Go-live: `NACHRICHTEN_DIENST` läuft mit Datenbank automatisch; E-Mail-Texte im Ausgang prüfen, Wartezeit
+(`nachrichten.WARTEZEIT_MINUTEN`) bei Bedarf anpassen; Feature-Flags in der `.env` bewusst setzen (`FEATURE_KI=0`, `FEATURE_LAGER=0` bleiben aus).
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

@@ -115,6 +115,12 @@ async def indizes_anlegen(d) -> None:
         ("eingangsrechnungen", [("firma_id", 1), ("zuordnungen.project_id", 1)], {"name": "projekt"}),
         ("aufmasse", [("firma_id", 1), ("project_id", 1), ("messdatum", -1)], {"name": "projekt_datum"}),
         ("aufmasse", [("firma_id", 1), ("project_id", 1), ("position.nr", 1)], {"name": "projekt_position"}),
+        ("chats", [("art", 1), ("project_id", 1), ("firma_id", 1)], {"name": "art_projekt"}),
+        ("chats", [("firma_ids", 1), ("letzte_nachricht_at", -1)], {"name": "firmen_zeit"}),
+        ("nachrichten", [("chat_id", 1), ("created_at", 1)], {"name": "chat_zeit"}),
+        ("nachrichten", [("angekuendigt_at", 1), ("created_at", 1)], {"name": "ankuendigung"}),
+        ("berichtsvorlagen", [("firma_id", 1), ("name", 1)], {"name": "firma_name"}),
+        ("projektakten", [("firma_id", 1), ("status", 1)], {"name": "firma_status"}),
         ("benachrichtigungen", [("id", 1)], {"name": "kennung"}),
         ("webhook_ausgang", [("firma_id", 1), ("webhook_id", 1), ("status", 1)], {"name": "firma_hook"}),
     ]

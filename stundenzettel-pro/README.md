@@ -315,6 +315,25 @@ Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berec
   Excel (.xlsx) oder GAEB – immer mit Vorschau und Fehlerzeilen, anhängen oder ersetzen.
 - **Artikelimport** zusätzlich aus Excel und DATANORM 4/5 (A-, P-, T-Sätze; Preise in Cent, Preiseinheiten je 1/10/100/1000; Windows-/DOS-Zeichensatz).
 
+## Nachrichten, Regieberichte, Projektakte mit Prüfsummen, Module (24.10.2026, Stufe G)
+
+- **Nachrichten** (Menü „Nachrichten“, Zähler für Ungelesenes): Projektchat intern (eigene Firma; das Büro kann ihn je Projekt für Mitarbeiter
+  schließen), Projektchat mit Partnern (Projektleitung des Auftraggebers und Leitung beteiligter Firmen), Bieterchat (je Bieterfirma ein privater
+  Chat mit der ausschreibenden Leitung – kein Bieter sieht einen anderen), Kontaktanfrage zwischen zwei Büros über das Firmenverzeichnis
+  („Zusammenarbeit → Firmen finden“), Chat zu einer Aufgabe (Leitung, beauftragte Firma, zugeteilte Mitarbeiter). Anhänge haben dieselben Rechte wie
+  der Chat. Jede Nachricht wird gespeichert; ein getrennter Dienst kündigt ungelesene Nachrichten nach zwei Minuten gesammelt per E-Mail an (Nachweis
+  im E-Mail-Ausgang, nie doppelt). Mitteilungen und „Jetzt zu erledigen“ zeigen ungelesene Nachrichten.
+- **Regieberichte und Berichtsvorlagen** (Projekt → Berichte): Art Bautagesbericht oder Regiebericht; Regie mit Stunden je Mitarbeiter, Material,
+  Geräten und Ansprechpartner; „Vorbelegen“ liefert zusätzlich Arbeitsanweisungen aus Auftragspositionen und Aufgaben sowie die Materialliste des Tages
+  (Buchungen, eingetroffene Lieferungen). Vorlagen je Firma (Büro speichert „Als Vorlage“, alle wählen sie aus). Der Auftraggeber unterschreibt auf dem
+  Gerät; danach ist der Bericht fest (Entfernen nur Büro der verfassenden Firma mit Grund im Verlauf und Protokoll). PDF mit Regietabellen und Unterschrift.
+- **Projektakte**: enthält jetzt `00_Index.pdf` (Inhaltsverzeichnis) und `manifest.json` mit SHA-256-Prüfsummen aller Dateien (Nachweis der
+  Unversehrtheit) sowie `12_Nachrichten/` (Projektchats, soweit für die Firma sichtbar, mit Anhängen). Mit Datenbank läuft die Erstellung im Hintergrund
+  mit Fortschritt (Status läuft → fertig/Fehler, Download erst danach); im Speicher-Modus synchron.
+- **Module (Feature-Flags)**: `GET /api/features`; Umgebung `FEATURE_CHAT`, `FEATURE_BERICHTSVORLAGEN`, `FEATURE_PROJEKTAKTE_ASYNC`, `FEATURE_KI`
+  (aus), `FEATURE_LAGER` (aus, nicht gebaut) = `1|0`. Abgeschaltete Module verschwinden aus dem Menü und antworten über die API mit 404 und Klartext.
+  Übersicht unter „Firma → Module“ (Inhaber).
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).

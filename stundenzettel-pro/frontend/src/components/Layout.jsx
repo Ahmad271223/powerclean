@@ -1,10 +1,11 @@
 /** Rahmen der App: Kopfzeile, Navigation (Seitenleiste am Rechner, Tab-Leiste am Handy), Lizenz- und Offline-Hinweis. */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel, Bell, UserCog, BadgeEuro, FileArchive, CalendarRange, FileText, ReceiptText, Package, Calculator, BellRing } from 'lucide-react';
+import { LayoutDashboard, Timer, FolderKanban, Users, Contact, Receipt, CalendarOff, FileDown, Building2, ShieldCheck, LogOut, MoreHorizontal, Clock, X, AlertTriangle, BarChart3, WifiOff, Handshake, ClipboardList, Gavel, Bell, UserCog, BadgeEuro, FileArchive, CalendarRange, FileText, ReceiptText, Package, Calculator, BellRing, MessageSquare } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { AppIcon, Sheet } from './ui';
 import { initials } from '../lib/utils';
+import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 
 /** Handwerksbetrieb: die vier Hauptaktionen unten am Handy (Übersicht, Projekte, Stempeluhr, Rechnungen), der Rest unter „Mehr“. */
@@ -20,6 +21,7 @@ const NAV_BETRIEB = [
   { to: '/artikel', label: 'Artikel & Material', icon: Package, recht: 'angebote' },
   { to: '/nachkalkulation', label: 'Nachkalkulation', icon: Calculator, recht: 'kalkulation' },
   { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
+  { to: '/nachrichten', label: 'Nachrichten', icon: MessageSquare, feature: 'chat', badge: 'nachrichten' },
   { to: '/ausschreibungen', label: 'Ausschreibungen & GU-Aufträge', icon: Gavel },
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
@@ -37,6 +39,7 @@ const NAV_AUFTRAGGEBER = [
   { to: '/projekte', label: 'Bauprojekte', icon: FolderKanban },
   { to: '/ausschreibungen', label: 'Ausschreibungen', icon: Gavel },
   { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
+  { to: '/nachrichten', label: 'Nachrichten', icon: MessageSquare, feature: 'chat', badge: 'nachrichten' },
   { to: '/aufgaben', label: 'Aufgaben & Abnahmen', icon: ClipboardList },
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
   { to: '/projektleiter', label: 'Projektleiter & Rechte', icon: UserCog },
@@ -57,6 +60,7 @@ const NAV_MITARBEITER = [
   { to: '/meine-zeiten', label: 'Meine Zeiten', icon: Clock },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
   { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
+  { to: '/nachrichten', label: 'Nachrichten', icon: MessageSquare, feature: 'chat', badge: 'nachrichten' },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
   { to: '/abwesenheiten', label: 'Abwesenheit', icon: CalendarOff },
   { to: '/profil', label: 'Profil', icon: Contact },
@@ -85,13 +89,14 @@ function PlanHinweis() {
 }
 
 export default function Layout({ children, title, subtitle, action, wide = false }) {
-  const { user, firma, logout, isBuero, kann } = useAuth();
+  const { user, firma, logout, isBuero, kann, feature } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mehr, setMehr] = useState(false);
+  const ungelesen = useUngelesen(feature('chat'), location.pathname);
   const art = firma?.art || 'betrieb';
   const navBasis = isBuero ? (art === 'auftraggeber' ? NAV_AUFTRAGGEBER : art === 'beides' ? NAV_BEIDES : NAV_BETRIEB) : NAV_MITARBEITER;
-  const nav = navBasis.filter((n) => !n.recht || kann(n.recht));
+  const nav = navBasis.filter((n) => (!n.recht || kann(n.recht)) && (!n.feature || feature(n.feature)));
   const tabs = nav.slice(0, 4);
   const rest = nav.slice(4);
   const restAktiv = rest.some((n) => location.pathname.startsWith(n.to) && n.to !== '/');
@@ -103,7 +108,7 @@ export default function Layout({ children, title, subtitle, action, wide = false
       klein ? 'flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-1.5 text-[11px] font-medium' : 'flex items-center gap-3 px-3.5 h-11 rounded-2xl text-[15px] font-medium transition-colors',
       isActive ? (klein ? 'text-[#C41E3A]' : 'bg-white shadow-card text-[#1D1D1F]') : (klein ? 'text-[#6E6E73]' : 'text-[#6E6E73] hover:bg-black/[0.04] hover:text-[#1D1D1F]'),
     )}>
-      <n.icon size={klein ? 22 : 18} /> <span className="truncate">{n.label}</span>
+      <span className="relative"><n.icon size={klein ? 22 : 18} />{n.badge === 'nachrichten' && ungelesen > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 rounded-full bg-[#C41E3A] text-white text-[10px] font-semibold flex items-center justify-center px-1" data-testid="nachrichten-badge">{ungelesen > 99 ? '99+' : ungelesen}</span>}</span> <span className="truncate">{n.label}</span>
     </NavLink>
   );
 
@@ -169,6 +174,20 @@ export default function Layout({ children, title, subtitle, action, wide = false
       </div>
     </div>
   );
+}
+
+/** Ungelesene Chat-Nachrichten für das Menü – alle 60 s, nur wenn das Modul an ist; nach jedem Seitenwechsel sofort. */
+function useUngelesen(aktiv, pfad) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!aktiv) { setN(0); return undefined; }
+    let laeuft = true;
+    const holen = () => api.get('/api/chats/ungelesen').then((r) => { if (laeuft) setN(r.ungelesen || 0); }).catch(() => {});
+    holen();
+    const t = setInterval(holen, 60000);
+    return () => { laeuft = false; clearInterval(t); };
+  }, [aktiv, pfad]);
+  return n;
 }
 
 export function Ladeanzeige() {
