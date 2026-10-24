@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Sheet, Btn, Field, TextInput, TextArea, SectionLabel, Toggle, Chip, Select } from './ui';
 
-const EMPTY = { name: '', customer_id: '', customer_name: '', customer_address: '', address: '', schedule: '', employee_ids: [], hourly_rate: '', color: PROJECT_COLORS[0], notes: '', archived: false, default_workers: 1, reverse_charge: false, budget_hours_month: '', budget_warn_percent: 80, kostenlos: false,
+const EMPTY = { name: '', customer_id: '', customer_name: '', customer_address: '', address: '', schedule: '', employee_ids: [], hourly_rate: '', abrechnungsart_projekt: 'stunden', pauschale_netto: '', color: PROJECT_COLORS[0], notes: '', archived: false, default_workers: 1, reverse_charge: false, budget_hours_month: '', budget_warn_percent: 80, kostenlos: false,
   projektnummer: '', auftraggeber: '', generalunternehmer: '', projektart: '', beschreibung: '', baubeginn: '', bauende: '', phasen: '', bauabschnitte: '', gewerke: '', projektstatus: '', volumen: '', kosten: '', anforderungen: '', lat: '', lon: '' };
 const liste = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
 const zuListe = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -50,6 +50,8 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
       beschreibung: form.beschreibung || '', anforderungen: form.anforderungen || '', baubeginn: form.baubeginn || null, bauende: form.bauende || null, phasen: zuListe(form.phasen), bauabschnitte: zuListe(form.bauabschnitte),
       gewerke: zuListe(form.gewerke), projektstatus: form.projektstatus || '', volumen: zahl(form.volumen), kosten: zahl(form.kosten), lat: zahl(form.lat), lon: zahl(form.lon),
       kostenlos: !!form.kostenlos,
+      abrechnungsart_projekt: form.abrechnungsart_projekt || 'stunden',
+      pauschale_netto: zahl(form.pauschale_netto) || 0,
     };
     setBusy(true);
     try {
@@ -124,6 +126,10 @@ export default function ProjectDialog({ open, onOpenChange, project, defaultRate
 
         <section className="space-y-3">
           <SectionLabel>Abrechnung</SectionLabel>
+          <Field label="Wie ist das Projekt mit dem Auftraggeber vereinbart?">
+            <Select value={form.abrechnungsart_projekt || 'stunden'} onChange={set('abrechnungsart_projekt')} className="w-full"><option value="stunden">Nach Stunden</option><option value="pauschal">Pauschalbetrag für das Projekt</option></Select>
+          </Field>
+          {form.abrechnungsart_projekt === 'pauschal' && <Field label="Vereinbarter Projektpreis (€ netto)" hint="Grundlage der Kalkulation und Nachkalkulation. Die Rechnung läuft weiter nach Stunden, bis Pauschal- und Abschlagsrechnungen fertig sind."><TextInput type="number" step="0.01" min="0" inputMode="decimal" value={form.pauschale_netto ?? ''} onChange={set('pauschale_netto')} /></Field>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Stundensatz (€ netto)" hint={form.kostenlos ? 'Kostenlos: 0 € bleibt 0 €' : rateText ? `Leer = Firmenstandard ${rateText} €` : undefined}>
               <TextInput type="number" step="0.01" min="0" inputMode="decimal" value={form.hourly_rate} onChange={set('hourly_rate')} placeholder={form.kostenlos ? '0' : rateText || 'z. B. 32,50'} disabled={!!form.kostenlos} />

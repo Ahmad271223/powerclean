@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Archive, Download, FileArchive, Trash2 } from 'lucide-react';
+import { Archive, Download, FileArchive, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Btn, Card, Empty } from './ui';
 import { api, download } from '../lib/api';
@@ -10,7 +10,7 @@ const fmtZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-
 const fmtGroesse = (b) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 // Zähler der ZIP sind Dateien (eine Zeiten-Tabelle, ein Stundennachweis je Monat, ein PDF je Nachtrag …)
 const INHALT = { stundennachweise: 'Stundennachweise', fotos: 'Fotos', dokumente: 'Dokumente', rechnungen: 'Rechnungen', unterschriften: 'Unterschriften', ausschreibungen: 'Ausschreibungen', angebote: 'Angebote', vergaben: 'Vergaben', tagesberichte: 'Bautagesberichte', nachtraege_pdf: 'Nachträge', abnahmen_pdf: 'Abnahmen', plattform_dokumente: 'geteilte Dokumente' };
-const TABELLEN = { zeiten: 'Zeiten', aufgaben: 'Aufgaben', maengel: 'Mängel', lieferungen: 'Lieferungen', protokoll: 'Protokoll', emails: 'E-Mail-Nachweise', nachweise: 'Nachweise', kommentare: 'Kommentare', checklisten: 'Checklisten' };
+const TABELLEN = { nachrichten: 'Nachrichten', zeiten: 'Zeiten', aufgaben: 'Aufgaben', maengel: 'Mängel', lieferungen: 'Lieferungen', protokoll: 'Protokoll', emails: 'E-Mail-Nachweise', nachweise: 'Nachweise', kommentare: 'Kommentare', checklisten: 'Checklisten' };
 const inhaltText = (inhalt) => {
   const teile = Object.entries(inhalt || {}).filter(([k]) => INHALT[k]).map(([k, v]) => `${v} ${INHALT[k]}`);
   const tabellen = Object.keys(inhalt || {}).filter((k) => TABELLEN[k]).map((k) => TABELLEN[k]);
@@ -24,10 +24,20 @@ export default function ProjektakteKarte({ projectId, className = '' }) {
   const [busy, setBusy] = useState('');
   const laden = useCallback(() => api.get(`/api/projekte/${projectId}/projektakten`).then(setDaten).catch(() => setDaten({ projektakten: [], fehler: true })), [projectId]);
   useEffect(() => { laden(); }, [laden]);
+  // Läuft eine Akte im Hintergrund, alle 1,5 s nachfragen, bis sie fertig ist (oder fehlgeschlagen)
+  const laeuft = (daten?.projektakten || []).some((a) => a.status === 'laeuft');
+  useEffect(() => {
+    if (!laeuft) return undefined;
+    const t = setInterval(() => laden(), 1500);
+    return () => clearInterval(t);
+  }, [laeuft, laden]);
   const erstellen = async () => {
     setBusy('erstellen');
-    try { const r = await api.post(`/api/projekte/${projectId}/projektakte`, {}); toast.success(`Projektakte erstellt (${fmtGroesse(r.projektakte.size)})`); laden(); }
-    catch (err) { toast.error(err.message); } finally { setBusy(''); }
+    try {
+      const r = await api.post(`/api/projekte/${projectId}/projektakte`, {});
+      toast.success(r.projektakte.status === 'laeuft' ? 'Projektakte wird im Hintergrund erstellt' : `Projektakte erstellt (${fmtGroesse(r.projektakte.size)})`);
+      laden();
+    } catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
   const holen = async (a) => { setBusy(a.id); try { await download(`/api/projektakten/${a.id}.zip`, a.dateiname); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
   return (
@@ -41,8 +51,11 @@ export default function ProjektakteKarte({ projectId, className = '' }) {
         <ul className="divide-y divide-black/[0.06] text-[14px]">
           {daten.projektakten.map((a) => (
             <li key={a.id} className="py-2 flex items-center gap-3">
-              <div className="flex-1 min-w-0"><div className="font-medium">{fmtZeit(a.created_at)} · {fmtGroesse(a.size)} · {a.created_by_name}</div><div className="text-[12px] text-[#6E6E73] truncate">{inhaltText(a.inhalt) || 'leer'}{a.hinweise?.length ? ` · ${a.hinweise.length} Hinweise` : ''}</div></div>
-              <Btn size="sm" variant="soft" onClick={() => holen(a)} loading={busy === a.id}><Download size={14} /> ZIP</Btn>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium flex items-center gap-2">{fmtZeit(a.created_at)}{a.status === 'fertig' || !a.status ? ` · ${fmtGroesse(a.size)}` : ''} · {a.created_by_name}{a.status === 'laeuft' && <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full bg-[#E8F0FE] text-[#1D4ED8] px-2 py-0.5" data-testid="akte-laeuft"><Loader2 size={11} className="animate-spin" /> {a.fortschritt || 'läuft'}</span>}{a.status === 'fehler' && <span className="text-[11px] font-semibold rounded-full bg-[#FDE8E8] text-[#C41E3A] px-2 py-0.5">Fehlgeschlagen</span>}{a.manifest_eintraege > 0 && <span className="inline-flex items-center gap-1 text-[11px] text-[#1B7F3B]" title="manifest.json mit SHA-256-Prüfsummen und 00_Index.pdf enthalten"><ShieldCheck size={12} /> Prüfsummen</span>}</div>
+                <div className="text-[12px] text-[#6E6E73] truncate">{a.status === 'fehler' ? a.fehler : (inhaltText(a.inhalt) || (a.status === 'laeuft' ? 'wird zusammengestellt …' : 'leer'))}{a.hinweise?.length ? ` · ${a.hinweise.length} Hinweise` : ''}</div>
+              </div>
+              <Btn size="sm" variant="soft" onClick={() => holen(a)} loading={busy === a.id} disabled={a.status === 'laeuft' || a.status === 'fehler'}><Download size={14} /> ZIP</Btn>
             </li>
           ))}
         </ul>
@@ -77,7 +90,7 @@ export function ProjektarchiveKarte({ className = '' }) {
               <tr key={a.id} className="border-t border-black/[0.06]">
                 <td className="py-1.5 pr-3"><div className="font-medium">{a.project_name}</div><div className="text-[11px] text-[#86868B]">{a.rolle === 'eigentuemer' ? 'eigenes Projekt' : 'Projekt eines Auftraggebers'} · {inhaltText(a.inhalt)}</div></td>
                 <td className="py-1.5 pr-3 whitespace-nowrap">{fmtZeit(a.created_at)}<div className="text-[11px] text-[#86868B]">{a.created_by_name}</div></td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">{fmtGroesse(a.size)}</td>
+                <td className="py-1.5 pr-3 whitespace-nowrap">{a.status === 'laeuft' ? 'läuft …' : a.status === 'fehler' ? 'Fehler' : fmtGroesse(a.size)}</td>
                 <td className="py-1.5 pr-3 whitespace-nowrap">{a.aufbewahren_bis ? fmtDate(fromKey(a.aufbewahren_bis)) : '–'}</td>
                 <td className="py-1.5 whitespace-nowrap text-right"><Btn size="sm" variant="soft" onClick={() => holen(a)} loading={busy === a.id}><Download size={14} /> ZIP</Btn>{isInhaber && <Btn size="sm" variant="ghost" className="ml-1" onClick={() => loeschen(a)} disabled={busy === a.id}><Trash2 size={14} /></Btn>}</td>
               </tr>

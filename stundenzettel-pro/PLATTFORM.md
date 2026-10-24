@@ -94,6 +94,185 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
   E-Mail-Nachweisen belegt; alle Entscheidungen tragen Name und Zeitstempel.
 - Offen: Chat/Nachrichten-Threads, Zahlungsdienst, Hintergrundjob für große Projektakten, Zwei-Faktor-Anmeldung, automatische Verifizierung.
 
+## 1e. Stufe A – Rechte je Büro-Nutzer, Fotoschutz, GU-Freischaltung (24.10.2026)
+
+- Rechte (`auth.py`: `RECHTE`, `RECHTE_BUERO_STANDARD`, `rechte_von`, `hat_recht`, `recht_noetig`, `schreibend_mit_recht`,
+  `firmenabo_noetig(…, recht)`): Inhaber alles; Büro Standard (Projekte, Personal, Lohn, Rechnungen, Plantafel) plus `users.rechte`;
+  Vorarbeiter/Mitarbeiter nichts. Nur der Inhaber setzt `rechte`, nur an Büro-Konten. Betroffene Routen: Projekte anlegen/ändern (projekte),
+  Mitarbeiter einladen/ändern/deaktivieren, fremde Zeiten, Warnungen, laufende Stempelungen, Konten, Protokoll/MiLoG-Export (personal),
+  Lohndaten/Lohnvorbereitung/Lohnexporte (lohn), Rechnungen (rechnungen), Plantafel (plantafel). Kalkulation und Kostensätze sind
+  vorbereitet und standardmäßig nicht vergeben.
+- Fotoschutz: `gemeinsam.foto_fuer_nutzer` entfernt Hochlader und Dateiname für Kollegen ohne Personal-Recht; `GET /api/dokumente/{id}/datei`
+  liefert Projektfotos anderer ohne EXIF; Löschen nur Hochlader oder Personal-Recht.
+- GU-Freischaltung: `abo.gu_freigeschaltet` (Testphase oder `firmen.freischaltungen.gu`), gesetzt über `POST /api/admin/plan` mit `gu`;
+  Auftraggeber-Routen antworten sonst 403 „GU-Freischaltung“.
+- Bestandsaudit mit Befunden A1–A7 und PR-#8-Bewertung: `AUDIT_20261024.md`. Tests `tests/test_stufe_a_20261024.py`.
+
+## 1f. Stufe B – Plantafel, Arbeitszeitabgleich, Erinnerungen (24.10.2026)
+
+- Datenmodell: `einsaetze` {id, firma_id, project_id, user_id, date, start_time, end_time, pause_minutes, planned_minutes, address, note,
+  taetigkeit, kolonne_id, status geplant|abgesagt, version, verlauf[], freigabe, serie_id}, `kolonnen` {id, firma_id, name, mitglieder[]},
+  `erinnerungen` (eindeutige `id` je Einsatz und Version). Nachtschichten über Mitternacht erlaubt (Ende < Beginn).
+- API `/api/einsatzplan`: `GET` (Zeitraum, Filter; Planer bekommen Mitarbeiter, Kolonnen, Projekte, Kapazität; alle bekommen Abwesenheiten,
+  Feiertage, Erinnerungseinstellung), `GET /meine`, `POST` (409 bei Überschneidung oder Abwesenheit, `erzwingen` übersteuert), `PUT /{id}`,
+  `POST /{id}/kopieren`, `DELETE /{id}?grund=` (Absage, nicht Löschung), `POST /{id}/wiederherstellen`, `POST /{id}/rueckgaengig`,
+  Kolonnen CRUD, `GET /abgleich`, `POST /{id}/freigabe`, `POST /{id}/freigabe-zuruecknehmen`, `GET /stundenzettel.pdf`.
+- Abgleich: je Einsatz Status `passt` (± 15 Minuten), `abweichung` (mit Hinweisen: zu früh/spät, Pause, fehlende Pause), `fehlt` (keine
+  Stempelung), `offen` (Zukunft), `freigegeben`. Freigabe schreibt die anrechenbare Zeit in den Zeiteintrag, hebt die Stempelung als
+  `original` auf und vermerkt Name, Zeit und Begründung; ohne Stempelung entsteht ein Eintrag mit Quelle `freigabe`. Zurücknehmen stellt
+  `original` wieder her. Lohn, Exporte (zeiten.csv mit Spalten „Freigegeben“, „Ursprünglich …“) und Projektakte rechnen mit dem Eintrag.
+- Erinnerungen (`erinnerungen.py`): Dienst prüft minütlich; je Firma `firmen.erinnerung = {uhrzeit, email}` (Standard 18:00, E-Mail an);
+  Benachrichtigung und E-Mail für Einsätze des Folgetags, einmal je Einsatz und Version. Planänderungen für heute/morgen melden sofort
+  (`_planaenderung_melden`, Art `einsatz_aenderung`). Im Speicher-Modus läuft der Dienst nur mit `EINSATZ_DIENST=1`.
+- Oberfläche: `PlantafelPage.jsx` (Raster, Drag & Drop, Kopiermodus, Kolonnen, Abgesagte einblenden, Abgleich-Bereich, PDF), `MeinEinsatzplanPage.jsx`
+  (Heute, Morgen, Diese Woche, Nächste Woche, Später, Letzte Tage; Navigation, Einstempeln), Stempeluhr „Mein Tag“ mit den Einsätzen von
+  heute und morgen, Startseite „Plantafel: Mitarbeiter einteilen“. Tests `tests/test_plantafel_20261024.py` (4 Tests).
+- Offen: Serien (`serie_id` vorbereitet), Schichtvorlagen, Kapazitätsplanung über Wochenstunden, Push-Benachrichtigung.
+
+## 1g. Stufe C – Kundenangebote, Auftrag, Kalkulation (24.10.2026)
+
+- Sammlungen `kundenangebote` (getrennt von den GU-Bieterangeboten in `angebote`): {id, firma_id, nummer, jahr, seq, version, vorgaenger_id, ersetzt_durch,
+  status anfrage|entwurf|gesendet|angenommen|abgelehnt|zurueckgezogen|abgelaufen|ersetzt, titel, customer_id, kunde (Momentaufnahme), project_id,
+  datum, gueltig_bis, anfrage, einleitung, schluss, zahlungsbedingungen, positionen[], zuschlaege[], rabatt_prozent, reverse_charge, summen, token,
+  pdf_pfad, versand[], annahme, ablehnung, auftrag, verlauf[], intern}; `angebotsvorlagen`; Zähler `firmen.angebotszaehler.{jahr}`.
+- Positionsstruktur (`angebote.py`, auch für Rechnungen/Aufmaß gedacht): {id, art titel|leistung|stunden|material|pauschal|text, text, beschreibung, menge,
+  einheit, einzelpreis, rabatt_prozent, alternativ, eventual, leistung_id, kalkulation}. `nummerieren()` (1, 1.1 …), `summen()` (Positionen → Zuschläge →
+  Rabatt → USt), `steuer_bestimmen()` (S/E/AE), `kalkulation_position()`/`kalkulation_angebot()` (Selbstkosten, vk_vorschlag, gewinn, aufschlag_prozent,
+  marge_prozent, deckungsbeitrag, stundenverrechnungssatz, vollstaendig, hinweise), `oeffentlich()` (Kundensicht ohne Kalkulation/Verlauf).
+- API `/api/kundenangebote`: Liste (status, project_id, customer_id, alle), POST (auch `status: anfrage`, `vorlage_id`, `kunde_frei`), GET/PUT/DELETE (nur
+  anfrage/entwurf), `/kopieren`, `/als-vorlage`, `/angebot.pdf`, `/senden` (an, nachricht, ohne_email → Snapshot unter `DATA_DIR/angebote/<firma>/`,
+  Token, E-Mail mit Anhang), `/version`, `/annahme`, `/ablehnen`, `/zurueckziehen`, `/auftrag` (project_id oder neues Projekt: `projects.auftrag`,
+  `abrechnungsart_projekt`, `pauschale_netto`), `/kalkulation` GET/PUT (Recht kalkulation, auch nach dem Senden), `/kalkulation/uebernehmen`;
+  Vorlagen `/api/kundenangebote/vorlagen`. Öffentlich ohne Anmeldung: `GET /api/oeffentlich/angebot/{token}`, `…/angebot.pdf`, `POST …/antwort`.
+- Rechte: neues Recht `angebote` (Standard für Büro an); `kalkulation` für die interne Kalkulation; `kostensaetze` für `firmen.kalkulation`
+  (`firma_oeffentlich` blendet das Feld sonst aus, `PUT /api/firma` lehnt ab). E-Mail-Ausgang kann Anhänge (`email_ausgang.anhaenge`, Dateien unter
+  `DATA_DIR/email_anhaenge/<id>/`). Projektakte: `06_Angebote/` (PDF je Version, angebote.csv, auftrag.json). Startseite: Kachel „Offene Angebote“
+  und offene Punkte (Anfragen, bald ablaufende Angebote, Aufträge anlegen).
+- Oberfläche: `AngebotePage` (Liste, Filter, Neu-Dialog mit Kunde/Vorlage/Projekt oder nur Anfrage, Vorlagenverwaltung), `AngebotPage` (Editor,
+  Summen live, Senden-/Annahme-/Auftragsdialoge, Versionen, Verlauf), `components/angebot/{PositionenEditor,KalkulationPanel,AngeboteEinstellungenKarte,AuftragTab}`,
+  `AngebotOeffentlichPage` (`/angebot/:token`), `lib/angebot.js` (Summenrechnung wie der Server). Tests `tests/test_angebote_20261024.py` (3 Tests).
+- Offen: Aufmaß-Mengen in Positionen, Artikelstamm statt freier Materialpositionen (Stufe D/F), Rechnung aus dem Auftrag (Stufe E), Unterschrift
+  des Kunden auf dem Antwortlink, Erinnerung zum Nachfassen per E-Mail.
+
+## 1h. Stufe D – Artikel, Material, Eingangsrechnungen, Nachkalkulation (24.10.2026)
+
+- Sammlungen: `artikel` {id, firma_id, nummer (eindeutig je Firma), name, beschreibung, einheit, einkaufspreis, verkaufspreis, hersteller, lieferant, kategorie,
+  steuer_satz, aktiv, quelle manuell|csv}, `materialverbrauch` {id, firma_id, project_id, user_id, user_name, date, artikel_id, artikel_nummer, bezeichnung, menge,
+  einheit, einkaufspreis (Momentaufnahme), verkaufspreis, kosten, note, quelle, status erfasst|geprueft, geprueft_von/at}, `eingangsrechnungen` {id, firma_id,
+  lieferant, lieferant_ustid, rechnungsnummer, rechnungsdatum, faellig_am, netto, ust, brutto, zuordnungen[{project_id, projekt_name, betrag_netto, kostenart}],
+  kostenart, notiz, dokument_id, status erfasst|geprueft|bezahlt|storniert, bezahlt_am, zahlungsart, dublette, dublette_hinweis, verlauf[]}; Belege als
+  `documents` mit scope `eingangsrechnung` (Zugriff nur mit Recht `rechnungen`).
+- `material.py`: `csv_lesen`/`spalten_zuordnen`/`artikel_aus_csv` (Synonyme für Spaltennamen, `zahl()` für Dezimalkomma), `erechnung_auslesen` (CII-XML →
+  Vorschlag), `zugferd_xml_aus_pdf` (pikepdf-Anhang), `dublette_schluessel`, `kostensatz_mitarbeiter` (Stundenlohn × (1 + Lohnnebenkosten) | Monatsgehalt ÷
+  (Wochenstunden × 4,33) | Firmensatz | fehlt), `nachkalkulation(firma, projekt)`.
+- API: `/api/artikel` (GET mit q/kategorie/aktiv, POST, PUT, DELETE → deaktiviert bei Verwendung, `/auswahl` für Mitarbeiter ohne Preise, `/import` mit
+  `vorschau=1`), `/api/projekte/{id}/material` (GET/POST), `/api/material/{id}` (PUT/DELETE), `/api/material/{id}/pruefen` (Recht kalkulation; Preis setzen
+  braucht kostensaetze), `/api/eingangsrechnungen` (GET mit status/project_id, POST mit `erzwingen` bei Dublette, `/datei` Upload mit Vorschlag, GET/PUT/DELETE
+  `{id}`, `/pruefen`, `/bezahlt`, `/storno`), `/api/projekte/{id}/nachkalkulation`, `/api/nachkalkulation` (Übersicht mit `warnung`). Startseite:
+  `kostenabweichungen`, offene Punkte `eingangsrechnungen_pruefen`, `eingangsrechnungen_faellig`, `material_pruefen`. Projektakte: `07_Material/`,
+  `08_Eingangsrechnungen/` (CSV + Belege), `09_Nachkalkulation/nachkalkulation.json`.
+- Kostenmodell: `firmen.kalkulation.lohnnebenkosten_prozent` (neu, Standard 0 – bewusst nicht geraten). Geplante Zeit (Angebotskalkulation, Plantafel) und
+  tatsächliche Zeit (gebucht, davon freigegeben) werden nie vermischt; die Ist-Personalkosten rechnen mit allen gebuchten Stunden und benennen die ungeprüften.
+- Oberfläche: `ArtikelPage` (Suche, Dialog, CSV-Import mit Vorschau), `EingangsrechnungenPage` (Liste, Dialog mit Upload/Vorschlag/Aufteilung/Aktionen,
+  `?id=` öffnet direkt), `NachkalkulationPage` (Übersicht, aufklappbar), `components/material/{MaterialTab,NachkalkulationTab}` als Projekt-Reiter,
+  Angebotspositionen „Aus Artikel übernehmen“. Tests `tests/test_material_20261024.py` (3 Tests).
+- Offen: Lager (Bestände, Ein-/Ausgang, Inventur, Reservierung), DATANORM-Import (Stufe F), Positionen der Eingangsrechnung einzeln erfassen, OCR für
+  Bild-/PDF-Belege ohne E-Rechnung (Stufe H, Feature-Flag), Teilzahlungen (Stufe E).
+
+## 1i. Stufe E – Rechnungsprozesse (24.10.2026)
+
+- Alles in `invoices` mit `art` monat|pauschal|abschlag|schluss|storno|gutschrift; Nummern über `firmen.rechnungszaehler` wie bisher. Nicht-Monatsrechnungen
+  tragen `month = -seq` (der eindeutige Index Firma/Projekt/Jahr/Monat bleibt), ihre Zeilen liegen in `extras` (text, quantity, unit, unit_price, amount),
+  die PDF/XML schon kennen. Neue Felder: `faellig_am` (beim Festschreiben gesetzt), `zahlungen[]`, `bezahlt_betrag`, `mahnstufe`, `mahnungen[]`,
+  `versand[]`, `abschlag_nr`, `kumulativ`, `leistungsstand_prozent`, `vorherige[]`, `abschlaege_netto`, `storno_von`, `storno_id`/`storno_nummer`,
+  `leistung_von/bis`, `rechnungstext`, `auftrag_nummer`. Status zusätzlich `teilbezahlt` (aus den Zahlungen abgeleitet).
+- `rechnungslauf.py`: `zeilen_summen` (Netto/USt/Brutto freier Zeilen, § 19/§ 13b), `auftragsbasis` (Auftragswert + freigegebene Nachträge),
+  `abschlag_zeilen` (kumulativ: Leistungsstand × Basis − gestellte Abschläge; pauschal: Betrag), `schluss_zeilen` (Auftragspositionen + Nachträge −
+  Abschläge, informativ „offen aus Abschlägen“), `storno_zeilen` (Gegenbuchung), `zahlungsstand`, `faellig_am`, `mahn_regeln`/`mahn_vorschlag`
+  (Stufe, Frist, jetzt fällig), `mahn_text`, `mahn_gebuehr`. `erechnung.rechnungsdaten` kennt `art`, `art_name`, `typecode`, `vorherige`;
+  `cii_xml` schreibt den Typcode und `InvoiceReferencedDocument`; `rechnung_pdf` überschreibt Titel, Betragszeile und Zahlungssatz je Art.
+- API (`routes/rechnungslauf.py`): `GET /api/projekte/{id}/abrechnung`, `POST /api/rechnungen/auftrag` (art pauschal|abschlag|schluss,
+  `leistungsstand_prozent` oder `betrag_netto`, `nur_pruefen` für die Vorschau; 409 bei vorhandener Schlussrechnung, Abschlagsarten werden nicht
+  gemischt), `POST /api/rechnungen/{id}/storno` (nur ausgestellte, nie Storno vom Storno), `POST /api/rechnungen/gutschrift`,
+  `POST/DELETE /api/rechnungen/{id}/zahlungen[/{zid}]`, `POST /api/rechnungen/{id}/senden`, `GET /api/mahnwesen`, `POST /api/rechnungen/{id}/mahnung`
+  (stufe = nächste Stufe, `erzwingen` für die Frist, `per_email`, `gebuehr`, `text`), `GET /api/rechnungen/{id}/mahnung/{stufe}.pdf`. Bestehend
+  angepasst: Liste liefert `art_name`, `status_name`, `bezahlt_betrag`, `offen_betrag`, `mahnstufe`; `PUT /{id}` Status bezahlt legt die Restzahlung an;
+  `GET /{id}/daten` liefert für Nicht-Monatsrechnungen `server_pdf: true`. Firmenregeln `firmen.mahnwesen` (FirmaIn-Validator). Mail-Arten
+  `rechnung`, `mahnung`; Mahn-PDFs unter `DATA_DIR/mahnungen/<firma>/`.
+- Oberfläche: `RechnungenPage` (Art-Badges, vier Statuskacheln, Server-PDF für neue Arten, Zahlungen, Senden, formaler Storno, Gutschrift),
+  `components/rechnungen/{RechnungDialoge,AbrechnungTab}` (Projekt-Reiter „Abrechnung“ mit Abschlag-Dialog und Vorschau), `MahnwesenPage` mit Regeln.
+  Tests `tests/test_rechnungslauf_20261024.py` (3 Tests).
+- Bewusst nicht: automatische Mahnläufe, Verzugszinsen, Inkasso-Übergabe, Skonto-Automatik, Sammelrechnungen über mehrere Projekte, Zahlungsabgleich
+  per Kontoauszug (CAMT/MT940) – offen für spätere Stufen.
+
+## 1j. Stufe F – Aufmaß, GAEB, DATANORM, Tabellenimporte (24.10.2026)
+
+- `aufmass.py`: Tokenizer + rekursiver Abstieg (`berechnen(formel)`), erlaubt Zahlen mit Komma/Punkt, + − * / x × ( ), Vorzeichen, Teilmengen mit „;“
+  oder Zeilenumbruch; kein `eval`, Ergebnis auf drei Stellen gerundet, unplausible Ergebnisse abgewiesen. `TYPEN`, `summen_je_position`.
+- Sammlung `aufmasse` {id, firma_id, project_id, bezeichnung, raum, typ, formel, menge, einheit, position {quelle angebot|auftrag, nr, text, einheit, …},
+  messdatum, note, user_id, user_name, status erfasst|geprueft, geprueft_von/at, fotos[]} – Fotos als `documents` mit scope `aufmass` (Zugriff über das Projekt).
+- API (`routes/aufmass.py`): `POST /api/aufmass/formel` (Vorschau), `GET/POST /api/projekte/{id}/aufmasse` (Positionen des Projekts aus `projects.auftrag.positionen`,
+  sonst aus dem jüngsten Kundenangebot), `PUT/DELETE /api/aufmasse/{id}` (eigene erfasste oder Büro; geänderte Menge setzt die Prüfung zurück),
+  `POST /api/aufmasse/{id}/fotos`, `POST /api/aufmasse/{id}/pruefen` (Büro), `POST /api/projekte/{id}/aufmasse/uebernehmen` (ziel angebot|auftrag,
+  nur geprüfte Mengen, nur gleiche Einheit, Pauschalauftrag nur mit `erzwingen`; Auftrag behält `netto_vor_aufmass`), `GET /api/projekte/{id}/aufmass.pdf`.
+- `gaeb.py`: `lesen()` (namespace-tolerant, BoQCtgy rekursiv, Item mit Qty/QU/UP, OutlineText/DetailTxt, Hinweise zu übersprungenen Elementen),
+  `schreiben(positionen, phase, info)` (Baum aus Ordnungszahlen, X83 ohne/X84 mit UP, IT, Totals). `importe.py`: `positionen_aus_datei` (CSV/XLSX/GAEB,
+  Spaltensynonyme, feste Reihenfolge ohne Kopfzeile), `artikel_aus_datanorm`, `artikel_aus_xlsx`; `material.artikel_aus_datei` verteilt. `openpyxl` neu in requirements.
+- Routen: Ausschreibung `POST …/positionen/gaeb` (echt, `vorschau`), `POST …/positionen/datei`, `GET …/lv.x83`; Bieter `GET /api/angebote/{id}/angebot.x84`;
+  Kundenangebot `POST /api/kundenangebote/{id}/positionen/datei` (modus ersetzen|anhaengen, nur Entwurf; Ordnungszahl in `import_nr`),
+  `GET /api/kundenangebote/{id}/angebot.x84`; Artikel `POST /api/artikel/import` erkennt CSV/XLSX/DATANORM.
+- Oberfläche: `components/aufmass/AufmassTab` (Projekt-Reiter „Aufmaß“), `components/angebot/PositionenImportDialog` (Angebot und Ausschreibung),
+  Knöpfe „Positionen aus Datei“/„GAEB X84“ im Angebot, „Datei“/„GAEB X83“ im Leistungsverzeichnis, Artikelimport mit Excel/DATANORM.
+  Tests `tests/test_aufmass_gaeb_20261024.py` (3 Tests); `test_ausschreibung::test_04` erwartet seit Stufe F die Klartext-Ablehnung leerer GAEB-Dateien.
+- Grenzen (dokumentiert): GAEB-Teilmenge (keine Zuschlags-/Bedarfs-/Alternativkennzeichen, keine Textergänzungen, keine XSD-Validierung offline),
+  DATANORM ohne Dimensions-/Rabattgruppensätze, Aufmaß ohne Zeichnungsbezug/Raumbuch.
+
+## 1k. Stufe G – Nachrichten, Berichtsvorlagen/Regieberichte, Projektakte asynchron, Feature-Flags (24.10.2026)
+
+- `features.py`: `STANDARD` (chat, berichtsvorlagen, projektakte_async = nicht im Speicher-Modus, ki aus, lager aus), Umgebung `FEATURE_<NAME>`,
+  `feature_noetig(name)` als Router-Dependency (404 mit Klartext), `GET /api/features` (öffentlich, ohne Geheimnisse). Oberfläche: `useAuth().feature(name)`,
+  Menüeinträge mit `feature:` werden gefiltert; unbekannt = anzeigen (älterer Server).
+- `nachrichten.py`: Sammlungen `chats` {id, art projekt_intern|projekt_gu|bieter|kontakt|aufgabe, project_id, ausschreibung_id, bieter_firma_id, aufgabe_id,
+  firma_id, firma_ids[], titel, letzte_nachricht_at, letzter_text, nachrichten_anzahl} und `nachrichten` {chat_id, firma_id, user_id, text, anhaenge[], gelesen_von[],
+  angekuendigt_at}. `chat_zugang(user, chat)` prüft je Art über `projekt_sichtbar`/`chat_intern`, `plattform.zugang`+`partner_leitung`, `ausschreibung_zugang`
+  (+ Bieterfirma = eigene), Verzeichnis (Kontakt, nur Büro) und `aufgabe_laden`; jeder Fehler wird zu 404 (kein Rückschluss auf fremde Chats).
+  `chat_oeffnen` findet oder legt an (Leitung eröffnet Bieterchats nur mit eingeladenen/bietenden Firmen). `meine_chats` prüft jeden Kandidaten einzeln.
+  `teilnehmer(chat)` liefert Empfängergruppen (Projektleitung je Firma wie `projekt_leitung`, zugeteilte Mitarbeiter bei Aufgaben) für In-App-Mitteilungen
+  (`benachrichtigen`, art `nachricht`) und für die E-Mail-Ankündigung. `einmal_pruefen(jetzt)`: ungelesene, noch nicht angekündigte Nachrichten älter als
+  `WARTEZEIT_MINUTEN` (2) je Chat und Person gesammelt per E-Mail (`mail.senden`, art `nachricht`, Link `/nachrichten?chat=…`), danach `angekuendigt_at`;
+  `dienst()` läuft im Lebenszyklus (nicht im Speicher-Modus, dort `NACHRICHTEN_DIENST=1`). Routen (`routes/nachrichten.py`, alle hinter `chat`):
+  `GET /api/chats`, `GET /api/chats/ungelesen`, `POST /api/chats/oeffnen`, `GET /api/chats/{id}`, `POST /api/chats/{id}/nachrichten`, `POST /api/chats/{id}/anhaenge`
+  (Dokument scope `chat`, Zugriff über `_dokument_zugriff` → `chat_laden`), `PUT /api/projekte/{id}/chat` (Büro: `chat_intern`).
+- Berichte (`routes/baustelle.py`): `TagesberichtIn` += art, vorlage_id, auftraggeber_name, regie_stunden/material/geraete (Untermodelle); `tagesbericht-vorschlag`
+  liefert `arbeitsanweisungen` (Auftragspositionen des lokalen Projekts + Aufgaben mit Beschreibung) und `materialliste` (Materialbuchungen des Tages, eingetroffene
+  Lieferungen). `POST/DELETE /api/tagesberichte/{id}/unterschrift` (PNG-Data-URL, Verlaufsschritte `unterschrieben`/`unterschrift_entfernt`, Entfernen nur Büro der
+  verfassenden Firma mit `grund`); unterschriebene Berichte sind nicht änderbar (`bearbeiten` false). Vorlagen `berichtsvorlagen` {firma_id, name, art, felder}
+  (`GET/POST /api/berichtsvorlagen`, `PUT/DELETE /{id}`, Büro, hinter `berichtsvorlagen`; Felder werden mit `TagesberichtIn` geprüft). `pdfs.tagesbericht_pdf`
+  titelt nach Art, druckt Regietabellen und die Unterschrift.
+- Projektakte (`projektakte.py`): `_Zip.manifest` (Name, Bytes, SHA-256 je Datei); `erstellen(user, projekt, hintergrund)` legt den Datensatz mit Status `laeuft`
+  an und baut synchron oder als `asyncio.Task` (`LAUFEND`), `_bauen` setzt `fortschritt`, schreibt `12_Nachrichten/` (`_nachrichten`), `00_LIESMICH.txt`,
+  `00_Index.pdf` (`pdfs.projektakte_index_pdf`) und zuletzt `manifest.json`; Fehler landen als Status `fehler` + Text im Datensatz (und im Serverlog).
+  Routen: `GET /api/projektakten/{id}` (Stand; nach der `.zip`-Route registriert), Download nur bei `fertig` (409 sonst). Oberfläche fragt alle 1,5 s nach.
+- Dashboard: Punkt `nachrichten` (ungelesen) für alle Rollen, wenn `chat` an. Oberfläche: `pages/NachrichtenPage`, `components/nachrichten/{ChatPanel,ChatKnopf,
+  ProjektChatTab,BieterChats,VerzeichnisSuche}`, Projekt-Reiter „Chat“, Ausschreibung „Nachrichten“, Aufgabe „Chat zur Aufgabe“, Zusammenarbeit „Firmen finden“,
+  Firma „Module“. Tests `tests/test_stufe_g_20261024.py` (4 Tests).
+- Grenzen (dokumentiert): kein Push/WebSocket (Nachladen alle 20 s im Chat, 60 s Zähler), keine Lesebestätigung je Person in der Oberfläche, keine Suche in Chats;
+  Projektakten im Hintergrund laufen im Serverprozess (bei Neustart bleibt Status `laeuft` stehen – Akte neu erstellen).
+
+## 1l. Stufe H – KI-Entwürfe (optional, Flag `ki` aus) (24.10.2026)
+
+- `ki.py`: `eingerichtet()` (Schlüssel vorhanden, Paket installiert, Modell – ohne den Schlüssel zu zeigen), `anfragen(anweisung, text)` (Anthropic-SDK,
+  `client.beta.messages.create` mit `fallbacks="default"` und Beta `server-side-fallback-2026-07-01`, Effort medium, 120 s; Fehler des Anbieters → 503 mit Klartext,
+  Ablehnung → 422), `angebot_entwurf(text, firma, artikel, leistungen)` und `beleg_vorschlag(text)` – beide parsen das JSON der Antwort tolerant (Code-Zaun,
+  Dezimalkomma), begrenzen Felder, markieren Positionen ohne Preis als `unsicher`, prüfen Netto + USt = Brutto und liefern `hinweise`. Tests ersetzen `anfragen`.
+- `routes/ki.py` (Präfix `/api/ki`, Router-Dependency `feature_noetig("ki")`): `GET /status`, `POST /angebot-entwurf` (Recht `angebote`), `POST /beleg-vorschlag`
+  (Recht `rechnungen`); Body `KiTextIn` {text ≤ 20 000 Zeichen}. Keine Route schreibt in die Datenbank; Protokoll `ki.angebot_entwurf`/`ki.beleg_vorschlag` nur mit
+  Zeichen, Positionen, Modell, Dauer.
+- Oberfläche: `components/ki/KiEntwurfDialog` (nur mit `feature('ki')`): Text → „Entwurf erzeugen“ → Tabelle/Felder mit Hinweisen → „übernehmen“ hängt Positionen an den
+  Angebotsentwurf (Preis 0 bei unsicher) bzw. füllt das Eingangsrechnungsformular vor; beides bleibt ungespeichert, bis der Nutzer regulär speichert.
+  Tests `tests/test_stufe_h_20261024.py` (2 Tests, ohne Netz).
+- Grenzen: kein Dokument-Upload an die KI (nur Text), keine Lernschleife, keine automatische Verbuchung; Kosten/Datenschutz beim Betreiber (Anbieter-Vertrag, AVV).
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:
@@ -277,7 +456,7 @@ Vergabe zurückziehen, CSV-Import, GAEB 501, Dokumentversionen, Speichergrenze 4
 
 - GAEB (X83/X84, GAEB 90): nur Erkennung und ehrliche Ablehnung (`gaeb.py`); Austausch des LV über CSV.
 - Umkreissuche mit Geokoordinaten (Projekte können lat/lon tragen; der Marktplatz filtert nach Ortstext); Karte nur als OpenStreetMap-Link.
-- Benachrichtigungen nur In-App; „bald endende Frist“ ohne Zeitplaner; keine E-Mail/Push.
+- Benachrichtigungen In-App und (für Einladungen, Nachweise, Einsatz-Erinnerungen) per E-Mail; „bald endende Frist“ ohne Zeitplaner; kein Push.
 - Tabellenimport nur CSV (kein XLSX); Angebots-PDF wird vom Bieter hochgeladen, nicht erzeugt.
 - Vergaberecht für öffentliche Auftraggeber nicht abgedeckt (siehe 8.3).
 

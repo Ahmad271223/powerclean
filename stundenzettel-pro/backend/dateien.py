@@ -17,6 +17,7 @@ ERLAUBT = {
     "image/heic": ".heic", "text/plain": ".txt", "application/msword": ".doc",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
     "application/vnd.ms-excel": ".xls", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/xml": ".xml", "text/xml": ".xml", "text/csv": ".csv",
 }
 
 KATEGORIEN_PERSONAL = [

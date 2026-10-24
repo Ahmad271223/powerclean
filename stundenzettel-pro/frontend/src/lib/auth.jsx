@@ -10,6 +10,9 @@ const sessionMerken = (daten) => { try { if (daten) localStorage.setItem(SESSION
 
 export function AuthProvider({ children }) {
   const [state, setState] = useState({ ready: false, user: null, firma: null, plan: null, offline: false });
+  // Feature-Flags des Servers (Stufe G): unbekannt = anzeigen, damit ein älterer Server nichts versteckt
+  const [features, setFeatures] = useState({ flags: null, beschreibung: {} });
+  useEffect(() => { api.get('/api/features').then((r) => setFeatures({ flags: r.features || {}, beschreibung: r.beschreibung || {} })).catch(() => setFeatures({ flags: {}, beschreibung: {} })); }, []);
 
   const uebernehmen = useCallback((daten) => {
     if (daten?.token) setToken(daten.token);
@@ -52,6 +55,11 @@ export function AuthProvider({ children }) {
     isBuero: ['buero', 'inhaber'].includes(state.user?.role),
     isInhaber: state.user?.role === 'inhaber',
     isVorarbeiter: state.user?.role === 'vorarbeiter',
+    rechte: state.user?.rechte || {},
+    kann: (recht) => state.user?.role === 'inhaber' || !!state.user?.rechte?.[recht],
+    features: features.flags || {},
+    featureBeschreibung: features.beschreibung,
+    feature: (name) => (features.flags ? features.flags[name] !== false : true),
     canWrite: state.plan ? state.plan.schreiben !== false : true,
     login: async (email, password) => uebernehmen(await api.post('/api/auth/login', { email, password })),
     register: async (daten) => uebernehmen(await api.post('/api/auth/registrieren', daten)),
@@ -59,9 +67,11 @@ export function AuthProvider({ children }) {
     logout,
     refresh,
     setFirma: (firma, plan) => setState((s) => { const n = { ...s, firma: firma || s.firma, plan: plan || s.plan }; sessionMerken(n); return n; }),
-  }), [state, uebernehmen, logout, refresh]);
+  }), [state, features, uebernehmen, logout, refresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export const useAuth = () => useContext(AuthContext);
+// Während eines Hot-Reloads (Vite HMR) kann der Kontext kurz fehlen – dann lieber „lädt“ als ein Absturz der Seite.
+const AUTH_LEER = { ready: false, user: null, firma: null, plan: null, rechte: {}, kann: () => false, features: {}, featureBeschreibung: {}, feature: () => true, isBuero: false, isInhaber: false, isVorarbeiter: false, refresh: async () => {}, setFirma: () => {}, logout: () => {} };
+export const useAuth = () => useContext(AuthContext) || AUTH_LEER;

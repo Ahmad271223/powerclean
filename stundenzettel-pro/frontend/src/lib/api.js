@@ -5,6 +5,7 @@
 import { downloadBlob } from './utils';
 
 const BASE = import.meta.env.VITE_API_URL || '';
+export const API_BASE = BASE;   // für öffentliche Links ohne Anmeldung (Angebots-PDF)
 const TOKEN_KEY = 'szpro-token';
 
 let token = null;

@@ -63,6 +63,13 @@ ok(c.post("/api/rechnungen/anlegen", json={"project_id": p1["id"], "year": 2026,
 ok(c.post("/api/rechnungen/anlegen", json={"project_id": p2["id"], "year": 2026, "month": 10}, headers=H))
 ok(c.post(f"/api/projekte/{p1['id']}/checklisten", json={"name": "Unterhaltsreinigung EG", "items": [{"text": "Böden wischen"}, {"text": "Mülleimer leeren"}, {"text": "Sanitär reinigen"}]}, headers=H))
 ok(c.post(f"/api/projekte/{p1['id']}/kommentare", json={"text": "Schlüssel liegt beim Hausmeister (Herr Kurt)."}, headers=HM))
+# Plantafel: Kolonne und Einsätze für Mia (heute bis übermorgen plus letzte zwei Werktage für den Abgleich)
+_heute = __import__("datetime").date.today()
+_tage = [(_heute + __import__("datetime").timedelta(days=i)).isoformat() for i in range(-3, 3) if (_heute + __import__("datetime").timedelta(days=i)).weekday() < 5]
+kol = ok(c.post("/api/einsatzplan/kolonnen", json={"name": "Team Sparkasse", "user_ids": [mia_id], "vorarbeiter_id": mia_id, "farbe": "#1D4ED8"}, headers=H))["kolonne"]
+ok(c.post("/api/einsatzplan", json={"project_id": p1["id"], "user_ids": [mia_id], "dates": _tage, "start_time": "06:00", "end_time": "09:30", "pause_minutes": 15,
+                                    "taetigkeit": "Unterhaltsreinigung EG und Treppenhaus", "note": "Schlüssel beim Hausmeister, Treffpunkt Hof", "kolonne_id": kol["id"]}, headers=H))
+ok(c.post("/api/einsatzplan", json={"project_id": p2["id"], "user_ids": [mia_id], "dates": [_tage[-1]], "start_time": "10:00", "end_time": "12:00", "pause_minutes": 0, "taetigkeit": "Glasreinigung"}, headers=H))
 print(f"Testdaten angelegt unter {BASIS}. Anmelden als Inhaber ({CHEF_EMAIL}) oder Mitarbeiterin ({MIA_EMAIL}), Passwörter stehen in dieser Datei.")
 
 # ---- Plattform: zweite Firma im Verzeichnis, Einladung zum Sparkassen-Projekt, Aufgabe ----
@@ -126,4 +133,79 @@ if r.status_code == 200:
     ok(c.post("/api/nachtraege/" + n["id"] + "/einreichen", headers=HE))
     ok(c.post("/api/projekte/" + p1["id"] + "/abnahmen", json={"art": "teilabnahme", "gewerk": "Elektro", "datum": meilenstein, "bemerkung": "Foyer ist fertig, bitte Teilabnahme"}, headers=HE))
     c.post("/api/admin/verifizieren", json={"email": "chef@elektro-mustermann.de", "verifiziert": True, "hinweis": "Handelsregister geprüft (Demo)"}, headers={"X-Admin-Token": "dev-betreiber"})
+    # Stufe C: Kundenangebote – Vorlage, gesendetes Angebot mit interner Kalkulation (aus Vorlage), neue Kundenanfrage
+    ok(c.put("/api/firma", json={"kalkulation": {"stundensatz": 22, "gemeinkosten_prozent": 12, "risiko_prozent": 2, "gewinn_prozent": 12}}, headers=H))
+    vorlage = ok(c.post("/api/kundenangebote/vorlagen", json={"name": "Unterhaltsreinigung Büro", "titel": "Unterhaltsreinigung", "gueltig_tage": 30, "positionen": [
+        {"art": "titel", "text": "Regelmäßige Reinigung"},
+        {"art": "stunden", "text": "Unterhaltsreinigung Büroflächen", "beschreibung": "Mo–Fr, Böden, Sanitär, Teeküchen, Abfallentsorgung", "menge": 40, "einheit": "Std.", "einzelpreis": 32.5},
+        {"art": "material", "text": "Reinigungsmittel und Verbrauchsmaterial", "menge": 1, "einheit": "Psch.", "einzelpreis": 45},
+        {"art": "titel", "text": "Zusatzleistungen"},
+        {"art": "pauschal", "text": "Grundreinigung bei Vertragsbeginn", "beschreibung": "einmalig, inkl. Maschinenreinigung der Hartböden", "menge": 1, "einheit": "Psch.", "einzelpreis": 480},
+        {"art": "leistung", "text": "Glasreinigung innen und außen", "menge": 120, "einheit": "m²", "einzelpreis": 2.2, "alternativ": True}]}, headers=H))["vorlage"]
+    ag = ok(c.post("/api/kundenangebote", json={"vorlage_id": vorlage["id"], "customer_id": kunde["id"], "project_id": p1["id"], "titel": "Unterhaltsreinigung Hauptstelle"}, headers=H))["angebot"]
+    kalk = {}
+    for p in ag["positionen"]:
+        if p["art"] == "stunden":
+            kalk[p["id"]] = {"stunden": 40}
+        elif p["art"] == "material":
+            kalk[p["id"]] = {"material_ek": 28}
+        elif p["art"] == "pauschal":
+            kalk[p["id"]] = {"stunden": 10, "material_ek": 60, "geraete": 40}
+        elif p["art"] == "leistung":
+            kalk[p["id"]] = {"stunden": 5, "material_ek": 15}
+    ok(c.put("/api/kundenangebote/" + ag["id"] + "/kalkulation", json={"positionen": kalk}, headers=H))
+    ok(c.post("/api/kundenangebote/" + ag["id"] + "/senden", json={"ohne_email": True}, headers=H))
+    # Zweites Angebot (Kopie) ist angenommen und als Auftrag am Sparkassen-Projekt angelegt → Nachkalkulation hat Soll-Werte
+    ag2 = ok(c.post("/api/kundenangebote/" + ag["id"] + "/kopieren", headers=H))["angebot"]
+    ok(c.post("/api/kundenangebote/" + ag2["id"] + "/senden", json={"ohne_email": True}, headers=H))
+    ok(c.post("/api/kundenangebote/" + ag2["id"] + "/annahme", json={"von_name": "Frau Richter", "art": "unterschrift"}, headers=H))
+    ok(c.post("/api/kundenangebote/" + ag2["id"] + "/auftrag", json={"project_id": p1["id"]}, headers=H))
+    ok(c.post("/api/kundenangebote", json={"status": "anfrage", "titel": "Treppenhausreinigung Wohnanlage Nord",
+                                      "kunde_frei": {"name": "Hausverwaltung Nord GmbH", "contact": "Frau Schulz", "email": "schulz@hv-nord.example", "street": "Nordring 5", "zip_code": "12345", "city": "Musterstadt"},
+                                      "anfrage": {"text": "Bitte Angebot für die wöchentliche Treppenhausreinigung: 3 Aufgänge, je 4 Etagen, inkl. Fenster im Treppenhaus.", "kanal": "Telefon"}}, headers=H))
+    # Stufe D: Artikel, Materialbuchung der Mitarbeiterin, Eingangsrechnung mit Aufteilung, Lohnnebenkosten für die Nachkalkulation
+    ok(c.put("/api/firma", json={"kalkulation": {"stundensatz": 22, "gemeinkosten_prozent": 12, "risiko_prozent": 2, "gewinn_prozent": 12, "lohnnebenkosten_prozent": 22}}, headers=H))
+    art = {}
+    for a in ({"nummer": "RM-100", "name": "Allzweckreiniger 10 l", "einheit": "Kanister", "einkaufspreis": 18.9, "verkaufspreis": 29.9, "kategorie": "Reinigungsmittel", "lieferant": "Reinigungsbedarf Nord"},
+              {"nummer": "RM-210", "name": "Glasreiniger 5 l", "einheit": "Kanister", "einkaufspreis": 12.4, "verkaufspreis": 19.9, "kategorie": "Reinigungsmittel", "lieferant": "Reinigungsbedarf Nord"},
+              {"nummer": "VM-050", "name": "Mikrofasertücher 40×40 (10er)", "einheit": "Pack", "einkaufspreis": 6.5, "verkaufspreis": 11.0, "kategorie": "Verbrauchsmaterial"},
+              {"nummer": "MS-300", "name": "Scheuersaugmaschine Miete", "einheit": "Tag", "einkaufspreis": 45.0, "verkaufspreis": 80.0, "kategorie": "Maschinen"}):
+        art[a["nummer"]] = ok(c.post("/api/artikel", json=a, headers=H))["artikel"]
+    ok(c.post("/api/projekte/" + p1["id"] + "/material", json={"artikel_id": art["RM-100"]["id"], "menge": 2, "date": heute}, headers=HM))
+    ok(c.post("/api/projekte/" + p1["id"] + "/material", json={"artikel_id": art["VM-050"]["id"], "menge": 3, "date": heute, "note": "für die Glasflächen"}, headers=HM))
+    beleg_xml = c.post("/api/eingangsrechnungen/datei", files={"datei": ("rechnung-nord.pdf", b"%PDF-1.4\n% Demo-Beleg\n", "application/pdf")}, headers=H).json()
+    ok(c.post("/api/eingangsrechnungen", json={"lieferant": "Reinigungsbedarf Nord GmbH", "rechnungsnummer": "RN-2026-4471", "rechnungsdatum": heute, "faellig_am": frist, "netto": 420.0, "ust": 79.8,
+                                               "zuordnungen": [{"project_id": p1["id"], "betrag_netto": 300.0, "kostenart": "material"}, {"project_id": p2["id"], "betrag_netto": 120.0, "kostenart": "material"}],
+                                               "dokument_id": beleg_xml.get("dokument", {}).get("id"), "notiz": "Monatslieferung Reinigungsmittel"}, headers=H))
+    # Stufe E: kumulativer Abschlag auf den Auftrag der Sparkasse (30 %), teilweise bezahlt
+    ab = ok(c.post("/api/rechnungen/auftrag", json={"project_id": p1["id"], "art": "abschlag", "leistungsstand_prozent": 30, "text": "Abschlag nach Montage der ersten Etage"}, headers=H))["rechnung"]
+    c.get("/api/rechnungen/" + ab["id"] + "/rechnung.pdf", headers=H)   # stellt die Rechnung aus (PDF, kein JSON)
+    ok(c.post("/api/rechnungen/" + ab["id"] + "/zahlungen", json={"betrag": 300.0, "art": "ueberweisung", "notiz": "Teilzahlung"}, headers=H))
+    # Stufe F: Aufmaße der Mitarbeiterin am Sparkassen-Projekt (Fläche, Länge), eines vom Büro geprüft
+    auf = ok(c.post("/api/projekte/" + p1["id"] + "/aufmasse", json={"bezeichnung": "Glasfläche Schalterhalle", "raum": "EG Schalterhalle", "typ": "flaeche", "formel": "3,20 x 2,60; 1,10 x 2,60", "position_nr": "2.1", "messdatum": heute}, headers=HM))["aufmass"]
+    ok(c.post("/api/projekte/" + p1["id"] + "/aufmasse", json={"bezeichnung": "Sockelleisten Flur", "raum": "EG Flur", "typ": "laenge", "formel": "12,4 + 8,75 + 3,1", "messdatum": heute, "note": "ohne Türen"}, headers=HM))
+    ok(c.post("/api/aufmasse/" + auf["id"] + "/pruefen", headers=H))
+    # Stufe G: Projektchat intern (Chef ↔ Mia), Partnerchat mit Elektro Mustermann, Kontaktanfrage, Berichtsvorlage + Regiebericht mit Kundenunterschrift
+    ch = ok(c.post("/api/chats/oeffnen", json={"art": "projekt_intern", "project_id": p1["id"]}, headers=H))["chat"]
+    ok(c.post("/api/chats/" + ch["id"] + "/nachrichten", json={"text": "Bitte morgen zuerst die Glasflächen in der Schalterhalle, danach den Flur."}, headers=H))
+    ok(c.post("/api/chats/" + ch["id"] + "/nachrichten", json={"text": "Alles klar, ich fange um 7 Uhr an. Reicht das Material für die Fenster?"}, headers=HM))
+    gu_chat = ok(c.post("/api/chats/oeffnen", json={"art": "projekt_gu", "project_id": p1["id"]}, headers=H))["chat"]
+    ok(c.post("/api/chats/" + gu_chat["id"] + "/nachrichten", json={"text": "Guten Tag Frau Mustermann, wann kommen die restlichen Panels für das Foyer?"}, headers=H))
+    ok(c.post("/api/chats/" + gu_chat["id"] + "/nachrichten", json={"text": "Die Lieferung ist für Donnerstag 7 Uhr bestätigt."}, headers=HE))
+    kt = ok(c.post("/api/chats/oeffnen", json={"art": "kontakt", "firma_id": el["firma"]["id"]}, headers=H))["chat"]
+    ok(c.post("/api/chats/" + kt["id"] + "/nachrichten", json={"text": "Hätten Sie im November Kapazität für ein weiteres Objekt in Musterstadt?"}, headers=H))
+    vorlage = ok(c.post("/api/berichtsvorlagen", json={"name": "Regiebericht Elektro", "art": "regiebericht", "felder": {"bereich": "Foyer", "taetigkeiten": "Regiearbeiten nach Anweisung der Bauleitung",
+                                                        "regie_geraete": [{"bezeichnung": "Hubarbeitsbühne", "stunden": 4}]}}, headers=HE))["vorlage"]
+    from PIL import Image as _Bild, ImageDraw as _Zeichnen
+    import base64 as _b64, io as _io
+    _u = _Bild.new("RGBA", (400, 140), (255, 255, 255, 0))
+    _Zeichnen.Draw(_u).line([(20, 100), (80, 40), (140, 110), (200, 50), (260, 100), (330, 60), (380, 90)], fill=(20, 20, 60, 255), width=4)
+    _puffer = _io.BytesIO()
+    _u.save(_puffer, "PNG")
+    unterschrift_png = "data:image/png;base64," + _b64.b64encode(_puffer.getvalue()).decode()
+    rb = ok(c.post("/api/projekte/" + p1["id"] + "/tagesberichte", json={"datum": heute, "art": "regiebericht", "vorlage_id": vorlage["id"], "bereich": "Foyer", "firmen": ["Elektro Mustermann GmbH"], "mitarbeiter_anzahl": 2,
+                                                                       "taetigkeiten": "Zusätzliche Leuchten im Windfang montiert (Regie, auf Wunsch der Hausverwaltung)", "auftraggeber_name": "Sparkasse – Herr Berger",
+                                                                       "regie_stunden": [{"name": "Erika Mustermann", "taetigkeit": "Montage", "stunden": 3.5}, {"name": "Milan Monteur", "taetigkeit": "Montage", "stunden": 3.5}],
+                                                                       "regie_material": [{"bezeichnung": "LED-Panel 60×60", "menge": 2, "einheit": "Stück"}], "regie_geraete": vorlage["felder"]["regie_geraete"]}, headers=HE))["bericht"]
+    ok(c.post("/api/tagesberichte/" + rb["id"] + "/unterschrift", json={"signer_name": "Herr Berger (Sparkasse)", "image": unterschrift_png}, headers=HE))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

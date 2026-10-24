@@ -31,20 +31,56 @@ export const fristText = (a) => {
   return `${fmtTag(a.angebotsfrist)} (noch ${a.frist_tage} Tage)`;
 };
 
-/** CSV-Text (Nr;Leistung;Menge;Einheit[;Beschreibung]) in Positionen umwandeln – für die Eingabe im Dialog. */
+/** Excel-/CSV-Zeilen importieren (Semikolon, Tab oder Komma; Anführungszeichen, Dezimalkomma, Kopfzeile; klare Fehler je Zeile). */
 export function csvZuPositionen(text) {
-  const zeilen = (text || '').replace(/^﻿/, '').split(/\r?\n/).filter((z) => z.trim());
-  if (!zeilen.length) return [];
-  const trenner = zeilen[0].includes(';') ? ';' : zeilen[0].includes('\t') ? '\t' : ',';
-  const aus = [];
-  for (const z of zeilen) {
-    const t = z.split(trenner).map((x) => x.trim());
-    if (['nr', 'nr.', 'pos', 'pos.', 'position', 'oz'].includes((t[0] || '').toLowerCase())) continue;
-    if (!t[1]) throw new Error(`Zeile „${z.slice(0, 40)}“: Leistung fehlt`);
-    const mengeText = (t[2] || '0').includes(',') ? (t[2] || '0').replace(/\./g, '').replace(',', '.') : (t[2] || '0');
-    const menge = parseFloat(mengeText);
-    if (Number.isNaN(menge)) throw new Error(`Position ${t[0]}: Menge „${t[2]}“ ist keine Zahl`);
-    aus.push({ nr: t[0], leistung: t[1], menge, einheit: t[3] || 'Stück', beschreibung: t[4] || '' });
+  const source = String(text || '').replace(/^\uFEFF/, '').trim();
+  if (!source) return [];
+  const first = source.split(/\r?\n/, 1)[0];
+  const counts = { ';': 0, '\t': 0, ',': 0 };
+  let quoted = false;
+  for (let i = 0; i < first.length; i += 1) {
+    if (first[i] === '"') {
+      if (quoted && first[i + 1] === '"') { i += 1; continue; }
+      quoted = !quoted;
+    } else if (!quoted && counts[first[i]] !== undefined) counts[first[i]] += 1;
   }
-  return aus;
+  const delim = counts['\t'] ? '\t' : counts[';'] ? ';' : ',';
+  const rows = [];
+  let row = [], cell = '', inside = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === '"') {
+      if (inside && source[i + 1] === '"') { cell += '"'; i += 1; } else inside = !inside;
+    } else if (ch === delim && !inside) {
+      row.push(cell.trim()); cell = '';
+    } else if ((ch === '\n' || ch === '\r') && !inside) {
+      if (ch === '\r' && source[i + 1] === '\n') i += 1;
+      row.push(cell.trim()); cell = '';
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  if (inside) throw new Error('CSV: Ein Anführungszeichen wurde nicht geschlossen.');
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  const normalized = (v) => String(v || '').trim().toLowerCase().replace(/[.\s_-]/g, '');
+  const headers = new Set(['nr', 'pos', 'position', 'positionsnummer', 'oz', 'ordnungszahl']);
+  const parseMenge = (value) => {
+    const raw = String(value ?? '').trim().replace(/\s/g, '');
+    if (!raw) return NaN;
+    return Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw);
+  };
+  const out = [];
+  const numbers = new Set();
+  rows.forEach((cols, rowIndex) => {
+    if (headers.has(normalized(cols[0]))) return;
+    if (cols.length < 3 || !String(cols[0] || '').trim() || !String(cols[1] || '').trim()) throw new Error(`CSV-Zeile ${rowIndex + 1}: Bitte Nr;Leistung;Menge;Einheit angeben.`);
+    const nr = String(cols[0]).trim();
+    const menge = parseMenge(cols[2]);
+    if (!Number.isFinite(menge) || menge < 0) throw new Error(`CSV-Zeile ${rowIndex + 1}: Ungültige Menge „${cols[2]}“.`);
+    if (numbers.has(nr)) throw new Error(`CSV-Zeile ${rowIndex + 1}: Position ${nr} kommt doppelt vor.`);
+    numbers.add(nr);
+    out.push({ nr, leistung: String(cols[1]).trim(), menge, einheit: cols[3] || 'Stück', beschreibung: cols.slice(4).join(delim) || '' });
+  });
+  return out;
 }

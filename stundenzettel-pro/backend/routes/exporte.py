@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, Response
 import config
 from csvsicher import zeile as csv_zeile
 
-from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig
+from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, nutzer_oeffentlich, recht_noetig, rolle_noetig
 from db import db
 from gemeinsam import FIRMA_DEFAULTS, firma_oeffentlich, nutzernamen
 from protokoll import protokollieren
@@ -66,7 +66,7 @@ def _monatsbereich(jahr: int, monat: int) -> tuple[str, str]:
 
 
 @router.get("/lohn.csv")
-async def lohn(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def lohn(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(recht_noetig("lohn"))):
     von, bis = _monatsbereich(jahr, monat)
     projekte = await _projekte(user["firma_id"])
     nutzer = await _nutzer(user["firma_id"])
@@ -83,7 +83,7 @@ async def lohn(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(...,
 
 
 @router.get("/lohn-summen.csv")
-async def lohn_summen(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def lohn_summen(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(recht_noetig("lohn"))):
     von, bis = _monatsbereich(jahr, monat)
     nutzer = await _nutzer(user["firma_id"])
     summen = {uid: {"minuten": 0, "tage": set()} for uid in nutzer}
@@ -118,7 +118,7 @@ async def lohn_summen(jahr: int = Query(..., ge=2025, le=2100), monat: int = Que
 
 
 @router.get("/zeiten.csv")
-async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user: dict = Depends(rolle_noetig("buero"))):
+async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user: dict = Depends(recht_noetig("personal"))):
     try:
         datum_pruefen(von)
         datum_pruefen(bis)
@@ -139,7 +139,7 @@ async def zeiten(von: str, bis: str, project_id: Optional[str] = None, user: dic
 
 
 @router.get("/abwesenheiten.csv")
-async def abwesenheiten(jahr: int = Query(..., ge=2025, le=2100), user: dict = Depends(rolle_noetig("buero"))):
+async def abwesenheiten(jahr: int = Query(..., ge=2025, le=2100), user: dict = Depends(recht_noetig("personal"))):
     namen = await nutzernamen(user["firma_id"])
     zeilen = [["Mitarbeiter", "Art", "Von", "Bis", "Tage", "Status", "Notiz", "Entschieden von"]]
     async for a in db().absences.find({"firma_id": user["firma_id"], "from_date": {"$lte": f"{jahr}-12-31"}, "to_date": {"$gte": f"{jahr}-01-01"}}, {"_id": 0}).sort("from_date", 1):

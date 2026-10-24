@@ -9,8 +9,10 @@ und die für alle freigegebenen Unterlagen. Private Daten anderer Firmen (Stunde
 Fehlen Ausschreibung oder Zuschlag, werden diese Bereiche einfach ausgelassen."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import csv
+import hashlib
 import io
 import json
 import re
@@ -68,6 +70,7 @@ class _Zip:
         self.zaehler: Counter = Counter()
         self.hinweise: list[str] = []
         self.namen: set[str] = set()
+        self.manifest: list[dict] = []   # je Datei: Name, Größe, SHA-256 (Stufe G)
 
     def eindeutig(self, name: str) -> str:
         basis, i = name, 2
@@ -79,14 +82,15 @@ class _Zip:
         return name
 
     def schreiben(self, name: str, daten: bytes, art: str) -> None:
-        self.z.writestr(self.eindeutig(name), daten)
+        name = self.eindeutig(name)
+        self.z.writestr(name, daten)
         self.zaehler[art] += 1
+        self.manifest.append({"datei": name, "bytes": len(daten), "sha256": hashlib.sha256(daten).hexdigest(), "art": art})
 
     def datei(self, name: str, pfad: str, art: str) -> bool:
         try:
             if pfad and Path(pfad).is_file():
-                self.z.write(pfad, self.eindeutig(name))
-                self.zaehler[art] += 1
+                self.schreiben(name, Path(pfad).read_bytes(), art)
                 return True
         except OSError:
             pass
@@ -121,42 +125,104 @@ async def _ausfuehrende_firma(firma_id: str) -> dict:
     return {k: f.get(k) for k in ("id", "name", "street", "zip_code", "city", "email", "phone")}
 
 
-async def erstellen(user: dict, projekt: dict) -> dict:
-    """Projektakte bauen, auf der Platte ablegen und den Datensatz in `projektakten` anlegen."""
-    firma_id = user["firma_id"]
-    firma = await firma_laden(firma_id)
+LAUFEND: dict[str, asyncio.Task] = {}
+ORDNER = [("00_LIESMICH.txt / 00_Index.pdf / manifest.json", "Übersicht, Inhaltsverzeichnis, SHA-256-Prüfsummen aller Dateien"), ("01_Projekt", "Stammdaten, Kommentare, Checklisten"),
+          ("02_Zeiten", "Zeiteinträge (CSV), Stundennachweis je Monat (PDF), Kunden-Unterschriften"), ("03_Fotos", "Fotos nach Mitarbeiter und Tag"), ("04_Dokumente", "Unterlagen mit Versionen"),
+          ("05_Rechnungen", "Rechnungen als PDF/A-3 mit ZUGFeRD-XML"), ("06_Ausschreibungen", "Eigene Ausschreibungen mit Angeboten und Vergaben (Auftraggeber)"),
+          ("07_Angebote", "Eigene Angebote und erhaltene Aufträge (beteiligte Firma)"), ("08_Zusammenarbeit", "Aufgaben, Lieferungen, Mängel, Bautages-/Regieberichte, Meilensteine, geteilte Dokumente"),
+          ("09_Nachtraege", "Nachträge mit Freigabe"), ("10_Abnahmen", "Abnahmeprotokolle"), ("11_Protokoll", "Sicherheitsprotokoll und E-Mail-Nachweise"),
+          ("12_Nachrichten", "Projektchats (intern und mit Partnern), soweit für diese Firma sichtbar, mit Anhängen")]
+
+
+async def erstellen(user: dict, projekt: dict, hintergrund: bool = False) -> dict:
+    """Projektakte: Datensatz sofort anlegen (Status `laeuft`), dann bauen – synchron oder als Hintergrundaufgabe mit Fortschritt."""
     projekt = projekt_normalisieren(projekt)
-    namen = await nutzernamen(firma_id)
-    verknuepft = projekt.get("verknuepft") or {}
-    plattform_id = verknuepft.get("project_id") or projekt["id"]
-    rolle = "beteiligt" if verknuepft.get("project_id") else "eigentuemer"
-    z_pl: Optional[dict] = None
-    try:
-        z_pl = await zugang(user, plattform_id)
-        if z_pl["eigentuemer"] and not z_pl["leitung"]:
-            z_pl = None
-    except HTTPException:
-        z_pl = None   # Beteiligung beendet oder kein Zugang mehr: nur die eigenen Daten
     akte_id = neue_id()
-    ordner = config.DATA_DIR / "projektakten" / re.sub(r"[^a-zA-Z0-9\-]", "", firma_id)
-    ordner.mkdir(parents=True, exist_ok=True)
-    pfad = ordner / f"{akte_id}.zip"
-    z = _Zip(pfad)
-    try:
-        await _eigene_daten(z, user, firma, projekt, namen)
-        if z_pl is not None:
-            await _plattform_daten(z, user, firma, projekt, z_pl, namen, rolle)
-        await _nachweise(z, firma_id, projekt, plattform_id)
-        z.schreiben("00_LIESMICH.txt", _liesmich(firma, projekt, user, rolle, z, z_pl), "liesmich")
-    finally:
-        z.schliessen()
-    groesse = pfad.stat().st_size
     aufbewahren_bis = (date.today().replace(year=date.today().year + config.AUFBEWAHRUNG_JAHRE)).isoformat()
-    akte = {"id": akte_id, "firma_id": firma_id, "project_id": projekt["id"], "project_name": projekt.get("name"), "plattform_project_id": plattform_id if z_pl is not None else None,
-            "rolle": rolle, "dateiname": f"Projektakte_{_name(projekt.get('name'), 60)}_{jetzt_iso()[:10]}.zip", "pfad": str(pfad), "size": groesse,
-            "inhalt": dict(z.zaehler), "hinweise": z.hinweise[:50], "aufbewahren_bis": aufbewahren_bis, "created_by": user["id"], "created_by_name": user.get("name"), "created_at": jetzt_iso()}
+    akte = {"id": akte_id, "firma_id": user["firma_id"], "project_id": projekt["id"], "project_name": projekt.get("name"), "plattform_project_id": None, "rolle": None,
+            "status": "laeuft", "fortschritt": "Vorbereitung", "fehler": "", "dateiname": f"Projektakte_{_name(projekt.get('name'), 60)}_{jetzt_iso()[:10]}.zip", "pfad": "", "size": 0,
+            "inhalt": {}, "hinweise": [], "manifest_eintraege": 0, "aufbewahren_bis": aufbewahren_bis, "created_by": user["id"], "created_by_name": user.get("name"),
+            "created_at": jetzt_iso(), "fertig_at": None}
     await db().projektakten.insert_one(dict(akte))
-    return akte
+    if hintergrund:
+        LAUFEND[akte_id] = asyncio.create_task(_bauen(akte_id, user, projekt))
+        return akte
+    await _bauen(akte_id, user, projekt)
+    return await db().projektakten.find_one({"id": akte_id}, {"_id": 0})
+
+
+async def _fortschritt(akte_id: str, text: str) -> None:
+    await db().projektakten.update_one({"id": akte_id}, {"$set": {"fortschritt": text}})
+
+
+async def _bauen(akte_id: str, user: dict, projekt: dict) -> None:
+    pfad: Optional[Path] = None
+    try:
+        firma_id = user["firma_id"]
+        firma = await firma_laden(firma_id)
+        namen = await nutzernamen(firma_id)
+        verknuepft = projekt.get("verknuepft") or {}
+        plattform_id = verknuepft.get("project_id") or projekt["id"]
+        rolle = "beteiligt" if verknuepft.get("project_id") else "eigentuemer"
+        z_pl: Optional[dict] = None
+        try:
+            z_pl = await zugang(user, plattform_id)
+            if z_pl["eigentuemer"] and not z_pl["leitung"]:
+                z_pl = None
+        except HTTPException:
+            z_pl = None   # Beteiligung beendet oder kein Zugang mehr: nur die eigenen Daten
+        ordner = config.DATA_DIR / "projektakten" / re.sub(r"[^a-zA-Z0-9\-]", "", firma_id)
+        ordner.mkdir(parents=True, exist_ok=True)
+        pfad = ordner / f"{akte_id}.zip"
+        z = _Zip(pfad)
+        try:
+            await _fortschritt(akte_id, "Eigene Daten (Zeiten, Fotos, Dokumente, Rechnungen)")
+            await _eigene_daten(z, user, firma, projekt, namen)
+            if z_pl is not None:
+                await _fortschritt(akte_id, "Plattform-Daten (Zusammenarbeit, Ausschreibungen, Nachträge, Abnahmen)")
+                await _plattform_daten(z, user, firma, projekt, z_pl, namen, rolle)
+            await _fortschritt(akte_id, "Nachrichten und Nachweise")
+            await _nachrichten(z, user, projekt, plattform_id, z_pl)
+            await _nachweise(z, firma_id, projekt, plattform_id)
+            await _fortschritt(akte_id, "Inhaltsverzeichnis und Prüfsummen")
+            z.schreiben("00_LIESMICH.txt", _liesmich(firma, projekt, user, rolle, z, z_pl), "liesmich")
+            z.schreiben("00_Index.pdf", pdfs.projektakte_index_pdf(firma, projekt, user, rolle, dict(z.zaehler), ORDNER, z.manifest, z.hinweise), "index")
+            manifest = {"projekt": projekt.get("name"), "firma": firma.get("name"), "erstellt_at": jetzt_iso(), "erstellt_von": user.get("name"), "algorithmus": "SHA-256",
+                        "dateien": sorted(z.manifest, key=lambda m: m["datei"])}
+            z.z.writestr("manifest.json", _json(manifest))   # bewusst nicht im Manifest selbst
+        finally:
+            z.schliessen()
+        groesse = pfad.stat().st_size
+        await db().projektakten.update_one({"id": akte_id}, {"$set": {
+            "status": "fertig", "fortschritt": "Fertig", "pfad": str(pfad), "size": groesse, "inhalt": dict(z.zaehler), "hinweise": z.hinweise[:50], "manifest_eintraege": len(z.manifest),
+            "plattform_project_id": plattform_id if z_pl is not None else None, "rolle": rolle, "fertig_at": jetzt_iso()}})
+    except Exception as exc:  # noqa: BLE001 – der Fehler gehört in den Datensatz und ins Serverlog
+        import traceback
+        traceback.print_exc()
+        await db().projektakten.update_one({"id": akte_id}, {"$set": {"status": "fehler", "fortschritt": "Abgebrochen", "fehler": str(exc)[:500], "fertig_at": jetzt_iso()}})
+        try:
+            if pfad and pfad.is_file():
+                pfad.unlink()
+        except OSError:
+            pass
+    finally:
+        LAUFEND.pop(akte_id, None)
+
+
+async def _nachrichten(z: _Zip, user: dict, projekt: dict, plattform_id: str, z_pl: Optional[dict]) -> None:
+    """12_Nachrichten: interner Projektchat der eigenen Firma und – mit Plattformzugang – der Partnerchat; Anhänge dazu."""
+    filt: dict = {"$or": [{"art": "projekt_intern", "project_id": projekt["id"], "firma_id": user["firma_id"]}]}
+    if z_pl is not None:
+        filt["$or"].append({"art": "projekt_gu", "project_id": plattform_id})
+    async for chat in db().chats.find(filt, {"_id": 0}).sort("created_at", 1):
+        nachrichten = [n async for n in db().nachrichten.find({"chat_id": chat["id"]}, {"_id": 0, "gelesen_von": 0}).sort("created_at", 1)]
+        if not nachrichten:
+            continue
+        stamm = f"12_Nachrichten/{_name(chat.get('titel') or chat['art'], 60)}"
+        z.schreiben(f"{stamm}.json", _json({"chat": chat, "nachrichten": nachrichten}), "nachrichten")
+        z.schreiben(f"{stamm}.csv", _csv([["Zeit", "Firma", "Von", "Text", "Anhänge"]] + [[n.get("created_at"), n.get("firma_name"), n.get("user_name"), n.get("text"), ", ".join(a.get("filename", "") for a in n.get("anhaenge") or [])] for n in nachrichten]), "nachrichten")
+        for d in await _dokumente({"scope": "chat", "ref_id": chat["id"]}):
+            z.datei(f"{stamm}_Anhaenge/{_dateiname(d)}", d.get("path"), "nachrichten_anhaenge")
 
 
 async def _eigene_daten(z: _Zip, user: dict, firma: dict, projekt: dict, namen: dict) -> None:
@@ -178,11 +244,13 @@ async def _eigene_daten(z: _Zip, user: dict, firma: dict, projekt: dict, namen: 
     eintraege = [e async for e in db().entries.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("date", 1), ("start_time", 1)])]
     unterschriften = [u async for u in db().signatures.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("week_monday", 1), ("version", 1)])]
     if eintraege:
-        zeilen = [["Datum", "Mitarbeiter", "Beginn", "Ende", "Pause (Min)", "Anzahl", "Netto (Min)", "Mitarbeiterstunden (dezimal)", "Tätigkeit", "Leistung", "Quelle", "Prüfen", "Hinweise", "Stempel Start", "Stempel Ende"]]
+        zeilen = [["Datum", "Mitarbeiter", "Beginn", "Ende", "Pause (Min)", "Anzahl", "Netto (Min)", "Mitarbeiterstunden (dezimal)", "Tätigkeit", "Leistung", "Quelle", "Prüfen", "Hinweise", "Stempel Start", "Stempel Ende",
+                   "Freigegeben", "Freigegeben von", "Ursprünglich Beginn", "Ursprünglich Ende", "Ursprünglich Netto (Min)"]]
         for e in eintraege:
+            f, o = e.get("freigabe") or {}, e.get("original") or {}
             zeilen.append([e.get("date"), namen.get(e.get("user_id") or "", ""), e.get("start_time"), e.get("end_time"), e.get("pause_minutes", 0), e.get("workers", 1), e.get("net_minutes", 0),
                            _dez(eintrag_minuten(e)), e.get("activity", ""), e.get("service_name", ""), e.get("source", "manuell"), "ja" if e.get("pruefen") else "", "; ".join(h.get("text", "") for h in e.get("hinweise") or []),
-                           e.get("clock_start_at") or "", e.get("clock_end_at") or ""])
+                           e.get("clock_start_at") or "", e.get("clock_end_at") or "", "ja" if f else "", f.get("von_name") or "", o.get("start_time") or "", o.get("end_time") or "", o.get("net_minutes") if o else ""])
         z.schreiben("02_Zeiten/zeiten.csv", _csv(zeilen), "zeiten")
         monate = sorted({(e["date"][:7]) for e in eintraege if e.get("date")})
         for ym in monate:
@@ -232,6 +300,65 @@ async def _eigene_daten(z: _Zip, user: dict, firma: dict, projekt: dict, namen: 
             except Exception as exc:  # noqa: BLE001
                 z.hinweise.append(f"Rechnung {r.get('number')} konnte nicht als PDF erzeugt werden: {exc}")
         z.schreiben("05_Rechnungen/rechnungen.csv", _csv(zeilen), "rechnungen_liste")
+    # Kundenangebote und Auftrag (Stufe C): jede Version als PDF (gesendete aus dem Snapshot), Liste, Auftrag des Projekts
+    angebote_k = [a async for a in db().kundenangebote.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("seq", 1), ("version", 1)])]
+    if angebote_k:
+        import angebote as ang_modul
+        zeilen = [["Nummer", "Version", "Status", "Titel", "Datum", "Gültig bis", "Netto", "USt", "Brutto", "Gesendet an", "Annahme durch", "Annahme am"]]
+        for a in angebote_k:
+            s = a.get("summen") or {}
+            an = a.get("annahme") or {}
+            zeilen.append([a.get("nummer"), a.get("version"), a.get("status"), a.get("titel"), a.get("datum"), a.get("gueltig_bis"), s.get("netto"), s.get("ust"), s.get("brutto"),
+                           "; ".join((v.get("an") or v.get("art") or "") for v in a.get("versand") or []), an.get("von_name") or "", an.get("am") or ""])
+            try:
+                pfad = a.get("pdf_pfad")
+                inhalt = (config.DATA_DIR / pfad).read_bytes() if pfad and (config.DATA_DIR / pfad).is_file() else pdfs.angebot_pdf(ang_modul.pdf_daten(firma, a))
+                z.schreiben(f"06_Angebote/{_name(a.get('nummer'))}_v{a.get('version') or 1}.pdf", inhalt, "angebote_kunde")
+            except Exception as exc:  # noqa: BLE001
+                z.hinweise.append(f"Angebot {a.get('nummer')} konnte nicht als PDF erzeugt werden: {exc}")
+        z.schreiben("06_Angebote/angebote.csv", _csv(zeilen), "angebote_kunde_liste")
+    if projekt.get("auftrag"):
+        z.schreiben("06_Angebote/auftrag.json", _json(projekt["auftrag"]), "auftrag")
+    # Material, Eingangsrechnungen (Belege), Nachkalkulation (Stufe D)
+    material = [m async for m in db().materialverbrauch.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("date", 1)])]
+    if material:
+        z.schreiben("07_Material/material.csv", _csv([["Datum", "Mitarbeiter", "Artikelnummer", "Material", "Menge", "Einheit", "Einkaufspreis", "Kosten", "Status", "Geprüft von", "Notiz"]] +
+                                                  [[m.get("date"), m.get("user_name"), m.get("artikel_nummer") or "", m.get("bezeichnung"), m.get("menge"), m.get("einheit"), m.get("einkaufspreis"), m.get("kosten"), m.get("status"), m.get("geprueft_von") or "", m.get("note") or ""] for m in material]), "material")
+    eingang = [r async for r in db().eingangsrechnungen.find({"firma_id": fid, "zuordnungen.project_id": pid}, {"_id": 0}).sort([("rechnungsdatum", 1)])]
+    if eingang:
+        zeilen = [["Lieferant", "Rechnungsnummer", "Rechnungsdatum", "Fällig", "Netto gesamt", "Brutto gesamt", "Anteil Projekt netto", "Kostenart", "Status", "Bezahlt am", "Beleg"]]
+        for r in eingang:
+            for zu in r.get("zuordnungen") or []:
+                if zu.get("project_id") != pid:
+                    continue
+                beleg = ""
+                if r.get("dokument_id"):
+                    d = await db().documents.find_one({"id": r["dokument_id"]}, {"_id": 0})
+                    if d:
+                        beleg = f"08_Eingangsrechnungen/{_name(r.get('rechnungsnummer') or r['id'], 60)}_{_dateiname(d)}"
+                        z.datei(beleg, d.get("path") or "", "eingangsrechnungen_belege")
+                zeilen.append([r.get("lieferant"), r.get("rechnungsnummer"), r.get("rechnungsdatum"), r.get("faellig_am") or "", r.get("netto"), r.get("brutto"), zu.get("betrag_netto"), zu.get("kostenart"), r.get("status"), r.get("bezahlt_am") or "", beleg])
+        z.schreiben("08_Eingangsrechnungen/eingangsrechnungen.csv", _csv(zeilen), "eingangsrechnungen")
+    aufmasse = [a async for a in db().aufmasse.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("messdatum", 1)])]
+    if aufmasse:
+        z.schreiben("10_Aufmass/aufmasse.csv", _csv([["Datum", "Position", "Bezeichnung", "Raum", "Typ", "Formel", "Menge", "Einheit", "Status", "Erfasst von", "Geprüft von"]] +
+                                                  [[a.get("messdatum"), (a.get("position") or {}).get("nr") or "", a.get("bezeichnung"), a.get("raum") or "", a.get("typ"), a.get("formel"), a.get("menge"), a.get("einheit"), a.get("status"), a.get("user_name") or "", a.get("geprueft_von") or ""] for a in aufmasse]), "aufmasse")
+        try:
+            import aufmass as aufmass_modul
+            z.schreiben("10_Aufmass/Aufmassblatt.pdf", pdfs.aufmass_pdf(firma, projekt, aufmasse, list(aufmass_modul.summen_je_position(aufmasse).values())), "aufmassblatt")
+        except Exception as exc:  # noqa: BLE001
+            z.hinweise.append(f"Aufmaßblatt konnte nicht erzeugt werden: {exc}")
+        for a in aufmasse:
+            for f_ in a.get("fotos") or []:
+                d = await db().documents.find_one({"id": f_.get("id")}, {"_id": 0})
+                if d:
+                    z.datei(f"10_Aufmass/Fotos/{_name((a.get('position') or {}).get('nr') or 'ohne', 20)}_{_dateiname(d)}", d.get("path") or "", "aufmass_fotos")
+    if projekt.get("auftrag") or material or eingang:
+        try:
+            import material as material_modul
+            z.schreiben("09_Nachkalkulation/nachkalkulation.json", _json(await material_modul.nachkalkulation(firma, projekt)), "nachkalkulation")
+        except Exception as exc:  # noqa: BLE001
+            z.hinweise.append(f"Nachkalkulation konnte nicht erzeugt werden: {exc}")
 
 
 async def _angebot_schreiben(z: _Zip, ordner: str, a: dict, g: dict, namen_frei: bool) -> None:
@@ -407,7 +534,8 @@ def _liesmich(firma: dict, projekt: dict, user: dict, rolle: str, z: _Zip, z_pl:
               "  11_Protokoll – Sicherheitsprotokoll und E-Mail-Nachweise zum Projekt", "",
               "Enthalten: " + (", ".join(f"{k}: {v}" for k, v in sorted(z.zaehler.items())) or "keine Daten"),
               "Plattform-Projekt: " + ("ja" if z_pl is not None else "nein – Bereiche ohne Daten wurden ausgelassen"),
-              "Nachrichten/Chat: in dieser Version nicht enthalten (E-Mail-Nachweise siehe 11_Protokoll).", "",
+              "  12_Nachrichten – Projektchats (intern und mit Partnern), soweit für diese Firma sichtbar, mit Anhängen",
+              "  00_Index.pdf – Inhaltsverzeichnis; manifest.json – SHA-256-Prüfsummen aller Dateien (Nachweis der Unversehrtheit)", "",
               f"Aufbewahrung: {config.AUFBEWAHRUNG_JAHRE} Jahre (Rechnungen und Buchungsbelege nach § 147 AO / § 257 HGB; Arbeitszeitnachweise mindestens zwei Jahre nach § 17 MiLoG).",
               "Enthält personenbezogene Daten – nur verschlüsselt und mit beschränktem Zugriff aufbewahren."]
     if z.hinweise:

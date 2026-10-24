@@ -2,6 +2,7 @@
 Alle Funktionen sind reine Funktionen über Dictionaries, damit Routen und die ZIP-Projektakte dieselben Dokumente erzeugen."""
 from __future__ import annotations
 
+import base64
 import io
 from datetime import date
 
@@ -12,6 +13,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from auth import jetzt_iso
 from pdfbasis import SCHRIFT, SCHRIFT_FETT, schrift_registrieren
 
 MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
@@ -188,8 +190,9 @@ def tagesbericht_pdf(b: dict, projekt: dict, fotos: list[tuple[bytes, str]]) -> 
     """Bautagesbericht (A4, bis zu sechs Fotos als JPEG-Bytes mit Notiz)."""
     st = _stile()
     buf = io.BytesIO()
-    doc = _doc(buf, f"Bautagesbericht {b.get('datum')} – {projekt.get('name')}", b.get("firma_name") or "")
-    teile = [Paragraph(f"Bautagesbericht {esc(b.get('datum'))}", st["h1"]), Paragraph(f"{esc(projekt.get('name'))}{' · ' + esc(projekt.get('address')) if projekt.get('address') else ''}", st["n"]),
+    titel = "Regiebericht" if b.get("art") == "regiebericht" else "Bautagesbericht"
+    doc = _doc(buf, f"{titel} {b.get('datum')} – {projekt.get('name')}", b.get("firma_name") or "")
+    teile = [Paragraph(f"{titel} {esc(de(b.get('datum')))}", st["h1"]), Paragraph(f"{esc(projekt.get('name'))}{' · ' + esc(projekt.get('address')) if projekt.get('address') else ''}", st["n"]),
              Paragraph(f"Verfasser: {esc(b.get('verfasser'))} ({esc(b.get('firma_name'))}) · Status: {esc(b.get('status_name'))}{' · Bauabschnitt ' + esc(b.get('bereich')) if b.get('bereich') else ''}{' · Wetter: ' + esc(b.get('wetter')) if b.get('wetter') else ''}", st["k"]), Spacer(1, 4 * mm)]
     kopf = [["Beteiligte Firmen", esc(", ".join(b.get("firmen") or []))], ["Mitarbeiter vor Ort", str(b.get("mitarbeiter_anzahl") or 0)], ["Fortschritt", esc(b.get("fortschritt"))]]
     t = Table([[Paragraph(k, st["h2"]), Paragraph(v, st["n"])] for k, v in kopf], colWidths=[45 * mm, 125 * mm])
@@ -199,6 +202,18 @@ def tagesbericht_pdf(b: dict, projekt: dict, fotos: list[tuple[bytes, str]]) -> 
                         ("Besondere Vorkommnisse", "besondere_vorkommnisse"), ("Notizen", "notizen")):
         if b.get(feld):
             teile += [Paragraph(titel, st["h2"]), Paragraph(esc(b[feld]), st["n"])]
+    if b.get("auftraggeber_name"):
+        teile.append(Paragraph(f"Auftraggeber / Ansprechpartner: {esc(b.get('auftraggeber_name'))}", st["n"]))
+    if b.get("regie_stunden"):
+        zeilen = [["Mitarbeiter", "Tätigkeit", "Stunden"]] + [[Paragraph(esc(r.get("name")), st["z"]), Paragraph(esc(r.get("taetigkeit")), st["z"]), f"{float(r.get('stunden') or 0):.2f}".replace(".", ",")] for r in b["regie_stunden"]]
+        zeilen.append(["Summe", "", f"{sum(float(r.get('stunden') or 0) for r in b['regie_stunden']):.2f}".replace(".", ",")])
+        teile += [Paragraph("Regiestunden", st["h2"]), _tabelle(zeilen, [60 * mm, 85 * mm, 25 * mm])]
+    if b.get("regie_material"):
+        zeilen = [["Material", "Menge", "Einheit"]] + [[Paragraph(esc(r.get("bezeichnung")), st["z"]), f"{float(r.get('menge') or 0):g}".replace(".", ","), esc(r.get("einheit"))] for r in b["regie_material"]]
+        teile += [Paragraph("Material", st["h2"]), _tabelle(zeilen, [110 * mm, 30 * mm, 30 * mm])]
+    if b.get("regie_geraete"):
+        zeilen = [["Gerät", "Stunden"]] + [[Paragraph(esc(r.get("bezeichnung")), st["z"]), f"{float(r.get('stunden') or 0):.2f}".replace(".", ",")] for r in b["regie_geraete"]]
+        teile += [Paragraph("Geräte", st["h2"]), _tabelle(zeilen, [140 * mm, 30 * mm])]
     if fotos:
         teile.append(Paragraph("Fotos", st["h2"]))
         zellen = []
@@ -217,6 +232,293 @@ def tagesbericht_pdf(b: dict, projekt: dict, fotos: list[tuple[bytes, str]]) -> 
             while len(zeile) < 2:
                 zeile.append("")
             teile.append(Table([[z_[0] if z_ else "" for z_ in zeile], [z_[1] if z_ else "" for z_ in zeile]], colWidths=[88 * mm, 88 * mm]))
+    u = b.get("unterschrift") or {}
+    if u.get("image"):
+        try:
+            roh = base64.b64decode(u["image"].split(",", 1)[1])
+            bild = ImageReader(io.BytesIO(roh))
+            bw, bh = bild.getSize()
+            teile += [Spacer(1, 6 * mm), Paragraph("Unterschrift Auftraggeber", st["h2"]), Image(io.BytesIO(roh), width=60 * mm, height=60 * mm * bh / bw),
+                      Paragraph(f"{esc(u.get('signer_name'))} · {esc(zeit(u.get('at')))} · aufgenommen von {esc(u.get('von'))}", st["k"])]
+        except Exception:  # noqa: BLE001 – defekte Unterschrift auslassen, aber benennen
+            teile += [Paragraph(f"Unterschrift von {esc(u.get('signer_name'))} ({esc(zeit(u.get('at')))}) – Bild nicht lesbar", st["k"])]
     teile += [Spacer(1, 8 * mm), Paragraph("Erstellt mit Stundenzettel Pro · Freigabe: " + ("erteilt" if b.get("status") == "freigegeben" else "offen"), st["k"])]
     doc.build(teile)
+    return buf.getvalue()
+
+
+def projektakte_index_pdf(firma: dict, projekt: dict, user: dict, rolle: str, zaehler: dict, ordner: list[tuple[str, str]], manifest: list[dict], hinweise: list[str]) -> bytes:
+    """Inhaltsverzeichnis der Projektakte: Ordner mit Erklärung, Anzahl je Art, Prüfsummenhinweis."""
+    st = _stile()
+    buf = io.BytesIO()
+    doc = _doc(buf, f"Projektakte {projekt.get('name')} – Inhalt", firma.get("name") or "")
+    teile = [Paragraph(f"Projektakte – {esc(projekt.get('name'))}", st["h1"]),
+             Paragraph(f"{esc(firma.get('name'))} · erstellt am {esc(zeit(jetzt_iso()))} von {esc(user.get('name'))} · Rolle: {'Eigentümerfirma' if rolle == 'eigentuemer' else 'Beteiligte Firma'}", st["n"]), Spacer(1, 4 * mm),
+             Paragraph("Ordner", st["h2"]), _tabelle([["Ordner", "Inhalt"]] + [[Paragraph(esc(o), st["z"]), Paragraph(esc(t), st["z"])] for o, t in ordner], [48 * mm, 122 * mm]),
+             Paragraph("Anzahl je Art", st["h2"]), _tabelle([["Art", "Anzahl"]] + [[esc(k), str(v)] for k, v in sorted(zaehler.items())], [120 * mm, 30 * mm])]
+    gesamt = sum(int(m.get("bytes") or 0) for m in manifest)
+    teile += [Paragraph("Prüfsummen", st["h2"]),
+              Paragraph(f"{len(manifest)} Dateien, {gesamt / 1024 / 1024:.1f} MB. Die Datei manifest.json enthält für jede Datei die SHA-256-Prüfsumme; damit lässt sich später nachweisen, dass die Akte unverändert ist.".replace(".1f", ""), st["n"])]
+    if hinweise:
+        teile += [Paragraph("Hinweise", st["h2"])] + [Paragraph(f"– {esc(h)}", st["k"]) for h in hinweise[:50]]
+    doc.build(teile)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------- Projekt-Stundenzettel aus freigegebenen Zeiten (Plantafel)
+
+def freigegebene_zeiten_pdf(firma: dict, projekt: dict, von: str, bis: str, einsaetze: list[dict], offen: int, namen: dict) -> bytes:
+    """Nur ausdrücklich freigegebene Einsatzzeiten; ungeprüfte Einsätze werden oben als fehlend genannt."""
+    st = _stile()
+    buf = io.BytesIO()
+    doc = _doc(buf, f"Projekt-Stundenzettel {projekt.get('name')} {von}–{bis}", firma.get("name") or "")
+    teile = [Paragraph("Projekt-Stundenzettel – freigegebene Arbeitszeiten", st["h1"]),
+             Paragraph(f"{esc(projekt.get('name'))}{' · ' + esc(projekt.get('address')) if projekt.get('address') else ''} · Zeitraum {de(von)} bis {de(bis)}", st["n"]),
+             Paragraph(f"{esc(firma.get('name'))} · Nur vom Betrieb geprüfte und freigegebene Zeiten – nicht identisch mit den ursprünglichen Stempelungen, die gesondert erhalten bleiben.", st["k"]), Spacer(1, 4 * mm)]
+    if offen:
+        teile += [Paragraph(f"Hinweis: {offen} Einsätze im Zeitraum sind noch nicht geprüft und fehlen in diesem Nachweis.", st["n"]), Spacer(1, 2 * mm)]
+    zeilen = [["Datum", "Mitarbeiter", "Beginn", "Ende", "Pause", "Netto", "Freigegeben von", "Vermerk"]]
+    gesamt = 0
+    for e in einsaetze:
+        f = e.get("freigabe") or {}
+        netto = int(f.get("net_minutes") or 0)
+        gesamt += netto
+        vermerk = ("Stempelung korrigiert" if f.get("abweichung") and f.get("hat_stempel") else "ohne Stempelung bestätigt" if not f.get("hat_stempel") else "")
+        zeilen.append([de(e.get("date")), Paragraph(esc(namen.get(e.get("user_id"), "")), st["z"]), f.get("start_time", ""), f.get("end_time", ""), f"{int(f.get('pause_minutes') or 0)} min",
+                       f"{netto // 60}:{netto % 60:02d}", Paragraph(esc(f.get("von_name")), st["z"]), Paragraph(esc(vermerk), st["z"])])
+    zeilen.append(["Summe", "", "", "", "", f"{gesamt // 60}:{gesamt % 60:02d}", "", Paragraph(f"{gesamt / 60:.2f} Stunden".replace(".", ","), st["z"])])
+    teile.append(_tabelle(zeilen, [20 * mm, 36 * mm, 14 * mm, 14 * mm, 14 * mm, 14 * mm, 32 * mm, 34 * mm]))
+    teile += [Spacer(1, 6 * mm), Paragraph("Grundlage: Freigaben in der Plantafel mit Name, Zeitstempel und Begründung (Sicherheitsprotokoll). Erstellt mit Stundenzettel Pro.", st["k"])]
+    doc.build(teile)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------- Kundenangebot (Stufe C)
+
+def _bild_flowable(data_url: str, max_w: float, max_h: float):
+    """Logo/Stempel aus einer Data-URL als platypus-Bild, proportional in den Rahmen eingepasst."""
+    import base64
+    try:
+        if not data_url or not str(data_url).startswith("data:image"):
+            return None
+        roh = base64.b64decode(str(data_url).split(",", 1)[1])
+        leser = ImageReader(io.BytesIO(roh))
+        bw, bh = leser.getSize()
+        faktor = min(max_w / bw, max_h / bh)
+        return Image(io.BytesIO(roh), width=bw * faktor, height=bh * faktor)
+    except Exception:  # noqa: BLE001 – ein kaputtes Bild darf das Angebot nicht verhindern
+        return None
+
+
+def _menge(x) -> str:
+    try:
+        v = float(x or 0)
+    except (TypeError, ValueError):
+        return "–"
+    s = f"{v:,.2f}" if v != int(v) else f"{int(v):,}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def angebot_pdf(daten: dict) -> bytes:
+    """Angebot an den Kunden: Briefkopf mit Logo, Anschrift, Angebotsdaten, gegliederte Positionen (Titel, Alternativ-/Eventualpositionen
+    ausgewiesen, aber nicht summiert), Summenblock, Zahlungsbedingungen, Gültigkeit, Unterschrift/Stempel und Annahmefeld für den Kunden."""
+    st = _stile()
+    f = daten.get("firma") or {}
+    k = daten.get("kunde") or {}
+    s = daten.get("summen") or {}
+    grau = colors.HexColor("#6E6E73")
+    st_t = ParagraphStyle("t", parent=st["n"], fontName=SCHRIFT_FETT)
+    st_klein = ParagraphStyle("kl", parent=st["k"], textColor=grau)
+    st_r = ParagraphStyle("r", parent=st["z"], alignment=2)
+    st_rf = ParagraphStyle("rf", parent=st_r, fontName=SCHRIFT_FETT)
+    st_grau_r = ParagraphStyle("gr", parent=st_r, textColor=grau)
+    version = int(daten.get("version") or 1)
+    nummer = f"{daten.get('nummer') or ''}" + (f" (Version {version})" if version > 1 else "")
+
+    def fuss(c, doc):
+        c.saveState()
+        c.setStrokeColor(GRAU)
+        c.setLineWidth(0.3)
+        c.line(16 * mm, 14 * mm, A4[0] - 16 * mm, 14 * mm)
+        c.setFont(SCHRIFT, 7)
+        c.setFillColor(grau)
+        zeile1 = " · ".join(t for t in [f.get("name"), ", ".join(t for t in [f.get("street"), f"{f.get('zip_code') or ''} {f.get('city') or ''}".strip()] if t), f.get("phone"), f.get("email")] if t)
+        zeile2 = " · ".join(t for t in [f"Bank {f['bank_name']}" if f.get("bank_name") else "", f"IBAN {f['iban']}" if f.get("iban") else "", f"BIC {f['bic']}" if f.get("bic") else "",
+                                        f"St.-Nr. {f['tax_number']}" if f.get("tax_number") else "", f"USt-IdNr. {f['vat_id']}" if f.get("vat_id") else ""] if t)
+        c.drawString(16 * mm, 10 * mm, zeile1[:170])
+        c.drawString(16 * mm, 6.5 * mm, zeile2[:170])
+        c.drawRightString(A4[0] - 16 * mm, 10 * mm, f"Angebot {daten.get('nummer') or ''} · Seite {doc.page}")
+        c.restoreState()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm, topMargin=16 * mm, bottomMargin=20 * mm,
+                            title=f"Angebot {nummer}", author=f.get("name") or "", creator="Stundenzettel Pro")
+    story = []
+    # Briefkopf: Firma links, Logo rechts
+    logo = _bild_flowable(daten.get("logo"), 45 * mm, 20 * mm)
+    kopf_links = Paragraph(f"<b>{esc(f.get('name'))}</b><br/>{esc(f.get('street'))}<br/>{esc((f.get('zip_code') or '') + ' ' + (f.get('city') or ''))}" +
+                           (f"<br/>{esc(f.get('phone'))}" if f.get("phone") else "") + (f"<br/>{esc(f.get('email'))}" if f.get("email") else ""), st["n"])
+    kopf = Table([[kopf_links, logo or ""]], colWidths=[120 * mm, 58 * mm])
+    kopf.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    story += [kopf, Spacer(1, 8 * mm)]
+    # Empfänger links, Angebotsdaten rechts
+    absender = " · ".join(t for t in [f.get("name"), f.get("street"), f"{f.get('zip_code') or ''} {f.get('city') or ''}".strip()] if t)
+    empf = [k.get("name"), k.get("contact"), k.get("street"), f"{k.get('zip_code') or ''} {k.get('city') or ''}".strip()]
+    empf_p = Paragraph(f"<font size=7 color='#6E6E73'>{esc(absender)[:120]}</font><br/><br/>" + "<br/>".join(esc(z) for z in empf if z), st["n"])
+    meta = [["Angebotsnummer", nummer], ["Datum", de(daten.get("datum"))], ["Gültig bis", de(daten.get("gueltig_bis")) if daten.get("gueltig_bis") else "auf Widerruf"]]
+    if k.get("customer_number"):
+        meta.append(["Kundennummer", k["customer_number"]])
+    if daten.get("projekt"):
+        meta.append(["Projekt / Objekt", daten["projekt"]])
+    if f.get("owner"):
+        meta.append(["Ansprechpartner", f["owner"]])
+    meta_t = Table([[Paragraph(esc(a), st_klein), Paragraph(esc(b), st["z"])] for a, b in meta], colWidths=[30 * mm, 48 * mm])
+    meta_t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5), ("TOPPADDING", (0, 0), (-1, -1), 1.5)]))
+    block = Table([[empf_p, meta_t]], colWidths=[100 * mm, 78 * mm])
+    block.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    story += [block, Spacer(1, 8 * mm)]
+    story.append(Paragraph(f"Angebot {esc(nummer)}" + (f" – {esc(daten.get('titel'))}" if daten.get("titel") else ""), st["h1"]))
+    story.append(Spacer(1, 3 * mm))
+    anrede = f"Sehr geehrte Damen und Herren," if not k.get("contact") else f"Guten Tag {esc(k.get('contact'))},"
+    story.append(Paragraph(anrede, st["n"]))
+    if daten.get("einleitung"):
+        story.append(Paragraph(esc(daten["einleitung"]), st["n"]))
+    story.append(Spacer(1, 4 * mm))
+    # Positionen
+    zeilen = [[Paragraph("Pos.", st_t), Paragraph("Leistung", st_t), Paragraph("Menge", ParagraphStyle("mt", parent=st_t, alignment=2)), Paragraph("Einheit", st_t),
+               Paragraph("Einzelpreis", ParagraphStyle("et", parent=st_t, alignment=2)), Paragraph("Gesamt", ParagraphStyle("gt", parent=st_t, alignment=2))]]
+    stil = [("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, -1), 0.25, GRAU), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F5F5F7")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
+    for p in daten.get("positionen") or []:
+        art = p.get("art") or "leistung"
+        i = len(zeilen)
+        if art == "titel":
+            zeilen.append([Paragraph(esc(p.get("nr")), st_t), Paragraph(f"<b>{esc(p.get('text'))}</b>", st["n"]), "", "", "", ""])
+            stil += [("SPAN", (1, i), (-1, i)), ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FAFAFA"))]
+            continue
+        if art == "text":
+            zeilen.append(["", Paragraph(esc(p.get("text")) + (f"<br/><font size=7.5 color='#6E6E73'>{esc(p.get('beschreibung'))}</font>" if p.get("beschreibung") else ""), st["z"]), "", "", "", ""])
+            stil += [("SPAN", (1, i), (-1, i))]
+            continue
+        kennz = "Alternativposition – nicht in der Summe" if p.get("alternativ") else "Eventualposition – nur bei Bedarf, nicht in der Summe" if p.get("eventual") else ""
+        text = f"<b>{esc(p.get('text'))}</b>" + (f"<br/><font size=7.5 color='#6E6E73'>{esc(p.get('beschreibung'))}</font>" if p.get("beschreibung") else "") + \
+               (f"<br/><font size=7.5 color='#B25E00'>{kennz}</font>" if kennz else "") + \
+               (f"<br/><font size=7.5 color='#6E6E73'>abzüglich {_menge(p.get('rabatt_prozent'))} % Nachlass</font>" if float(p.get("rabatt_prozent") or 0) else "")
+        st_g = st_grau_r if kennz else st_r
+        zeilen.append([Paragraph(esc(p.get("nr")), st["z"]), Paragraph(text, st["z"]), Paragraph(_menge(p.get("menge")), st_r), Paragraph(esc(p.get("einheit")), st["z"]),
+                       Paragraph(geld(p.get("einzelpreis")), st_r), Paragraph(geld(p.get("gesamt")), st_g)])
+    t = Table(zeilen, colWidths=[13 * mm, 91 * mm, 17 * mm, 15 * mm, 21 * mm, 21 * mm], repeatRows=1)
+    t.setStyle(TableStyle(stil))
+    story += [t, Spacer(1, 4 * mm)]
+    # Summen
+    summen = [["Summe der Positionen (netto)", geld(s.get("positionen_netto"))]]
+    for z in s.get("zuschlaege") or []:
+        summen.append([f"zzgl. {z.get('text')} ({_menge(z.get('prozent'))} %)", geld(z.get("betrag"))])
+    if float(s.get("rabatt_betrag") or 0):
+        summen.append([f"abzüglich Rabatt ({_menge(s.get('rabatt_prozent'))} %)", "– " + geld(s.get("rabatt_betrag"))])
+    summen.append(["Nettobetrag", geld(s.get("netto"))])
+    steuer = s.get("steuer") or {}
+    if steuer.get("kategorie") == "S":
+        summen.append([f"zzgl. {_menge(s.get('ust_satz'))} % Umsatzsteuer", geld(s.get("ust"))])
+    else:
+        summen.append(["Umsatzsteuer", geld(0)])
+    summen.append(["Angebotssumme (brutto)", geld(s.get("brutto"))])
+    st_summe = [[Paragraph(esc(a), st_rf if i == len(summen) - 1 else st_r), Paragraph(esc(b), st_rf if i == len(summen) - 1 else st_r)] for i, (a, b) in enumerate(summen)]
+    ts = Table(st_summe, colWidths=[120 * mm, 38 * mm], hAlign="RIGHT")
+    ts.setStyle(TableStyle([("LINEABOVE", (0, len(summen) - 1), (-1, len(summen) - 1), 0.6, colors.black), ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5)]))
+    story.append(ts)
+    hinweise = []
+    if float(s.get("alternativ_netto") or 0):
+        hinweise.append(f"Alternativpositionen (netto, nicht enthalten): {geld(s.get('alternativ_netto'))}")
+    if float(s.get("eventual_netto") or 0):
+        hinweise.append(f"Eventualpositionen (netto, nur bei Bedarf): {geld(s.get('eventual_netto'))}")
+    if steuer.get("hinweis"):
+        hinweise.append(steuer["hinweis"] + ".")
+    for h in hinweise:
+        story.append(Paragraph(esc(h), st_klein))
+    story.append(Spacer(1, 5 * mm))
+    if daten.get("zahlungsbedingungen"):
+        story.append(Paragraph(f"<b>Zahlungsbedingungen:</b> {esc(daten['zahlungsbedingungen'])}", st["n"]))
+    if daten.get("gueltig_bis"):
+        story.append(Paragraph(f"Dieses Angebot ist gültig bis zum {de(daten['gueltig_bis'])}.", st["n"]))
+    if daten.get("schluss"):
+        story.append(Paragraph(esc(daten["schluss"]), st["n"]))
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph("Mit freundlichen Grüßen", st["n"]))
+    stempel = _bild_flowable(daten.get("stempel"), 60 * mm * min(1.5, max(0.5, (daten.get("stempel_scale") or 100) / 100)), 28 * mm)
+    if stempel is not None:
+        story += [Spacer(1, 2 * mm), stempel]
+    else:
+        story.append(Spacer(1, 10 * mm))
+    story.append(Paragraph(esc(f.get("owner") or f.get("name")), st["n"]))
+    story.append(Paragraph(esc(f.get("name")), st_klein))
+    annahme = daten.get("annahme")
+    if annahme:
+        story += [Spacer(1, 8 * mm), Paragraph(f"<b>Angenommen</b> am {de(annahme.get('am'))} durch {esc(annahme.get('von_name'))}" + (f" ({esc(annahme.get('art'))})" if annahme.get("art") else ""), st["n"])]
+    else:
+        story += [Spacer(1, 10 * mm), Paragraph("<b>Auftragserteilung</b> – Hiermit erteile ich den Auftrag gemäß diesem Angebot:", st["n"]), Spacer(1, 12 * mm),
+                  Table([[Paragraph("______________________________<br/>Ort, Datum", st_klein), Paragraph("______________________________<br/>Unterschrift Auftraggeber", st_klein)]], colWidths=[85 * mm, 85 * mm])]
+    doc.build(story, onFirstPage=fuss, onLaterPages=fuss)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------- Zahlungserinnerung / Mahnung (Stufe E)
+
+def mahnung_pdf(firma: dict, kunde: dict, rechnung: dict, mahnung: dict, art_name: str, faellig: str | None) -> bytes:
+    """Mahnschreiben: Briefkopf, Anschrift, Text der Stufe, Tabelle der offenen Rechnung mit Gebühr, Gesamtforderung."""
+    st = _stile()
+    f = firma
+    buf = io.BytesIO()
+    doc = _doc(buf, f"{mahnung.get('name')} {rechnung.get('number')}", f.get("name") or "")
+    story = []
+    logo = _bild_flowable(f.get("logo"), 45 * mm, 20 * mm)
+    kopf = Table([[Paragraph(f"<b>{esc(f.get('name'))}</b><br/>{esc(f.get('street'))}<br/>{esc((f.get('zip_code') or '') + ' ' + (f.get('city') or ''))}", st["n"]), logo or ""]], colWidths=[120 * mm, 58 * mm])
+    kopf.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    story += [kopf, Spacer(1, 8 * mm)]
+    empf = [kunde.get("name"), kunde.get("contact"), kunde.get("street"), f"{kunde.get('zip_code') or ''} {kunde.get('city') or ''}".strip()]
+    story += [Paragraph("<br/>".join(esc(z) for z in empf if z), st["n"]), Spacer(1, 6 * mm)]
+    story += [Paragraph(f"{esc(f.get('city') or '')}, {de(mahnung.get('am'))}", ParagraphStyle("r", parent=st["k"], alignment=2)), Spacer(1, 4 * mm)]
+    story += [Paragraph(f"{esc(mahnung.get('name'))} – {esc(art_name)} {esc(rechnung.get('number'))}", st["h1"]), Spacer(1, 3 * mm)]
+    story += [Paragraph(f"{'Guten Tag ' + esc(kunde.get('contact')) + ',' if kunde.get('contact') else 'Sehr geehrte Damen und Herren,'}", st["n"]),
+              Paragraph(esc(mahnung.get("text")), st["n"]), Spacer(1, 4 * mm)]
+    zeilen = [[Paragraph("Beleg", st["z"]), Paragraph("Datum", st["z"]), Paragraph("Fällig", st["z"]), Paragraph("Betrag", st["z"]), Paragraph("Bezahlt", st["z"]), Paragraph("Offen", st["z"])],
+              [Paragraph(f"{esc(art_name)} {esc(rechnung.get('number'))}", st["z"]), Paragraph(de(rechnung.get("invoice_date")), st["z"]), Paragraph(de(faellig) if faellig else "–", st["z"]),
+               Paragraph(geld(rechnung.get("gross")), st["z"]), Paragraph(geld(rechnung.get("bezahlt_betrag")), st["z"]), Paragraph(geld(mahnung.get("offen_betrag")), st["z"])]]
+    if float(mahnung.get("gebuehr") or 0):
+        zeilen.append([Paragraph("Mahngebühr", st["z"]), "", "", "", "", Paragraph(geld(mahnung.get("gebuehr")), st["z"])])
+    zeilen.append([Paragraph("<b>Gesamtforderung</b>", st["z"]), "", "", "", "", Paragraph(f"<b>{geld(mahnung.get('gesamt'))}</b>", st["z"])])
+    story += [_tabelle(zeilen, [52 * mm, 24 * mm, 24 * mm, 26 * mm, 26 * mm, 26 * mm]), Spacer(1, 5 * mm)]
+    bank = " · ".join(t for t in [f"Bank {f['bank_name']}" if f.get("bank_name") else "", f"IBAN {f['iban']}" if f.get("iban") else "", f"BIC {f['bic']}" if f.get("bic") else ""] if t)
+    story += [Paragraph(f"Bitte überweisen Sie den Gesamtbetrag unter Angabe der Rechnungsnummer{(' auf: ' + esc(bank)) if bank else ''}.", st["n"]), Spacer(1, 6 * mm),
+              Paragraph("Mit freundlichen Grüßen", st["n"]), Spacer(1, 8 * mm), Paragraph(esc(f.get("owner") or f.get("name")), st["n"]), Paragraph(esc(f.get("name")), st["k"])]
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------- Aufmaßblatt (Stufe F)
+
+def aufmass_pdf(firma: dict, projekt: dict, aufmasse: list[dict], summen: list[dict]) -> bytes:
+    """Aufmaßblatt: alle Aufmaße des Projekts mit Formel, Menge, Status; Summen je Position."""
+    st = _stile()
+    buf = io.BytesIO()
+    doc = _doc(buf, f"Aufmaß {projekt.get('name')}", firma.get("name") or "")
+    story = [Paragraph(f"Aufmaßblatt – {esc(projekt.get('name'))}", st["h1"]),
+             Paragraph(f"{esc(firma.get('name'))} · {esc(projekt.get('customer_name') or '')} · {esc(projekt.get('address') or '')} · Stand {de(date.today().isoformat())}", st["k"]), Spacer(1, 4 * mm)]
+    zeilen = [[Paragraph(t, st["z"]) for t in ("Pos.", "Bezeichnung / Raum", "Datum", "Formel", "Menge", "Status")]]
+    for a in aufmasse:
+        pos = (a.get("position") or {}).get("nr") or "–"
+        zeilen.append([Paragraph(esc(pos), st["z"]), Paragraph(f"{esc(a.get('bezeichnung'))}{('<br/><font size=7 color=#666666>' + esc(a.get('raum')) + '</font>') if a.get('raum') else ''}", st["z"]),
+                       Paragraph(de(a.get("messdatum")), st["z"]), Paragraph(esc(a.get("formel")), st["z"]), Paragraph(f"{float(a.get('menge') or 0):,.3f} {esc(a.get('einheit'))}".replace(",", "X").replace(".", ",").replace("X", "."), st["z"]),
+                       Paragraph("geprüft" if a.get("status") == "geprueft" else "erfasst", st["z"])])
+    story += [_tabelle(zeilen, [16 * mm, 58 * mm, 20 * mm, 44 * mm, 24 * mm, 16 * mm]), Spacer(1, 6 * mm)]
+    if summen:
+        story.append(Paragraph("Summen je Position (nur geprüfte Mengen zählen für die Übernahme)", st["h2"]))
+        z2 = [[Paragraph(t, st["z"]) for t in ("Pos.", "Position", "Aufmaße", "Gesamt", "Geprüft")]]
+        for s_ in summen:
+            z2.append([Paragraph(esc(s_.get("nr")), st["z"]), Paragraph(esc(s_.get("text")), st["z"]), Paragraph(str(s_.get("anzahl")), st["z"]),
+                       Paragraph(f"{float(s_.get('gesamt') or 0):,.3f} {esc(s_.get('einheit'))}".replace(",", "X").replace(".", ",").replace("X", "."), st["z"]),
+                       Paragraph(f"{float(s_.get('geprueft') or 0):,.3f} {esc(s_.get('einheit'))}".replace(",", "X").replace(".", ",").replace("X", "."), st["z"])])
+        story.append(_tabelle(z2, [18 * mm, 80 * mm, 20 * mm, 30 * mm, 30 * mm]))
+    story += _unterschriften(st, "Aufgemessen (Firma)", "Bestätigt (Auftraggeber)")
+    doc.build(story)
     return buf.getvalue()

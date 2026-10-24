@@ -2,11 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
-import {
-  ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check,
-  Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera,
-  Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen, Gavel, FileSignature,
-} from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check, Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera, Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen, Gavel, FileSignature, Package, Calculator, Ruler } from 'lucide-react';
 import Layout from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
 import EntryDialog from '../components/EntryDialog';
@@ -27,8 +23,14 @@ import DokumenteTab from '../components/plattform/DokumenteTab';
 import MeilensteineKarte from '../components/plattform/MeilensteineKarte';
 import PlattformTag from '../components/plattform/PlattformTag';
 import AusschreibungenTab from '../components/plattform/AusschreibungenTab';
+import AuftragTab from '../components/angebot/AuftragTab';
+import MaterialTab from '../components/material/MaterialTab';
+import NachkalkulationTab from '../components/material/NachkalkulationTab';
+import AbrechnungTab from '../components/rechnungen/AbrechnungTab';
+import AufmassTab from '../components/aufmass/AufmassTab';
 import NachtraegeTab from '../components/plattform/NachtraegeTab';
 import AbnahmenTab from '../components/plattform/AbnahmenTab';
+import ProjektChatTab from '../components/nachrichten/ProjektChatTab';
 import ProjektakteKarte from '../components/ProjektakteKarte';
 import { AppIcon, Btn, Card, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Field } from '../components/ui';
 import { api, openFile } from '../lib/api';
@@ -45,7 +47,7 @@ const fmtZeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit',
 export default function ProjektPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { isBuero, isVorarbeiter, firma: eigeneFirma } = useAuth();
+  const { isBuero, isVorarbeiter, firma: eigeneFirma, kann, feature } = useAuth();
   const today = useMemo(() => new Date(), []);
   const [{ year, month }, setYm] = useState(() => clampMonth(today.getFullYear(), today.getMonth()));
   const [tab, setTab] = useState('kalender');
@@ -181,6 +183,12 @@ export default function ProjektPage() {
       : leitung
         ? [{ value: 'firmen', label: 'Firmen', icon: Building2 }, ...((eigeneFirma?.art || 'betrieb') !== 'betrieb' ? [{ value: 'ausschreibungen', label: 'Ausschreibungen', icon: Gavel }] : []), { value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }, ...baustelleTabs, vertragTab, { value: 'anwesenheit', label: 'Anwesenheit', icon: Users }, { value: 'nachweise', label: 'Nachweise', icon: FileCheck2 }]
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
+    ...(isBuero && !verknuepft ? [{ value: 'auftrag', label: 'Angebot & Auftrag', icon: FileText }] : []),
+    { value: 'material', label: 'Material', icon: Package },
+    { value: 'aufmass', label: 'Aufmaß', icon: Ruler },
+    ...(isBuero && kann('rechnungen') ? [{ value: 'abrechnung', label: 'Abrechnung', icon: Receipt }] : []),
+    ...(isBuero && kann('kalkulation') ? [{ value: 'nachkalkulation', label: 'Nachkalkulation', icon: Calculator }] : []),
+    ...(feature('chat') ? [{ value: 'chat', label: 'Chat', icon: MessageSquare }] : []),
   ];
 
   return (
@@ -355,6 +363,12 @@ export default function ProjektPage() {
       {tab === 'berichte' && <BerichteTab projectId={plattformId} />}
       {tab === 'dokumente' && <DokumenteTab projectId={plattformId} />}
       {tab === 'vertrag' && <><NachtraegeTab projectId={plattformId} /><AbnahmenTab projectId={plattformId} className="mt-6" /></>}
+      {tab === 'auftrag' && <AuftragTab projekt={project} />}
+      {tab === 'material' && <MaterialTab projekt={project} />}
+      {tab === 'aufmass' && <AufmassTab projekt={project} />}
+      {tab === 'abrechnung' && <AbrechnungTab projekt={project} kunde={data.kunde} />}
+      {tab === 'nachkalkulation' && <NachkalkulationTab projekt={project} />}
+      {tab === 'chat' && <ProjektChatTab projekt={project} plattformId={plattformId} leitung={leitung} />}
 
       <EntryDialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }} projectId={project.id} dateKey={selectedDate}
         entries={selectedDate ? (byDay[selectedDate] || []) : []} lastEntry={lastEntry} recentActivities={recentActivities}

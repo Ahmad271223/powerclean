@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, Response
 
 import config
 import mail
-from auth import aktueller_nutzer, firmenabo_noetig, hat_rolle, jetzt_iso, nutzer_oeffentlich, rolle_noetig, schreibend
+from auth import aktueller_nutzer, firmenabo_noetig, hat_recht, hat_rolle, jetzt_iso, nutzer_oeffentlich, recht_fehlt, recht_noetig, RECHTE, rolle_noetig, schreibend, schreibend_mit_recht
 from dateien import KATEGORIEN_PERSONAL, KATEGORIEN_PROJEKT, bild_verkleinern, datei_loeschen, datei_speichern
 from db import db
 from gemeinsam import neue_id, projekt_sichtbar
@@ -43,7 +43,7 @@ async def liste(alle: bool = False, user: dict = Depends(aktueller_nutzer)):
 
 
 @router.post("/api/mitarbeiter")
-async def einladen(body: MitarbeiterIn, user: dict = Depends(firmenabo_noetig("buero"))):
+async def einladen(body: MitarbeiterIn, user: dict = Depends(firmenabo_noetig("buero", "personal"))):
     email = body.email.lower().strip()
     if await db().users.find_one({"email": email}):
         raise HTTPException(409, "Diese E-Mail-Adresse ist schon vergeben.")
@@ -78,8 +78,9 @@ async def _laden(user: dict, user_id: str) -> dict:
 
 
 def _selbst_oder_buero(user: dict, user_id: str) -> None:
-    if user["id"] != user_id and not hat_rolle(user, "buero"):
-        raise HTTPException(403, "Dafür fehlt die Berechtigung.")
+    """Eigene Daten immer; fremde nur mit dem Personalrecht (Inhaber, Büro je Vergabe)."""
+    if user["id"] != user_id and not hat_recht(user, "personal"):
+        raise HTTPException(403, "Die Daten anderer Mitarbeiter sieht nur, wer das Personalrecht hat (Inhaber oder vom Inhaber freigegebenes Büro).")
 
 
 @router.get("/api/mitarbeiter/{user_id}")
@@ -93,6 +94,15 @@ async def lesen(user_id: str, user: dict = Depends(aktueller_nutzer)):
 async def aendern(user_id: str, body: MitarbeiterUpdateIn, user: dict = Depends(schreibend("buero"))):
     u = await _laden(user, user_id)
     aenderung = body.model_dump(exclude_unset=True)
+    if "rechte" in aenderung:
+        if aenderung["rechte"] is None:
+            aenderung.pop("rechte")
+        else:
+            if not hat_rolle(user, "inhaber"):
+                raise HTTPException(403, "Rechte vergibt und entzieht nur der Inhaber.")
+            if aenderung.get("role", u.get("role")) != "buero":
+                raise HTTPException(400, "Rechte gibt es nur für Büro-Konten; Mitarbeiter und Vorarbeiter haben feste Rollenrechte.")
+            aenderung["rechte"] = {**(u.get("rechte") or {}), **{k: bool(v) for k, v in aenderung["rechte"].items() if k in RECHTE}}
     if "role" in aenderung:
         if (u.get("role") == "inhaber" or aenderung["role"] == "inhaber") and not hat_rolle(user, "inhaber"):
             raise HTTPException(403, "Rollen von Inhabern kann nur der Inhaber ändern.")
@@ -213,8 +223,25 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
             if not ((z["eigentuemer"] and z["leitung"]) or d.get("firma_id") == user["firma_id"] or d.get("freigabe_alle")):
                 raise HTTPException(404, "Dokument nicht gefunden.")
         return d
+    if d["scope"] == "chat":
+        # Chat-Anhänge: dieselben Rechte wie der Chat (firmenübergreifend, nie über firma_id der Datei)
+        from routes.nachrichten import dokument_zugang as chat_dokument_zugang
+        await chat_dokument_zugang(user, d["ref_id"])
+        return d
     if d.get("firma_id") != user["firma_id"]:
         raise HTTPException(404, "Dokument nicht gefunden.")
+    if d["scope"] == "aufmass":
+        a = await db().aufmasse.find_one({"id": d["ref_id"], "firma_id": user["firma_id"]}, {"_id": 0, "project_id": 1})
+        if not a:
+            raise HTTPException(404, "Dokument nicht gefunden.")
+        from gemeinsam import projekt_laden as _pl
+        await _pl(user, a["project_id"])
+        return d
+    if d["scope"] == "eingangsrechnung":
+        from auth import hat_recht, recht_fehlt
+        if not hat_recht(user, "rechnungen"):
+            raise HTTPException(403, recht_fehlt("rechnungen"))
+        return d
     if d["scope"] == "user":
         _selbst_oder_buero(user, d["ref_id"])
     elif d["scope"] == "project" and not hat_rolle(user, "buero"):
@@ -227,6 +254,14 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
 @router.get("/api/dokumente/{dokument_id}/datei")
 async def dokument_datei(dokument_id: str, user: dict = Depends(aktueller_nutzer)):
     d = await _dokument_zugriff(user, dokument_id)
+    # Fremde Teamfotos: Kollegen bekommen eine neu erzeugte JPEG-Kopie ohne EXIF (Gerät, Ort, Name) und ohne Originaldateinamen
+    fremdes_teamfoto = (d.get("scope") == "project" and (d.get("mime") or "").startswith("image/") and d.get("uploaded_by") != user["id"] and not hat_recht(user, "personal"))
+    if fremdes_teamfoto:
+        try:
+            daten = bild_verkleinern(d["path"], 3000)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(415, "Foto kann nicht angezeigt werden.") from exc
+        return Response(content=daten, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300", "Content-Disposition": 'inline; filename="Projektfoto.jpg"'})
     return FileResponse(d["path"], media_type=d.get("mime") or "application/octet-stream", filename=d.get("filename") or "datei")
 
 
@@ -247,7 +282,7 @@ async def dokument_bild(dokument_id: str, max: int = Query(1400, ge=100, le=3000
 async def dokument_aendern(dokument_id: str, body: DokumentIn, user: dict = Depends(schreibend("mitarbeiter"))):
     """Arbeitstag oder Notiz eines Fotos ändern (eigene Fotos, Büro alle)."""
     d = await _dokument_zugriff(user, dokument_id)
-    if d.get("uploaded_by") != user["id"] and not hat_rolle(user, "buero"):
+    if d.get("uploaded_by") != user["id"] and not hat_recht(user, "personal"):
         raise HTTPException(403, "Nur eigene Fotos lassen sich ändern.")
     aenderung = body.model_dump(exclude_unset=True)
     if not aenderung:
@@ -259,10 +294,15 @@ async def dokument_aendern(dokument_id: str, body: DokumentIn, user: dict = Depe
 
 
 @router.delete("/api/dokumente/{dokument_id}")
-async def dokument_loeschen(dokument_id: str, user: dict = Depends(schreibend("buero"))):
+async def dokument_loeschen(dokument_id: str, user: dict = Depends(schreibend("mitarbeiter"))):
     d = await _dokument_zugriff(user, dokument_id)
     if d.get("firma_id") != user["firma_id"]:
         raise HTTPException(403, "Fotos einer anderen Firma kann nur diese Firma löschen.")
+    eigenes = d.get("uploaded_by") == user["id"]
+    if not eigenes and not hat_recht(user, "personal"):
+        raise HTTPException(403, "Nur die hochladende Person oder das Büro mit Personalrecht darf diese Datei löschen.")
+    if not eigenes and not hat_rolle(user, "buero"):
+        raise HTTPException(403, "Fremde Dateien löscht nur das Büro oder der Inhaber.")
     await db().documents.delete_one({"id": dokument_id})
     datei_loeschen(d)
     await protokollieren(user, "dokument.geloescht", d.get("filename", ""), details={"scope": d["scope"], "ref": d["ref_id"]})
@@ -278,8 +318,9 @@ async def kategorien(user: dict = Depends(aktueller_nutzer)):
 
 @router.get("/api/mitarbeiter/{user_id}/lohndaten")
 async def lohndaten(user_id: str, user: dict = Depends(aktueller_nutzer)):
-    """Eigene Lohndaten darf jeder sehen, fremde nur Büro/Inhaber (Zugriff wird protokolliert)."""
-    _selbst_oder_buero(user, user_id)
+    """Eigene Lohndaten darf jeder sehen, fremde nur mit dem Lohnrecht (Zugriff wird protokolliert)."""
+    if user["id"] != user_id and not hat_recht(user, "lohn"):
+        raise HTTPException(403, recht_fehlt("lohn"))
     u = await _laden(user, user_id)
     if user["id"] != user_id:
         await protokollieren(user, "mitarbeiter.lohndaten_gelesen", u.get("name", ""))
@@ -287,7 +328,7 @@ async def lohndaten(user_id: str, user: dict = Depends(aktueller_nutzer)):
 
 
 @router.put("/api/mitarbeiter/{user_id}/lohndaten")
-async def lohndaten_aendern(user_id: str, body: LohndatenIn, user: dict = Depends(schreibend("buero"))):
+async def lohndaten_aendern(user_id: str, body: LohndatenIn, user: dict = Depends(schreibend_mit_recht("lohn"))):
     u = await _laden(user, user_id)
     aenderung = body.model_dump(exclude_unset=True)
     if not aenderung:

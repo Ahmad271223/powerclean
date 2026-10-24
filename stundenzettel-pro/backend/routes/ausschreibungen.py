@@ -17,7 +17,7 @@ from ausschreibung import (ABRECHNUNGSARTEN, ANGEBOT_STATUS_NAMEN, ANNAHME_TEXT,
                            einladung_der_firma, frist_offen, frist_tage, heute, interessierte_firmen, leitung_benachrichtigen, leitung_noetig,
                            neue_vergabe_pruefen, nummer_vergeben, oeffentliche_ansicht, positionen_berechnen, schritt, vergabe_schritt,
                            vergabe_zugang, zweites_augenpaar)
-from abo import gu_abo_aktivieren, ist_auftraggeber
+from abo import gu_abo_aktivieren, gu_freigeschaltet, ist_auftraggeber
 from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, rolle_noetig, schreibend
 from preise import PREISE
 from dateien import datei_speichern, speicher_belegt, speicher_grenze, version_verknuepfen
@@ -49,6 +49,9 @@ async def _auftraggeber_noetig(user: dict) -> dict:
     if not ist_auftraggeber(firma):
         raise HTTPException(403, "Formale Ausschreibungen können nur Auftraggeber-Konten anlegen und veröffentlichen (Firma → Firmendaten → Firmenart „Auftraggeber“ oder „Beides“). "
                                  "Partnerfirmen lassen sich weiterhin direkt unter „Zusammenarbeit“ zum Projekt einladen.")
+    if not gu_freigeschaltet(firma):
+        raise HTTPException(403, "Nach der Testphase brauchen formale Ausschreibungen die GU-Freischaltung durch den Anbieter "
+                                 "(Projektabo 50,99 € netto je aktivem Bauprojekt). Bitte den Anbieter kontaktieren – Partnerfirmen lassen sich weiterhin unter „Zusammenarbeit“ einladen.")
     user["_firma"] = firma
     return firma
 
@@ -528,16 +531,82 @@ async def positionen_import(ausschreibung_id: str, body: PositionenTextIn, user:
 
 
 @router.post("/api/ausschreibungen/{ausschreibung_id}/positionen/gaeb")
-async def positionen_gaeb(ausschreibung_id: str, datei: UploadFile = File(...), user: dict = Depends(schreibend("mitarbeiter"))):
+async def positionen_gaeb(ausschreibung_id: str, datei: UploadFile = File(...), vorschau: str = Form("0"), user: dict = Depends(schreibend("mitarbeiter"))):
     zg = await ausschreibung_zugang(user, ausschreibung_id)
     leitung_noetig(zg)
+    a = zg["ausschreibung"]
+    if a.get("status") in ("vergeben", "aufgehoben"):
+        raise HTTPException(400, "Diese Ausschreibung ist abgeschlossen.")
     inhalt = await datei.read()
     try:
-        positionen = gaeb.lesen(inhalt, datei.filename or "")
+        g = gaeb.lesen(inhalt, datei.filename or "")
     except gaeb.GaebNichtUnterstuetzt as exc:
-        raise HTTPException(501, str(exc))
-    await db().ausschreibungen.update_one({"id": ausschreibung_id}, {"$set": {"positionen": positionen, "updated_at": jetzt_iso()}})
-    return {"positionen": positionen}
+        raise HTTPException(400, str(exc))
+    positionen = _positionen_flach(g["positionen"])
+    if vorschau == "1":
+        return {"positionen": positionen, "hinweise": g["hinweise"], "phase": g["phase"], "projekt": g.get("projekt") or "", "vorschau": True}
+    await db().ausschreibungen.update_one({"id": ausschreibung_id}, {"$set": {"positionen": positionen, "updated_at": jetzt_iso()}, "$push": {"verlauf": schritt(user, "positionen_gaeb", f"{len(positionen)} Positionen aus GAEB X{g['phase']}")}})
+    return {"positionen": positionen, "hinweise": g["hinweise"], "phase": g["phase"], "vorschau": False}
+
+
+def _positionen_flach(positionen: list[dict]) -> list[dict]:
+    """Ausschreibungspositionen sind eine flache Liste: Titel werden als Präfix in die Ordnungszahl-Hierarchie übernommen, Textzeilen entfallen."""
+    aus, gesehen = [], set()
+    for p in positionen:
+        if (p.get("art") or "leistung") in ("titel", "text"):
+            continue
+        nr = str(p.get("nr") or "")[:20] or str(len(aus) + 1)
+        if nr in gesehen:
+            nr = f"{nr}-{len(aus) + 1}"
+        gesehen.add(nr)
+        aus.append({"nr": nr, "leistung": str(p.get("leistung") or "")[:300], "beschreibung": str(p.get("beschreibung") or "")[:2000], "menge": float(p.get("menge") or 0), "einheit": str(p.get("einheit") or "Stück")[:20]})
+    if len(aus) > 500:
+        raise HTTPException(400, "Höchstens 500 Positionen.")
+    return aus
+
+
+@router.post("/api/ausschreibungen/{ausschreibung_id}/positionen/datei")
+async def positionen_datei(ausschreibung_id: str, datei: UploadFile = File(...), vorschau: str = Form("0"), user: dict = Depends(schreibend("mitarbeiter"))):
+    """Leistungsverzeichnis aus CSV, Excel oder GAEB DA XML – mit Vorschau und Fehlerzeilen."""
+    import importe
+    zg = await ausschreibung_zugang(user, ausschreibung_id)
+    leitung_noetig(zg)
+    a = zg["ausschreibung"]
+    if a.get("status") in ("vergeben", "aufgehoben"):
+        raise HTTPException(400, "Diese Ausschreibung ist abgeschlossen.")
+    try:
+        ergebnis = importe.positionen_aus_datei(await datei.read(), datei.filename or "")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    positionen = _positionen_flach(ergebnis["positionen"])
+    if vorschau == "1" or not positionen:
+        return {"positionen": positionen, "fehler": ergebnis["fehler"], "quelle": ergebnis.get("quelle"), "vorschau": True}
+    await db().ausschreibungen.update_one({"id": ausschreibung_id}, {"$set": {"positionen": positionen, "updated_at": jetzt_iso()}, "$push": {"verlauf": schritt(user, "positionen_import", f"{len(positionen)} Positionen aus {ergebnis.get('quelle')}")}})
+    if a.get("status") in ("veroeffentlicht", "in_vergabe"):
+        await _firmen_benachrichtigen(a, "ausschreibung_aktualisiert", f"Das Leistungsverzeichnis der Ausschreibung „{a['titel']}“ wurde aktualisiert.")
+    return {"positionen": positionen, "fehler": ergebnis["fehler"], "quelle": ergebnis.get("quelle"), "vorschau": False}
+
+
+@router.get("/api/ausschreibungen/{ausschreibung_id}/lv.x83")
+async def lv_x83(ausschreibung_id: str, user: dict = Depends(aktueller_nutzer)):
+    """Leistungsverzeichnis als GAEB DA XML X83 (Angebotsaufforderung) – für Bieter und Eigentümer."""
+    zg = await ausschreibung_zugang(user, ausschreibung_id)
+    a = zg["ausschreibung"]
+    f = await firma_kurz(a["firma_id"])
+    inhalt = gaeb.schreiben(a.get("positionen") or [], "83", {"titel": a.get("titel"), "projekt": a.get("titel"), "auftraggeber": f.get("name")})
+    return _datei(inhalt, f"LV-{a.get('nummer')}.x83", "application/xml")
+
+
+@router.get("/api/angebote/{angebot_id}/angebot.x84")
+async def angebot_x84(angebot_id: str, user: dict = Depends(aktueller_nutzer)):
+    """Eigenes Bieterangebot als GAEB DA XML X84 (Angebotsabgabe) mit Einheitspreisen."""
+    g, zg = await angebot_zugang(user, angebot_id)
+    a = zg["ausschreibung"]
+    preise = {p["nr"]: p for p in g.get("positionen") or []}
+    positionen = [{**p, "einzelpreis": (preise.get(p["nr"]) or {}).get("einzelpreis") or 0} for p in a.get("positionen") or []]
+    f = await firma_kurz(g["firma_id"])
+    inhalt = gaeb.schreiben(positionen, "84", {"titel": a.get("titel"), "projekt": a.get("titel"), "auftraggeber": (await firma_kurz(a["firma_id"])).get("name"), "bieter": f.get("name")})
+    return _datei(inhalt, f"Angebot-{g.get('nummer') or angebot_id[:8]}.x84", "application/xml")
 
 
 # ---------------------------------------------------------------- Rückfragen

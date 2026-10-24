@@ -28,6 +28,16 @@ import AuswertungPage from './pages/AuswertungPage';
 import MitteilungenPage from './pages/MitteilungenPage';
 import ProjektleiterPage from './pages/ProjektleiterPage';
 import AbosPage from './pages/AbosPage';
+import PlantafelPage from './pages/PlantafelPage';
+import MeinEinsatzplanPage from './pages/MeinEinsatzplanPage';
+import AngebotePage from './pages/AngebotePage';
+import AngebotPage from './pages/AngebotPage';
+import AngebotOeffentlichPage from './pages/AngebotOeffentlichPage';
+import ArtikelPage from './pages/ArtikelPage';
+import EingangsrechnungenPage from './pages/EingangsrechnungenPage';
+import NachkalkulationPage from './pages/NachkalkulationPage';
+import MahnwesenPage from './pages/MahnwesenPage';
+import NachrichtenPage from './pages/NachrichtenPage';
 
 function CrashScreen({ error }) {
   return (
@@ -114,6 +124,16 @@ export default function App() {
             <Route path="/mitteilungen" element={<Geschuetzt><MitteilungenPage /></Geschuetzt>} />
             <Route path="/projektleiter" element={<Geschuetzt buero><ProjektleiterPage /></Geschuetzt>} />
             <Route path="/abos" element={<Geschuetzt buero><AbosPage /></Geschuetzt>} />
+            <Route path="/plantafel" element={<Geschuetzt buero><PlantafelPage /></Geschuetzt>} />
+            <Route path="/einsaetze" element={<Geschuetzt><MeinEinsatzplanPage /></Geschuetzt>} />
+            <Route path="/angebote" element={<Geschuetzt buero><AngebotePage /></Geschuetzt>} />
+            <Route path="/angebote/:angebotId" element={<Geschuetzt buero><AngebotPage /></Geschuetzt>} />
+            <Route path="/angebot/:token" element={<AngebotOeffentlichPage />} />
+            <Route path="/artikel" element={<Geschuetzt buero><ArtikelPage /></Geschuetzt>} />
+            <Route path="/eingangsrechnungen" element={<Geschuetzt buero><EingangsrechnungenPage /></Geschuetzt>} />
+            <Route path="/nachkalkulation" element={<Geschuetzt buero><NachkalkulationPage /></Geschuetzt>} />
+            <Route path="/mahnwesen" element={<Geschuetzt buero><MahnwesenPage /></Geschuetzt>} />
+            <Route path="/nachrichten" element={<Geschuetzt><NachrichtenPage /></Geschuetzt>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </DialogProvider>

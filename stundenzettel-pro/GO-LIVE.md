@@ -79,6 +79,94 @@ E-Mail-Ausgang mit Nachweisen und Wiederholung, Nachträge mit Freigabe, Abnahme
 
 Offen: echter SMTP-Versand auf dem Zielserver (Testmail), Projektakte bei sehr großen Projekten (Laufzeit, Speicher), Chat.
 
+## 1e. Stufe A und B (24.10.2026, Branch `handwerker-plattform`)
+
+| Befund (`AUDIT_20261024.md`) | Geprüft | Ergebnis |
+|---|---|---|
+| A1 Büro sieht Löhne, Rechnungen, Personalakten ohne Abstufung | bestätigt (alle Büro-Routen nur `rolle_noetig("buero")`) | vergebbare Rechte je Büro-Nutzer, jede Route prüft ihr Recht, Navigation blendet aus (`test_stufe_a_20261024.py::test_02`) |
+| A2 Kollegen sehen Hochlader und Dateinamen fremder Projektfotos | bestätigt | `foto_fuer_nutzer`, EXIF-freie Auslieferung, Löschrecht eingeschränkt (`test_01`) |
+| A3 Firmenart „Auftraggeber“ selbst wählbar → Ausschreibungen ohne Freigabe | bestätigt | `gu_freigeschaltet` (Testphase oder Betreiber-Freischaltung), 403 sonst (`test_03`) |
+| A4 CSV-Import kippt bei Anführungszeichen und Dezimalkomma | bestätigt | robuster Parser (`lib/ausschreibung.js`), aus PR #8 übernommen |
+| A5 Exporte-Seite meldet „Nicht gefunden“ gegen alten Server | bestätigt | Klartext „Server veraltet“ statt 404-Toast |
+| A6 Angebotsart (Pauschal/Stunden) ohne Rückmeldung | bestätigt | gesperrte Preisart sichtbar, eigene Dialoge |
+| A7 Keine Einsatzplanung, Lohn rechnet mit roher Stempelung | bestätigt | Plantafel mit Abgleich und Freigabe (`test_plantafel_20261024.py`, 4 Tests) |
+
+Alle Backend-Tests grün (75, davon 7 neu für Stufe A und B); Frontend-Build grün; Browser-Prüfung Plantafel (Ziehen, Kopieren, Abgleich, Freigabe) und
+„Meine Einsätze“/„Mein Tag“ am 24.10.2026.
+
+Offen: Erinnerungsdienst auf dem Zielserver beobachten (Protokoll `erinnerungen`), SMTP-Testmail, Serien- und Schichtvorlagen.
+
+## 1f. Stufe C – Kundenangebote und Kalkulation (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Routenkonflikt `/api/angebote/{id}` mit den GU-Bieterangeboten | gefunden beim Testlauf (PUT lief auf die GU-Route); Kundenangebote liegen unter `/api/kundenangebote` |
+| Dreifach eingefügte Blöcke aus dem Stufe-A-Patch (`auth.py` Rechte-Block, `gemeinsam.foto_fuer_nutzer`, zwei `ProjektIn`-Felder) | bereinigt, Suite unverändert grün |
+| Summen und Rundung (Zuschlag, Rabatt, USt, § 19, § 13b, Alternativ/Eventual) | `test_angebote_20261024.py::test_01` |
+| Senden mit PDF-Anhang und Antwortlink, Unveränderlichkeit, Versionen, Online-Annahme, Auftrag, Projektakte, Ablauf, Anfrage | `test_02` |
+| Kalkulation: Aufschlag ≠ Marge, Deckungsbeitrag, Unvollständigkeit, Assistent, Vertraulichkeit | `test_03` |
+| Browser (24.10.2026): Liste, Editor, Anlegen über Dialog, Position speichern, ohne E-Mail senden, Firma → Angebote, Projekt → Angebot & Auftrag, Antwortseite | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 78 grün. Offen: echter E-Mail-Versand mit Anhang über SMTP auf dem Zielserver prüfen (Anhangsgröße, Spam-Bewertung).
+
+## 1g. Stufe D – Material, Eingangsrechnungen, Nachkalkulation (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| CSV-Import: Trennzeichen, Anführungszeichen mit Semikolon im Text, Dezimalkomma, Fehlerzeilen mit Nummer, Mehrfachnummern, Einkaufspreise ohne Recht | `test_material_20261024.py::test_01` |
+| Materialverbrauch: nur zugeteilte Projekte, Mitarbeiter nie Preise, Büro ohne Kostensätze ohne Preise, Prüfung nur mit Recht, geprüfte Buchung für Mitarbeiter gesperrt | `test_02` |
+| Eingangsrechnung: XRechnung-Vorschlag, Beleg-Zugriff, Aufteilung ≤ Netto, Brutto = Netto + USt, Dublette (409/erzwingen), prüfen/bezahlt/storno, Nachkalkulation Soll/Ist mit Hinweisen, Personenkosten nur mit Kostensätzen, Projektakte | `test_03` |
+| Browser (24.10.2026): Artikelliste und -dialog, Eingangsrechnungsliste und -dialog mit „Geprüft“, Projekt → Material (Büro mit Kosten, Prüfen; Mitarbeiterin bucht ohne Preise), Projekt → Nachkalkulation, Übersicht | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 81 grün. Offen: ZUGFeRD-Auslesen mit echten Lieferanten-PDFs prüfen (nur mit erzeugten XML getestet), Lohnnebenkosten je Firma einstellen (Standard 0).
+
+## 1h. Stufe E – Rechnungsprozesse (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Kumulative Abschläge (30 % → 60 %), Abzug gestellter Abschläge, Teilzahlung/teilbezahlt/Überzahlung, Nachtrag in der Basis, Schlussrechnung mit Vorgängerbelegen in der XML, Sperren nach Schluss, pauschaler Abschlag, Server-PDF | `test_rechnungslauf_20261024.py::test_01` |
+| Storno nur ausgestellter Rechnungen (Gegenbuchung, 384, Verweis), Gutschrift (381, positive XML-Beträge), Rechnung aus Auftrag, Versand mit ZUGFeRD-Anhang, „als bezahlt“ legt Zahlung an | `test_02` |
+| Mahnwesen: nur ausgestellte und überfällige, Stufen in Reihenfolge, Fristen (409 / erzwingen), Gebühren aus Regeln, PDF-Snapshot, E-Mail-Nachweis, Startseite, Zahlung beendet den Vorgang | `test_03` |
+| Browser (24.10.2026): Rechnungsliste mit Abschlag/Teilzahlung, Zahlungsdialog, Projekt → Abrechnung, Mahnwesen mit Regeln | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 84 grün. Vor dem Go-live: Rechnungs-PDFs der neuen Arten vom Steuerberater prüfen lassen (Abschlag/Schluss-Darstellung, § 13b,
+Gutschrift), Mahnfristen und -gebühren mit den eigenen AGB abstimmen (Standard 0 €), XRechnung-Validator (KoSIT) gegen Abschlag/Storno laufen lassen.
+
+## 1i. Stufe F – Aufmaß, GAEB, DATANORM (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Formelparser: Dezimalkomma, Teilmengen, Klammern, Vorzeichen, ×/x; Ablehnung von `**`, Namen, Code, Division durch null, offenen Klammern | `test_aufmass_gaeb_20261024.py::test_01` |
+| Aufmaß: Positionen aus Angebot/Auftrag, Erfassen mit Fehlern, Foto-Zugriff nur mit Projektzugang, Prüfung nur Büro, Änderung setzt Prüfung zurück, Summen, Übernahme in Angebot (nur geprüft) und Auftrag (Pauschal nur erzwungen), Aufmaßblatt, Projektakte | `test_02` |
+| GAEB X83 lesen (Hierarchie, Texte, Mengen, Hinweise, Fehlerfälle), Ausschreibung Import/Export mit Rücklesen, Bieter-X84 mit UP/IT/Total, Kundenangebot CSV/Excel/X83 mit Fehlerzeilen und X84, DATANORM und Excel für Artikel | `test_03` |
+| Browser (24.10.2026): Aufmaß-Reiter (Mitarbeiterin: Live-Berechnung, Speichern; Inhaber: Prüfen, Übernahme-Dialog), Angebot: CSV-Import mit Vorschau und X84-Knopf, Ausschreibung: X83-Import mit Vorschau, Export-Knöpfe | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 87 grün. Vor dem Go-live: GAEB-Dateien echter Auftraggeber (X83 aus AVA-Programmen) und DATANORM-Kataloge echter Lieferanten
+durch den Import laufen lassen; X84-Ausgabe mit einem GAEB-Prüfprogramm validieren (keine XSD-Prüfung im Server).
+
+## 1j. Stufe G – Nachrichten, Regieberichte, Projektakte, Module (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Feature-Flags lesen, Projektchat intern (Rechte je Rolle und Firma, Schließen durch das Büro), Partnerchat (Leitung/Partnerleitung, nie Mitarbeiter), Anhänge mit Chat-Rechten, Ungelesen-Zähler und Dashboard-Punkt, E-Mail-Ankündigung (Wartezeit, nur fremde ungelesene, einmal je Nachricht), Modul aus → 404 | `test_stufe_g_20261024.py::test_01` |
+| Bieterchats getrennt je Bieter, Leitung nur mit beteiligten Firmen, Kontaktanfrage nur über Verzeichnis und nur Büro, Aufgabenchat (Leitung, Firma, zugeteilter Monteur; GU-Mitarbeiter/Fremde nie) | `test_02` |
+| Vorlagen (Prüfung der Felder, nur Büro, je Firma), Vorschlag mit Arbeitsanweisungen und Materialliste, Regiebericht mit Stunden/Material/Geräten, Unterschrift (PNG-Pflicht, Rechte, sperrt Änderungen, PDF), Entfernen mit Grund, Verlauf, Modul aus | `test_03` |
+| Projektakte: Manifest mit stimmenden SHA-256-Summen, Index-PDF, Nachrichten je Rolle (beteiligte Firma sieht keinen fremden internen Chat), Hintergrundlauf mit Status und Download erst bei fertig | `test_04` |
+| Browser (24.10.2026): Nachrichten-Seite mit Zähler, Senden; Projekt → Chat (intern/Partner, Schalter fürs Büro), Regiebericht-Dialog mit Regietabellen und Unterschrift, Projektakte mit Prüfsummen-Kennzeichen, Ausschreibung → Nachrichten (Bieterchat eröffnen, senden), Zusammenarbeit → Firmen finden → Kontakt, Firma → Module; Mitarbeiterin: Zähler, interner Chat ohne Partner-Bereich und ohne Schalter | ohne Konsolenfehler nach Abschluss |
+
+Backend-Tests gesamt: 91 grün. Vor dem Go-live: `NACHRICHTEN_DIENST` läuft mit Datenbank automatisch; E-Mail-Texte im Ausgang prüfen, Wartezeit
+(`nachrichten.WARTEZEIT_MINUTEN`) bei Bedarf anpassen; Feature-Flags in der `.env` bewusst setzen (`FEATURE_KI=0`, `FEATURE_LAGER=0` bleiben aus).
+
+## 1k. Stufe H – KI-Entwürfe (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Flag aus → 404 mit Klartext; Flag an ohne Schlüssel → Status `bereit: false` ohne Schlüsselpreisgabe, Entwurf 503 mit Klartext, kein Netzaufruf; Eingabegrenzen | `test_stufe_h_20261024.py::test_01` |
+| Angebotsentwurf mit Firmenkontext (Stundensatz im Prompt), tolerantes Parsen (unbekannte Art, Strings, Dezimalkomma, kaputte Zeilen), `unsicher`-Markierung, keine Speicherung, Protokoll ohne Inhalt, Übernahme nur über die Angebotsroute; Belegvorschlag mit Code-Zaun und Rechenprüfung, Recht `rechnungen`, 502 bei unlesbarer Antwort | `test_02` |
+
+Backend-Tests gesamt: 93 grün. Browser: Flag ist aus – kein KI-Element sichtbar (Standardzustand geprüft). Vor dem Einschalten: Anbieter-Vertrag/AVV, Schlüssel
+nur in der `.env`, `FEATURE_KI=1` bewusst setzen und mit einem echten Beispielangebot prüfen.
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

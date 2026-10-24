@@ -18,9 +18,10 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import config
+import features
 from db import db, indizes_anlegen
 from routes import (abschluss, api_v1, ausschreibungen, auth_routes, auswertung, baustelle, dashboard, exporte, firma, import_free, konten, kunden,
-                    leistungen, lohn, mitarbeiter, plattform, projekte, rechnungen, zeiten_routes, abwicklung, archiv)
+                    leistungen, lohn, mitarbeiter, plattform, projekte, rechnungen, zeiten_routes, abwicklung, archiv, einsatzplan, angebote, material, rechnungslauf, aufmass, nachrichten, ki)
 
 VERSION = "1.1.0"
 
@@ -57,6 +58,12 @@ async def lebenszyklus(app: FastAPI):
     if config.DB_MODE != "memory" or os.environ.get("MAIL_DIENST") == "1":
         import mail
         dienste.append(asyncio.create_task(mail.hintergrunddienst()))       # stellt offene E-Mails zu (Wiederholungen, auch nach Neustart)
+    if config.DB_MODE != "memory" or os.environ.get("EINSATZ_DIENST") == "1":
+        import erinnerungen
+        dienste.append(asyncio.create_task(erinnerungen.dienst()))          # Einsatz-Erinnerungen am Vorabend (einmal je Einsatz und Version)
+    if features.aktiv("chat") and (config.DB_MODE != "memory" or os.environ.get("NACHRICHTEN_DIENST") == "1"):
+        import nachrichten
+        dienste.append(asyncio.create_task(nachrichten.dienst()))           # kündigt ungelesene Chat-Nachrichten per E-Mail an (getrennt vom Senden)
     yield
     for dienst in dienste:
         dienst.cancel()
@@ -67,8 +74,9 @@ app = FastAPI(title="Stundenzettel Pro", version=VERSION, docs_url="/api/docs", 
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 for modul in (auth_routes, firma, mitarbeiter, kunden, projekte, zeiten_routes, rechnungen, exporte, import_free, api_v1, dashboard,
-              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle, ausschreibungen, abwicklung, archiv):
+              konten, leistungen, auswertung, abschluss, lohn, plattform, baustelle, ausschreibungen, abwicklung, archiv, einsatzplan, angebote, material, rechnungslauf, aufmass, nachrichten, ki):
     app.include_router(modul.router)
+app.include_router(features.router)
 
 
 @app.exception_handler(RequestValidationError)

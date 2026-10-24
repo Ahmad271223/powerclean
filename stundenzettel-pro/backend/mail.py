@@ -11,6 +11,8 @@ nie für jede Statusänderung. Firmen (Firma → Firmendaten) und Nutzer (Profil
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+import re
 import smtplib
 import ssl
 from datetime import datetime, timedelta, timezone
@@ -29,7 +31,9 @@ STATUS_NAMEN = {"offen": "Wartet auf Versand", "gesendet": "Gesendet", "fehlgesc
                 "nicht_konfiguriert": "Kein E-Mail-Versand eingerichtet (nur Nachweis)"}
 ARTEN = {"mitarbeiter_einladung": "Einladung Mitarbeiter", "projekt_einladung": "Einladung zum Projekt", "ausschreibung_einladung": "Einladung zur Ausschreibung",
          "angebot_nachweis": "Einreichungsnachweis Angebot", "angebot_eingegangen": "Angebot eingegangen", "zuschlag": "Zuschlag", "absage": "Absage",
-         "auftrag_angenommen": "Auftrag angenommen", "nachtrag": "Nachtrag", "abnahme": "Abnahme", "allgemein": "Allgemein"}
+         "auftrag_angenommen": "Auftrag angenommen", "nachtrag": "Nachtrag", "abnahme": "Abnahme", "einsatz_erinnerung": "Einsatz morgen",
+         "einsatz_aenderung": "Planänderung", "angebot_kunde": "Angebot an Kunden", "angebot_angenommen": "Angebot angenommen",
+         "angebot_abgelehnt": "Angebot abgelehnt", "rechnung": "Rechnung an Kunden", "mahnung": "Zahlungserinnerung / Mahnung", "nachricht": "Neue Nachricht", "allgemein": "Allgemein"}
 SOFORT_ZUSTELLEN = True   # Tests schalten die sofortige Zustellung ab und arbeiten den Ausgang gezielt ab
 
 
@@ -37,13 +41,19 @@ def eingerichtet() -> bool:
     return bool(config.SMTP_HOST and config.SMTP_ABSENDER)
 
 
-def _smtp_senden(an: str, betreff: str, text: str) -> None:
-    """Synchroner Versand über SMTP (läuft in einem Hilfsthread)."""
+def _smtp_senden(an: str, betreff: str, text: str, anhaenge: Optional[list] = None) -> None:
+    """Synchroner Versand über SMTP (läuft in einem Hilfsthread). anhaenge: [(Dateiname, Pfad)]."""
     msg = EmailMessage()
     msg["From"] = formataddr((config.SMTP_ABSENDER_NAME or "Stundenzettel Pro", config.SMTP_ABSENDER))
     msg["To"] = an
     msg["Subject"] = betreff
     msg.set_content(text)
+    for name, pfad in anhaenge or []:
+        try:
+            daten = Path(pfad).read_bytes()
+        except OSError:
+            continue
+        msg.add_attachment(daten, maintype="application", subtype="pdf" if str(name).lower().endswith(".pdf") else "octet-stream", filename=str(name)[:120])
     kontext = ssl.create_default_context()
     if config.SMTP_TLS == "ssl":
         with smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=20, context=kontext) as s:
@@ -74,15 +84,21 @@ def _jetzt() -> datetime:
 
 
 async def senden(firma_id: Optional[str], an: str, betreff: str, text: str, art: str = "allgemein", ref_id: str = "",
-                 project_id: str = "", absender_firma_id: Optional[str] = None) -> Optional[dict]:
-    """E-Mail in den Ausgang stellen (Nachweis) und – wenn eingerichtet – sofort zustellen."""
+                 project_id: str = "", absender_firma_id: Optional[str] = None, anhaenge: Optional[list[tuple[str, bytes]]] = None) -> Optional[dict]:
+    """E-Mail in den Ausgang stellen (Nachweis) und – wenn eingerichtet – sofort zustellen. Anhänge werden unter DATA_DIR/email_anhaenge abgelegt."""
     an = (an or "").strip().lower()
     if not an or "@" not in an or an.endswith("@konto.geloescht"):
         return None
     e = {"id": neue_id(), "firma_id": firma_id, "an": an, "betreff": (betreff or "")[:200], "text": ((text or "") + fusszeile())[:20000],
          "absender_firma_id": absender_firma_id or firma_id, "art": art if art in ARTEN else "allgemein", "ref_id": ref_id or "", "project_id": project_id or "",
          "status": "offen" if eingerichtet() else "nicht_konfiguriert", "versuche": 0, "fehler": "",
-         "naechster_versuch_at": _jetzt().isoformat(), "gesendet_at": None, "created_at": jetzt_iso()}
+         "naechster_versuch_at": _jetzt().isoformat(), "gesendet_at": None, "created_at": jetzt_iso(), "anhaenge": []}
+    for name, inhalt in anhaenge or []:
+        sicher = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(name))[:120] or "anhang.bin"
+        ziel = config.DATA_DIR / "email_anhaenge" / e["id"] / sicher
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        ziel.write_bytes(inhalt)
+        e["anhaenge"].append({"name": sicher, "pfad": f"email_anhaenge/{e['id']}/{sicher}", "groesse": len(inhalt)})
     await db().email_ausgang.insert_one(dict(e))
     if e["status"] == "offen" and SOFORT_ZUSTELLEN:
         try:
@@ -95,7 +111,10 @@ async def senden(firma_id: Optional[str], an: str, betreff: str, text: str, art:
 async def zustellen(e: dict) -> bool:
     """Einen Ausgangseintrag zustellen; bei Fehlern den nächsten Versuch planen."""
     try:
-        await asyncio.to_thread(VERSAND, e["an"], e["betreff"], e["text"])
+        if e.get("anhaenge"):
+            await asyncio.to_thread(VERSAND, e["an"], e["betreff"], e["text"], [(x["name"], str(config.DATA_DIR / x["pfad"])) for x in e["anhaenge"]])
+        else:
+            await asyncio.to_thread(VERSAND, e["an"], e["betreff"], e["text"])
     except Exception as exc:  # noqa: BLE001 – jeder Fehler wird gespeichert, nie geworfen
         versuche = int(e.get("versuche") or 0) + 1
         if versuche >= MAX_VERSUCHE:

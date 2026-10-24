@@ -82,6 +82,65 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
 - Mahnlauf ohne Zahlungsdienst: 1. Rechnung aus `/api/admin/abos`; 2. nach 14 Tagen `POST /api/admin/plan` mit `hinweis` („Rechnung … offen“);
   3. nach 30 Tagen `status: gesperrt` (Lesen und Export bleiben); nach Zahlung wieder `status: aktiv`.
 
+## 4f. Einsatz-Erinnerungen (Plantafel)
+
+- Der Dienst (`erinnerungen.py`) läuft im Server mit echter MongoDB automatisch; im Speicher-Modus nur mit `EINSATZ_DIENST=1`.
+  Er prüft jede Minute, ob für eine Firma die Erinnerungszeit (Firma → Benachrichtigungen, Standard 18:00 Uhr) erreicht ist, und legt je
+  Einsatz des Folgetags genau eine Benachrichtigung (und bei eingeschalteter E-Mail eine Nachricht im `email_ausgang`) an.
+- Doppelte Erinnerungen verhindert die eindeutige `id` in `erinnerungen` (`einsatz-erinnerung-<einsatz>-v<version>`); nach einem Neustart
+  wird nichts erneut verschickt. Verschobene Einsätze (neue Version) erzeugen eine neue Erinnerung – gewollt.
+- Prüfung im Betrieb: `db.erinnerungen.find().sort({at:-1}).limit(5)` und `db.email_ausgang.find({art:"einsatz_erinnerung"})`.
+
+## 4g. Kundenangebote
+
+- Gesendete Angebote liegen als PDF-Snapshot unter `DATA_DIR/angebote/<firma_id>/<angebot>_v<version>.pdf`, E-Mail-Anhänge unter
+  `DATA_DIR/email_anhaenge/<email_id>/`; beides gehört in die Sicherung (`backup.sh` sichert `DATA_DIR`). Fehlt ein Snapshot, erzeugt der Server das PDF
+  aus den gespeicherten Daten neu.
+- Der Antwortlink (`BASE_URL/#/angebot/<token>`) braucht keine Anmeldung; `BASE_URL` muss auf die öffentliche Adresse der Oberfläche zeigen.
+  Der Token ist 32 Zeichen lang und zufällig; abgelaufene Angebote lassen sich darüber nicht mehr annehmen.
+- Nummernkreis `firmen.angebotszaehler.{jahr}` zählt nie zurück (gelöschte Entwürfe hinterlassen Lücken – gewollt, wie bei Rechnungen).
+
+## 4h. Eingangsrechnungen und Nachkalkulation
+
+- Belege der Eingangsrechnungen liegen wie alle Dokumente unter `DATA_DIR` (Sammlung `documents`, scope `eingangsrechnung`) und gehören in die Sicherung.
+- Die Nachkalkulation rechnet bei jedem Aufruf neu (keine gespeicherten Zwischenstände); die Übersicht `/api/nachkalkulation` und die Startseiten-Kachel
+  gehen über alle aktiven Projekte mit Auftragswert – bei sehr vielen Projekten lohnt ein Zwischenspeicher (offen).
+- Kostenmodell je Firma unter Firma → Angebote → Kalkulationssätze: interner Stundensatz (Rückfall), Lohnnebenkosten in Prozent (Aufschlag auf Stundenlohn
+  oder Monatsgehalt aus den Lohndaten). Ohne Lohndaten und ohne Firmensatz werden Stunden als „ohne Lohnsatz“ ausgewiesen, nie geraten.
+
+## 4i. Rechnungsprozesse und Mahnwesen
+
+- Mahn-PDFs liegen unter `DATA_DIR/mahnungen/<firma_id>/<rechnung>_m<stufe>.pdf`, E-Mail-Anhänge unter `DATA_DIR/email_anhaenge/`; beides sichern.
+- Nichts mahnt automatisch: die Startseite zeigt fällige Mahnschritte, das Büro löst jede Stufe aus. Fristen/Gebühren/Texte unter Mahnwesen → Regeln
+  (`firmen.mahnwesen`); Gebühren nur, wenn AGB oder Gesetz sie erlauben.
+- Nummernkreis: Abschläge, Schluss-, Storno- und Gutschriftsbelege zählen im selben Kreis wie Monatsrechnungen (RE-JJJJ-0001 …); ausgestellte Belege
+  werden nie gelöscht oder nachberechnet – Korrekturen laufen über Storno und neuen Beleg.
+- Bestehende MongoDB-Installationen: der neue Index `invoices.mahnwesen` wird beim Start angelegt; der alte eindeutige Index bleibt gültig, weil
+  Nicht-Monatsrechnungen `month = -seq` tragen.
+
+## 4j. Aufmaß und Importe
+
+- Aufmaß-Fotos sind Dokumente (scope `aufmass`) unter `DATA_DIR`; Aufmaßblätter werden bei Bedarf erzeugt (kein Snapshot).
+- Importe laufen synchron mit Vorschau; Dateigrenzen: Positionen 20 MB/1000 Positionen, Artikel 10 MB. Excel braucht `openpyxl` (requirements.txt).
+- GAEB: Dateien von Auftraggebern, die der Import ablehnt, bitte aufbewahren und als Beispiel für die Erweiterung einreichen (Meldung nennt den Grund).
+
+## 4k. Nachrichten, Projektakten im Hintergrund, Module
+
+- Feature-Flags über die Umgebung: `FEATURE_CHAT`, `FEATURE_BERICHTSVORLAGEN`, `FEATURE_PROJEKTAKTE_ASYNC`, `FEATURE_KI`, `FEATURE_LAGER` (`1|0`). Ohne Angabe gelten die
+  Standardwerte aus `features.py` (Chat und Vorlagen an, Hintergrund-Projektakten mit Datenbank an, KI und Lager aus). Stand: `GET /api/features` oder „Firma → Module“.
+- Der Nachrichten-Dienst (`nachrichten.dienst`) läuft im Serverprozess und prüft jede Minute; E-Mails erscheinen im E-Mail-Ausgang (art „Neue Nachricht“). Bei mehreren
+  Serverprozessen nur einen mit Diensten starten (siehe 4b) – sonst doppelte Ankündigungen.
+- Chat-Anhänge liegen wie alle Dokumente unter `DATA_DIR/dateien/<firma>` (scope `chat`) und zählen zum Speicherkontingent der hochladenden Firma.
+- Projektakten im Hintergrund: Status `laeuft` bleibt nach einem Serverneustart stehen – die Akte dann einfach neu erstellen (Datensatz kann der Inhaber löschen).
+  Prüfsummen: `manifest.json` in der ZIP; Nachweis mit `sha256sum` gegen die entpackten Dateien.
+
+## 4l. KI-Entwürfe (optional)
+
+- Einschalten: `FEATURE_KI=1`, `ANTHROPIC_API_KEY=…` (nur in der `.env`, nie im Repo), optional `KI_MODELL` (Standard claude-opus-5-5), `pip install anthropic`.
+  Stand prüfen: `GET /api/ki/status` (zeigt nie den Schlüssel). Kosten entstehen je Anfrage beim Anbieter; Länge der Eingabe ist auf 20 000 Zeichen begrenzt.
+- Datenschutz: Der eingegebene Text wird an den Anbieter übertragen – Vertrag zur Auftragsverarbeitung abschließen, Nutzer anweisen, keine Personaldaten einzugeben.
+  Das Protokoll speichert nur Längen, Modell und Dauer.
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

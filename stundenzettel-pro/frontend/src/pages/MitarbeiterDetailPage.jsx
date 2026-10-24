@@ -21,7 +21,7 @@ export default function MitarbeiterDetailPage() {
   const navigate = useNavigate();
   const [m, setM] = useState(null);
   const [tab, setTab] = useState('daten');
-  const { isBuero } = useAuth();
+  const { isBuero, isInhaber } = useAuth();
   const laden = useCallback(() => api.get(`/api/mitarbeiter/${userId}`).then((r) => setM(r.mitarbeiter)).catch((err) => { toast.error(err.message); navigate('/mitarbeiter'); }), [userId, navigate]);
   useEffect(() => { laden(); }, [laden]);
 
@@ -35,7 +35,7 @@ export default function MitarbeiterDetailPage() {
             <div className="min-w-0"><div className="font-semibold text-[20px] leading-tight truncate">{m.name}</div><div className="text-[12px] text-[#6E6E73]">{m.rolle_name}{m.personalnummer ? ` · Nr. ${m.personalnummer}` : ''} · {m.email}</div></div>
           </div>
           <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar">
-            <Segmented value={tab} onChange={setTab} options={[{ value: 'daten', label: 'Mitarbeiterdaten' }, { value: 'konto', label: 'Konten' }, { value: 'abwesenheiten', label: 'Abwesenheiten' }, { value: 'stunden', label: 'Stundenübersicht' }, { value: 'akte', label: 'Personalakte' }, ...(isBuero ? [{ value: 'lohn', label: 'Lohndaten' }] : [])]} />
+            <Segmented value={tab} onChange={setTab} options={[{ value: 'daten', label: 'Mitarbeiterdaten' }, { value: 'konto', label: 'Konten' }, { value: 'abwesenheiten', label: 'Abwesenheiten' }, { value: 'stunden', label: 'Stundenübersicht' }, { value: 'akte', label: 'Personalakte' }, ...(isBuero ? [{ value: 'lohn', label: 'Lohndaten' }] : []), ...(isInhaber && m.role === 'buero' ? [{ value: 'rechte', label: 'Rechte' }] : [])]} />
           </div>
           {tab === 'daten' && <Daten m={m} onSaved={laden} />}
           {tab === 'konto' && <Konten m={m} />}
@@ -43,6 +43,7 @@ export default function MitarbeiterDetailPage() {
           {tab === 'stunden' && <Stunden m={m} />}
           {tab === 'akte' && <Personalakte userId={m.id} />}
           {tab === 'lohn' && isBuero && <Lohndaten m={m} />}
+          {tab === 'rechte' && isInhaber && <Rechte m={m} onSaved={laden} />}
         </>
       )}
     </Layout>
@@ -361,6 +362,38 @@ function Lohndaten({ m }) {
         </Gruppe>
         <div className="flex justify-end"><Btn type="submit" loading={busy}>Speichern</Btn></div>
       </form>
+    </Card>
+  );
+}
+
+
+const RECHTE = [
+  ['projekte', 'Projekte', 'Projekte anlegen und ändern'],
+  ['personal', 'Personal und Zeiten', 'Zeiten, Stempelungen, Konten, Personalakten und Fotografen aller Mitarbeiter sehen und korrigieren'],
+  ['lohn', 'Lohn', 'Lohnvorbereitung, Lohndaten und DATEV-Export'],
+  ['rechnungen', 'Rechnungen', 'Rechnungen, E-Rechnungen und Zahlungen'],
+  ['angebote', 'Angebote', 'Angebote an Kunden erstellen, senden, annehmen und als Auftrag anlegen'],
+  ['plantafel', 'Plantafel', 'Einsätze planen und Arbeitszeiten freigeben'],
+  ['kalkulation', 'Kalkulation', 'Angebote kalkulieren, Nachkalkulation und Deckungsbeiträge sehen'],
+  ['kostensaetze', 'Kostensätze', 'Interne Stundensätze, Einkaufspreise und Mitarbeiterkosten sehen'],
+];
+
+/** Rechte eines Büro-Kontos – vergibt und entzieht nur der Inhaber. Standard: Projekte, Personal, Lohn, Rechnungen, Plantafel an; Kalkulation und Kostensätze aus. */
+function Rechte({ m, onSaved }) {
+  const [busy, setBusy] = useState('');
+  const setzen = async (recht, wert) => {
+    setBusy(recht);
+    try { await api.put(`/api/mitarbeiter/${m.id}`, { rechte: { [recht]: wert } }); toast.success(wert ? 'Recht vergeben' : 'Recht entzogen'); onSaved?.(); }
+    catch (err) { toast.error(err.message); } finally { setBusy(''); }
+  };
+  return (
+    <Card className="p-5 sm:p-7 max-w-3xl mx-auto space-y-3">
+      <div><h2 className="text-[17px]">Rechte von {m.name}</h2><p className="text-[14px] text-[#6E6E73] mt-1">Büro-Konten bekommen nur die Rechte, die du hier freigibst. Mitarbeiter und Vorarbeiter sehen nie Zeiten, Lohn oder Kalkulationen anderer. Du als Inhaber hast immer alle Rechte.</p></div>
+      <div className="divide-y divide-black/[0.06]">
+        {RECHTE.map(([key, label, text]) => (
+          <div key={key} className="py-1"><Toggle checked={!!m.rechte?.[key]} onChange={(v) => { if (!busy) setzen(key, v); }} label={label} hint={text} /></div>
+        ))}
+      </div>
     </Card>
   );
 }

@@ -9,7 +9,7 @@ import { fotoZeit } from '../lib/fotos';
 
 /** Fotos eines Arbeitstags im Projekt: ansehen, aufnehmen/hochladen (mit Datum des Tages), eigene oder als Büro löschen. */
 export default function TagFotos({ projectId, dateKey, fotos = [], onChanged, darfHochladen = true }) {
-  const { user, isBuero } = useAuth();
+  const { user, kann } = useAuth();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const eingabe = useRef(null);
@@ -56,10 +56,10 @@ export default function TagFotos({ projectId, dateKey, fotos = [], onChanged, da
               <button type="button" className="w-full h-full" onClick={() => openFile(`/api/dokumente/${f.id}/datei`).catch((err) => toast.error(err.message))} title="Groß anzeigen">
                 <Bild id={f.id} max={300} className="w-full h-full" alt={f.note || f.filename} />
               </button>
-              <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[10px] px-1.5 py-0.5 truncate text-left">{[fotoZeit(f), f.uploaded_by_name].filter(Boolean).join(' · ')}{f.note ? ` · ${f.note}` : ''}</span>
+              <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[10px] px-1.5 py-0.5 truncate text-left">{[fotoZeit(f), f.uploaded_by_name || (f.uploaded_by === user?.id ? 'Von dir' : 'Teamfoto')].filter(Boolean).join(' · ')}{f.note ? ` · ${f.note}` : ''}</span>
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 <IconBtn size={26} variant="soft" onClick={() => openFile(`/api/dokumente/${f.id}/datei`).catch((err) => toast.error(err.message))} title="Öffnen"><ExternalLink size={12} /></IconBtn>
-                {(isBuero || f.uploaded_by === user?.id) && <IconBtn size={26} variant="danger" onClick={() => loeschen(f)} title="Löschen"><Trash2 size={12} /></IconBtn>}
+                {(kann('personal') || f.uploaded_by === user?.id) && <IconBtn size={26} variant="danger" onClick={() => loeschen(f)} title="Löschen"><Trash2 size={12} /></IconBtn>}
               </div>
             </div>
           ))}

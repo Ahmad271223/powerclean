@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends
 
-from auth import aktueller_nutzer, firma_laden, hat_rolle, plan_status
+from auth import aktueller_nutzer, firma_laden, hat_recht, hat_rolle, plan_status
 from db import db
 from gemeinsam import budget_info, nutzernamen, projekt_normalisieren, projekt_sichtbar
 from konten import kontoverlauf, urlaubskonto
@@ -45,9 +45,19 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
                 warn_tage.add((e.get("user_id"), e.get("date")))
         offen_antraege = await db().absences.count_documents({"firma_id": f, "status": "beantragt"})
         rech_offen, rech_summe = 0, 0.0
-        async for r in db().invoices.find({"firma_id": f, "status": "offen"}, {"_id": 0, "gross": 1}):
+        ueberfaellig_n, ueberfaellig_summe, mahn_faellig = 0, 0.0, 0
+        from rechnungslauf import mahn_vorschlag as _mahn_vorschlag, zahlungsstand as _zstand
+        async for r in db().invoices.find({"firma_id": f, "status": {"$in": ["offen", "teilbezahlt"]}}, {"_id": 0, "positions": 0, "extras": 0}):
+            if r.get("art") in ("storno", "gutschrift"):
+                continue
             rech_offen += 1
-            rech_summe += float(r.get("gross") or 0)
+            rech_summe += _zstand(r)["offen_betrag"]
+            v = _mahn_vorschlag(r, firma, heute_d)
+            if v:
+                ueberfaellig_n += 1
+                ueberfaellig_summe += v["offen_betrag"]
+                if v["jetzt_faellig"]:
+                    mahn_faellig += 1
         namen = await nutzernamen(f)
         gestempelt, lange = 0, []
         async for s in db().stempel.find({"firma_id": f}, {"_id": 0}):
@@ -68,12 +78,17 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
         abwesend = []
         async for a in db().absences.find({"firma_id": f, "from_date": {"$lte": heute}, "to_date": {"$gte": heute}, "status": "genehmigt"}, {"_id": 0}):
             abwesend.append({"user_name": namen.get(a["user_id"], ""), "type": a["type"], "to_date": a["to_date"]})
+        if not hat_recht(user, "personal"):   # Büro ohne Personalrecht: keine Namen und Stempelungen einzelner Personen
+            lange, abwesend = [], []
         vormonat = (heute_d.replace(day=1) - timedelta(days=1))
         vormonat_zu = await db().abschluesse.find_one({"firma_id": f, "year": vormonat.year, "month": vormonat.month}) is not None
         aus.update({
             "heute_eintraege": tage_heute, "gestempelt": gestempelt, "mitarbeiter_aktiv": mitarbeiter, "projekte_aktiv": len(aktiv),
             "monat": {"minuten": minuten_monat, "umsatz_netto": round(umsatz, 2)},
             "antraege_offen": offen_antraege, "rechnungen_offen": {"anzahl": rech_offen, "summe": round(rech_summe, 2)},
+            "zahlungen_ueberfaellig": {"anzahl": ueberfaellig_n, "summe": round(ueberfaellig_summe, 2), "mahnungen_faellig": mahn_faellig},
+            "angebote_offen": await _angebote_offen(f) if hat_recht(user, "angebote") else None,
+            "kostenabweichungen": await _kostenabweichungen(firma) if hat_recht(user, "kalkulation") else None,
             "letzte_projekte": aktiv[:6], "abwesend_heute": abwesend,
             "arbzg_warnungen": len(warn_tage), "budget_warnungen": budgets, "lange_stempelungen": lange,
             "vormonat": {"jahr": vormonat.year, "monat": vormonat.month, "abgeschlossen": vormonat_zu},
@@ -102,6 +117,43 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
     return aus
 
 
+async def _kostenabweichungen(firma: dict) -> dict:
+    """Projekte mit Auftragswert, deren Ist-Kosten den Plan um mehr als 10 % übersteigen oder deren Deckungsbeitrag negativ ist."""
+    import material as mat
+    warnungen, gesamt = [], 0
+    async for p in db().projects.find({"firma_id": firma["id"], "archived": {"$ne": True}}, {"_id": 0}):
+        if not (p.get("auftrag") or float(p.get("pauschale_netto") or 0)):
+            continue
+        gesamt += 1
+        try:
+            n = await mat.nachkalkulation(firma, p)
+        except Exception:  # noqa: BLE001 – die Startseite darf an einer Nachkalkulation nicht scheitern
+            continue
+        db_akt = n["deckungsbeitrag"]["aktuell"]
+        if (n["abweichung"] is not None and n["plan"]["gesamt"] and n["abweichung"] > 0.1 * n["plan"]["gesamt"]) or (db_akt is not None and db_akt < 0):
+            warnungen.append({"project_id": p["id"], "name": p["name"], "abweichung": n["abweichung"], "deckungsbeitrag": db_akt})
+    return {"anzahl": len(warnungen), "projekte": gesamt, "liste": warnungen[:5]}
+
+
+async def _angebote_offen(firma_id: str) -> dict:
+    """Entwürfe und gesendete Kundenangebote: Anzahl, Netto, davon in den nächsten 7 Tagen ablaufend; neue Anfragen."""
+    from angebote import abgelaufen
+    heute = lokal_jetzt().date()
+    bald = (heute + timedelta(days=7)).isoformat()
+    n, summe, ablaufend, anfragen = 0, 0.0, 0, 0
+    async for a in db().kundenangebote.find({"firma_id": firma_id, "status": {"$in": ["anfrage", "entwurf", "gesendet"]}}, {"_id": 0, "status": 1, "gueltig_bis": 1, "summen.netto": 1}):
+        if a["status"] == "anfrage":
+            anfragen += 1
+            continue
+        if abgelaufen(a, heute.isoformat()):
+            continue
+        n += 1
+        summe += float((a.get("summen") or {}).get("netto") or 0)
+        if a["status"] == "gesendet" and (a.get("gueltig_bis") or "") <= bald:
+            ablaufend += 1
+    return {"anzahl": n, "summe": round(summe, 2), "ablaufend": ablaufend, "anfragen": anfragen}
+
+
 @router.get("/aufgaben")
 async def aufgaben(user: dict = Depends(aktueller_nutzer)):
     """Offene Punkte für die Startseite – was jetzt eine Entscheidung oder Handlung braucht, je Rolle, mit Link und Dringlichkeit (1 = zuerst)."""
@@ -117,6 +169,10 @@ async def aufgaben(user: dict = Depends(aktueller_nutzer)):
         if anzahl:
             punkte.append({"art": art, "text": text, "anzahl": int(anzahl), "link": link, "prio": prio})
 
+    import features
+    if features.aktiv("chat"):
+        from nachrichten import ungelesen_gesamt
+        punkt("nachrichten", "Ungelesene Nachrichten", await ungelesen_gesamt(user), "/nachrichten", 3)
     if hat_rolle(user, "buero"):
         firma = await firma_laden(f)
         art = firma.get("art") or "betrieb"
@@ -148,6 +204,27 @@ async def aufgaben(user: dict = Depends(aktueller_nutzer)):
         punkt("vergaben_annehmen", "Erhaltene Aufträge verbindlich annehmen", await db().vergaben.count_documents({"firma_id": f, "status": "mitgeteilt"}), "/ausschreibungen", 1)
         punkt("nachtraege_angefragt", "Angefragte Nachträge bepreisen und einreichen", await db().nachtraege.count_documents({"firma_id": f, "status": "angefragt"}), "/zusammenarbeit", 2)
         punkt("abnahmen_bestaetigen", "Abnahmeprotokolle bestätigen oder widersprechen", await db().abnahmen.count_documents({"firma_id": f, "status": "erstellt"}), "/zusammenarbeit", 1)
+        if hat_recht(user, "plantafel"):
+            punkt("zeiten_freigeben", "Arbeitszeiten prüfen und freigeben (Plantafel)",
+                  await db().einsaetze.count_documents({"firma_id": f, "status": "geplant", "freigabe": None, "date": {"$gte": (heute_d - timedelta(days=30)).isoformat(), "$lt": heute}}), "/plantafel?abgleich=1", 2)
+            punkt("heute_geplant", "Heute eingeplante Einsätze", await db().einsaetze.count_documents({"firma_id": f, "status": "geplant", "date": heute}), "/plantafel", 3)
+        if hat_recht(user, "angebote"):
+            punkt("anfragen", "Neue Kundenanfragen in Angebote umsetzen", await db().kundenangebote.count_documents({"firma_id": f, "status": "anfrage"}), "/angebote?status=anfrage", 2)
+            punkt("angebote_nachfassen", "Gesendete Angebote laufen in 7 Tagen ab – nachfassen",
+                  await db().kundenangebote.count_documents({"firma_id": f, "status": "gesendet", "gueltig_bis": {"$gte": heute, "$lte": (heute_d + timedelta(days=7)).isoformat()}}), "/angebote?status=gesendet", 2)
+            punkt("auftraege_anlegen", "Angenommene Angebote als Auftrag anlegen", await db().kundenangebote.count_documents({"firma_id": f, "status": "angenommen", "auftrag": None}), "/angebote?status=angenommen", 1)
+        if hat_recht(user, "rechnungen"):
+            from rechnungslauf import mahn_vorschlag as _mv
+            faellige = 0
+            async for r_ in db().invoices.find({"firma_id": f, "status": {"$in": ["offen", "teilbezahlt"]}}, {"_id": 0, "positions": 0, "extras": 0}):
+                v_ = _mv(r_, firma, heute_d)
+                if v_ and v_["jetzt_faellig"]:
+                    faellige += 1
+            punkt("mahnungen", "Überfällige Rechnungen: Zahlungserinnerung oder Mahnung schicken", faellige, "/mahnwesen", 1)
+            punkt("eingangsrechnungen_pruefen", "Eingangsrechnungen prüfen", await db().eingangsrechnungen.count_documents({"firma_id": f, "status": "erfasst"}), "/eingangsrechnungen?status=erfasst", 2)
+            punkt("eingangsrechnungen_faellig", "Überfällige Eingangsrechnungen bezahlen", await db().eingangsrechnungen.count_documents({"firma_id": f, "status": {"$in": ["erfasst", "geprueft"]}, "faellig_am": {"$lt": heute}}), "/eingangsrechnungen", 1)
+        if hat_recht(user, "kalkulation"):
+            punkt("material_pruefen", "Materialbuchungen prüfen", await db().materialverbrauch.count_documents({"firma_id": f, "status": "erfasst"}), "/projekte", 3)
         punkt("maengel_firma", "Überfällige Mängel beheben", await db().maengel.count_documents({"firma_id": f, "status": {"$nin": ["abgenommen"]}, "frist": {"$lt": heute}}), "/zusammenarbeit", 2)
         # Eigentümerseite: Vergaben, Angebote, Rückfragen, Fristen, Nachträge, Abnahmen, Berichte
         punkt("vergaben_freigeben", "Vergabevorschläge freigeben", await db().vergaben.count_documents({"owner_firma_id": f, "status": "vorgeschlagen"}), "/ausschreibungen", 1)

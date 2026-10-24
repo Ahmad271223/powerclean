@@ -33,6 +33,10 @@ async def firma_aendern(body: FirmaIn, user: dict = Depends(schreibend("buero"))
         aenderung.pop("art", None)
     elif not hat_rolle(user, "inhaber"):
         raise HTTPException(403, "Die Firmenart ändert nur der Inhaber.")
+    if "kalkulation" in aenderung:
+        from auth import hat_recht, recht_fehlt
+        if not hat_recht(user, "kostensaetze"):
+            raise HTTPException(403, recht_fehlt("kostensaetze"))
     if not aenderung:
         return await firma_lesen(user)
     aenderung["updated_at"] = jetzt_iso()
@@ -64,7 +68,7 @@ async def abos_betreiber():
     aus = []
     async for f in db().firmen.find({}, {"_id": 0, "id": 1, "name": 1, "email": 1, "art": 1}):
         a = await firma_abos(f["id"])
-        aus.append({"firma_id": f["id"], "name": f.get("name"), "email": f.get("email"), "art": a["art"], "status": a["plan"]["status"], "stufe": a["plan"]["stufe"],
+        aus.append({"firma_id": f["id"], "name": f.get("name"), "email": f.get("email"), "art": a["art"], "gu_freigeschaltet": a["gu_freigeschaltet"], "status": a["plan"]["status"], "stufe": a["plan"]["stufe"],
                     "nutzer_aktiv": a["nutzer_aktiv"], "gu_projekte_aktiv": a["gu_projekte_aktiv"], "kosten_firma_monat": a["kosten_firma_monat"],
                     "kosten_projekte_monat": a["kosten_projekte_monat"], "kosten_monat": a["kosten_monat"],
                     "projekte": [{"id": p["id"], "name": p["name"], **(p.get("gu_abo") or {})} for p in a["projekte"]]})
@@ -203,6 +207,9 @@ async def plan_setzen(body: PlanIn):
             "test_bis": body.test_bis or (firma.get("plan") or {}).get("test_bis"), "hinweis": body.hinweis or "",
             "stufe": body.stufe or (firma.get("plan") or {}).get("stufe") or "plus", "gesetzt_am": jetzt_iso()}
     await db().firmen.update_one({"id": firma["id"]}, {"$set": {"plan": plan}})
+    if body.gu is not None:
+        await db().firmen.update_one({"id": firma["id"]}, {"$set": {"freischaltungen.gu": bool(body.gu)}})
+        await protokollieren(None, "gu.freigeschaltet" if body.gu else "gu.freischaltung_entzogen", firma.get("name", ""), firma_id=firma["id"])
     await protokollieren(None, "plan.gesetzt", firma["name"], details=plan, firma_id=firma["id"])
     return {"ok": True, "firma_id": firma["id"], "plan": plan_status({**firma, "plan": plan})}
 

@@ -1,16 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Receipt, FileStack, Download, RotateCcw, CheckCircle2, Ban, ListPlus, Trash2, Plus, FileCode } from 'lucide-react';
+import { Receipt, FileStack, Download, RotateCcw, CheckCircle2, Ban, ListPlus, Trash2, Plus, FileCode, CreditCard, Mail, FilePlus2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import { Btn, Card, Empty, IconBtn, Select, Sheet, TextInput } from '../components/ui';
-import { api, download } from '../lib/api';
+import { api, download, openFile } from '../lib/api';
+import { useDialoge } from '../components/Dialoge';
+import { ART_CLS, GutschriftDialog, SendenDialog, ZahlungDialog } from '../components/rechnungen/RechnungDialoge';
 import FotoAuswahlDialog from '../components/FotoAuswahlDialog';
 import { fotosImZeitraum, ladeFotoDaten } from '../lib/fotos';
 import { invoicePdf, monthPdf, signatureMap, preloadLogo } from '../lib/pdf';
 import { fmtDate, fmtDecimalHours, fmtEur, fromKey, MONTHS_DE, monthLastDay, toKey } from '../lib/dates';
 import { deliverPdf } from '../lib/utils';
 
-const STATUS_CLS = { offen: 'bg-[#FFF4E5] text-[#B25E00]', bezahlt: 'bg-[#E8F8EC] text-[#1B7F3B]', storniert: 'bg-black/[0.06] text-[#6E6E73]' };
+const STATUS_CLS = { offen: 'bg-[#FFF4E5] text-[#B25E00]', teilbezahlt: 'bg-[#E8F0FE] text-[#1D4ED8]', bezahlt: 'bg-[#E8F8EC] text-[#1B7F3B]', storniert: 'bg-black/[0.06] text-[#6E6E73]' };
 const VORSCHLAEGE = [['Anfahrt', 'Fahrten'], ['Reinigungsmittel', 'Stk.'], ['Entsorgung', 'Pauschale'], ['Maschinenmiete', 'Tage'], ['Sonderreinigung', 'Pauschale']];
 
 export default function RechnungenPage() {
@@ -21,6 +23,13 @@ export default function RechnungenPage() {
   const [extras, setExtras] = useState(null);   // Rechnung, deren Zusatzpositionen bearbeitet werden
   const [erech, setErech] = useState(null);     // Rechnung, für die eine E-Rechnung erzeugt wird
   const [fotoWahl, setFotoWahl] = useState(null); // PDF mit Fotos: { r, art, fotos }
+  const [zahlung, setZahlung] = useState(null);   // Rechnung, deren Zahlungen bearbeitet werden
+  const [senden, setSenden] = useState(null);     // Rechnung, die per E-Mail geht
+  const [gutschrift, setGutschrift] = useState(false);
+  const [kunden, setKunden] = useState([]);
+  const [projekte, setProjekte] = useState([]);
+  const { fragen } = useDialoge();
+  useEffect(() => { api.get('/api/kunden').then((r) => setKunden(r.kunden)).catch(() => {}); api.get('/api/projekte').then((r) => setProjekte((r.projekte || r).filter((p) => !p.archived))).catch(() => {}); }, []);
   const laden = useCallback(() => api.get(`/api/rechnungen${jahr ? `?jahr=${jahr}` : ''}`).then(setDaten).catch((err) => toast.error(err.message)), [jahr]);
   useEffect(() => { laden(); }, [laden]);
 
@@ -30,6 +39,11 @@ export default function RechnungenPage() {
   const pdf = async (r, art, mode, bilder = null) => {
     setBusy(`${art}-${r.id}`);
     try {
+      if (r.art && r.art !== 'monat') {   // Abschlag, Schluss, Pauschal, Storno, Gutschrift: PDF kommt vom Server (stellt die Rechnung aus)
+        if (mode === 'download') await download(`/api/rechnungen/${r.id}/rechnung.pdf`); else await openFile(`/api/rechnungen/${r.id}/rechnung.pdf`);
+        laden();
+        return;
+      }
       const d = await api.get(`/api/rechnungen/${r.id}/daten`);
       await preloadLogo(d.firma);
       const m0 = r.month - 1;
@@ -52,6 +66,12 @@ export default function RechnungenPage() {
     try { const bilder = ausgewaehlt.length ? await ladeFotoDaten(ausgewaehlt) : []; setFotoWahl(null); await pdf(w.r, w.art, mode, bilder); }
     catch (err) { toast.error(err.message); } finally { setBusy(''); }
   };
+  const storno = async (r) => {
+    if (!r.festgeschrieben_at) { toast.error('Ein Entwurf wird nicht storniert – Nummer zurücksetzen.'); return; }
+    const grund = await fragen({ titel: `${r.art_name || 'Rechnung'} ${r.number} stornieren`, text: 'Grund (erscheint auf der Stornorechnung mit eigener Nummer):', pflicht: true });
+    if (!grund) return;
+    try { const x = await api.post(`/api/rechnungen/${r.id}/storno`, { grund }); toast.success(`Stornorechnung ${x.storno.number} angelegt`); laden(); } catch (err) { toast.error(err.message); }
+  };
   const setzen = async (r, st) => {
     if (st === 'storniert' && !window.confirm(`Rechnung ${r.number} stornieren?`)) return;
     try { await api.put(`/api/rechnungen/${r.id}`, { status: st }); toast.success(st === 'bezahlt' ? 'Als bezahlt markiert' : st === 'offen' ? 'Wieder offen' : 'Storniert'); laden(); } catch (err) { toast.error(err.message); }
@@ -63,11 +83,11 @@ export default function RechnungenPage() {
 
   return (
     <Layout title="Rechnungen" subtitle="Eine Rechnung je Projekt und Monat. Neue entstehen im Kalender eines Projekts."
-      action={daten?.jahre?.length > 1 ? <Select value={jahr} onChange={(e) => setJahr(e.target.value)}><option value="">Alle Jahre</option>{daten.jahre.map((j) => <option key={j} value={j}>{j}</option>)}</Select> : null}>
+      action={<div className="flex gap-2">{daten?.jahre?.length > 1 && <Select value={jahr} onChange={(e) => setJahr(e.target.value)}><option value="">Alle Jahre</option>{daten.jahre.map((j) => <option key={j} value={j}>{j}</option>)}</Select>}<Btn variant="soft" onClick={() => setGutschrift(true)}><FilePlus2 size={16} /> <span className="hidden sm:inline">Gutschrift</span></Btn></div>}>
       {!daten ? <Ladeanzeige /> : (
         <>
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            {[['offen', 'Offen'], ['bezahlt', 'Bezahlt'], ['storniert', 'Storniert']].map(([st, l]) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            {[['offen', 'Offen'], ['teilbezahlt', 'Teilweise bezahlt'], ['bezahlt', 'Bezahlt'], ['storniert', 'Storniert']].map(([st, l]) => (
               <button key={st} type="button" onClick={() => setStatus(status === st ? 'alle' : st)} className={`rounded-2xl p-4 text-left transition-all ${status === st ? 'bg-[#1D1D1F] text-white' : 'bg-white shadow-card'}`}>
                 <div className={`text-[12px] ${status === st ? 'text-white/70' : 'text-[#6E6E73]'}`}>{l} ({daten.rechnungen.filter((r) => r.status === st).length})</div>
                 <div className="text-[20px] font-bold tracking-tight">{fmtEur(summe(st))}</div>
@@ -79,17 +99,22 @@ export default function RechnungenPage() {
               {liste.map((r) => (
                 <Card key={r.id} className="p-4 sm:p-5 flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-[220px]">
-                    <div className="text-[15px] font-semibold flex items-center gap-2">{r.number} <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STATUS_CLS[r.status] || ''}`}>{r.status}</span>{r.status === 'offen' && <span className="text-[11px] font-medium text-[#86868B]">{r.festgeschrieben_at ? 'ausgestellt' : 'Entwurf'}</span>}</div>
-                    <div className="text-[13px] text-[#6E6E73] truncate">{r.project_name}{r.customer_name ? ` · ${r.customer_name}` : ''} · {MONTHS_DE[r.month - 1]} {r.year} · vom {fmtDate(fromKey(r.invoice_date))}{r.paid_at ? ` · bezahlt ${fmtDate(fromKey(r.paid_at))}` : ''}</div>
-                    <div className="text-[12px] text-[#86868B] mt-0.5">{fmtDecimalHours(r.total_minutes || 0)} Std. · netto {fmtEur(r.net || 0)}{r.extras_anzahl ? ` · ${r.extras_anzahl} Zusatzposition${r.extras_anzahl > 1 ? 'en' : ''} (${fmtEur(r.extras_net || 0)})` : ''}{r.reverse_charge ? ' · § 13b' : ''}</div>
+                    <div className="text-[15px] font-semibold flex items-center gap-2 flex-wrap">{r.number} {r.art && r.art !== 'monat' && <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${ART_CLS[r.art] || ''}`}>{r.art_name}{r.art === 'abschlag' && r.leistungsstand_prozent ? ` ${r.leistungsstand_prozent} %` : ''}</span>}<span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${STATUS_CLS[r.status] || ''}`}>{r.status_name || r.status}</span>{r.status === 'offen' && <span className="text-[11px] font-medium text-[#86868B]">{r.festgeschrieben_at ? 'ausgestellt' : 'Entwurf'}</span>}{r.mahnstufe > 0 && <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 bg-[#FDE8E8] text-[#C41E3A]">Mahnstufe {r.mahnstufe}</span>}</div>
+                    <div className="text-[13px] text-[#6E6E73] truncate">{r.project_name}{r.customer_name ? ` · ${r.customer_name}` : ''}{(!r.art || r.art === 'monat') ? ` · ${MONTHS_DE[r.month - 1]} ${r.year}` : ''} · vom {fmtDate(fromKey(r.invoice_date))}{r.faellig_am && ['offen', 'teilbezahlt'].includes(r.status) && !['storno', 'gutschrift'].includes(r.art) ? ` · fällig ${fmtDate(fromKey(r.faellig_am))}` : ''}{r.paid_at ? ` · bezahlt ${fmtDate(fromKey(r.paid_at))}` : ''}{r.storno_nummer ? ` · storniert durch ${r.storno_nummer}` : ''}</div>
+                    <div className="text-[12px] text-[#86868B] mt-0.5">{(!r.art || r.art === 'monat') ? `${fmtDecimalHours(r.total_minutes || 0)} Std. · ` : ''}netto {fmtEur(r.net || 0)}{r.extras_anzahl && (!r.art || r.art === 'monat') ? ` · ${r.extras_anzahl} Zusatzposition${r.extras_anzahl > 1 ? 'en' : ''} (${fmtEur(r.extras_net || 0)})` : ''}{r.reverse_charge ? ' · § 13b' : ''}{r.status === 'teilbezahlt' ? ` · offen ${fmtEur(r.offen_betrag || 0)}` : ''}</div>
                   </div>
                   <div className="text-[18px] font-bold tracking-tight">{fmtEur(r.gross || 0)}</div>
                   <div className="flex items-center gap-1 flex-wrap">
                     <Btn size="sm" onClick={() => pdf(r, 'invoice')} loading={busy === `invoice-${r.id}`}><Receipt size={15} /> PDF</Btn>
-                    <IconBtn size={34} variant="soft" onClick={() => pdf(r, 'month')} disabled={!!busy} title="Monats-PDF (Stundenzettel + Rechnung)"><FileStack size={15} /></IconBtn>
+                    {(!r.art || r.art === 'monat') && <IconBtn size={34} variant="soft" onClick={() => pdf(r, 'month')} disabled={!!busy} title="Monats-PDF (Stundenzettel + Rechnung)"><FileStack size={15} /></IconBtn>}
                     <IconBtn size={34} variant="soft" onClick={() => pdf(r, 'invoice', 'download')} disabled={!!busy} title="Rechnung herunterladen"><Download size={15} /></IconBtn>
                     {r.status !== 'storniert' && <IconBtn size={34} variant="soft" onClick={() => setErech(r)} title="E-Rechnung: XRechnung (XML) oder ZUGFeRD (PDF/A-3)"><FileCode size={15} /></IconBtn>}
-                    {r.status === 'offen' && <><IconBtn size={34} variant="soft" onClick={() => setExtras(r)} title="Zusatzpositionen (Material, Anfahrt, Pauschalen)"><ListPlus size={16} /></IconBtn><IconBtn size={34} onClick={() => setzen(r, 'bezahlt')} title="Als bezahlt markieren" className="text-[#1B7F3B]"><CheckCircle2 size={16} /></IconBtn><IconBtn size={34} onClick={() => setzen(r, 'storniert')} title="Stornieren" className="text-[#6E6E73]"><Ban size={15} /></IconBtn><IconBtn size={34} onClick={() => reset(r)} title="Nummer zurücksetzen" className="text-[#A1A1A6]"><RotateCcw size={14} /></IconBtn></>}
+                    {r.status !== 'storniert' && <IconBtn size={34} variant="soft" onClick={() => setSenden(r)} title="Per E-Mail an den Kunden senden"><Mail size={15} /></IconBtn>}
+                    {['offen', 'teilbezahlt'].includes(r.status) && !['storno', 'gutschrift'].includes(r.art) && <IconBtn size={34} variant="soft" onClick={() => setZahlung(r)} title="Zahlungen / Teilzahlungen"><CreditCard size={15} /></IconBtn>}
+                    {r.status === 'offen' && (!r.art || r.art === 'monat') && !r.festgeschrieben_at && <IconBtn size={34} variant="soft" onClick={() => setExtras(r)} title="Zusatzpositionen (Material, Anfahrt, Pauschalen)"><ListPlus size={16} /></IconBtn>}
+                    {['offen', 'teilbezahlt'].includes(r.status) && !['storno', 'gutschrift'].includes(r.art) && <IconBtn size={34} onClick={() => setzen(r, 'bezahlt')} title="Als vollständig bezahlt markieren" className="text-[#1B7F3B]"><CheckCircle2 size={16} /></IconBtn>}
+                    {['offen', 'teilbezahlt'].includes(r.status) && r.festgeschrieben_at && r.art !== 'storno' && <IconBtn size={34} onClick={() => storno(r)} title="Stornieren (Stornorechnung mit eigener Nummer)" className="text-[#6E6E73]"><Ban size={15} /></IconBtn>}
+                    {r.status === 'offen' && !r.festgeschrieben_at && <IconBtn size={34} onClick={() => reset(r)} title="Entwurf verwerfen (Nummer wird nicht neu vergeben)" className="text-[#A1A1A6]"><RotateCcw size={14} /></IconBtn>}
                     {r.status === 'bezahlt' && <Btn size="sm" variant="ghost" onClick={() => setzen(r, 'offen')}>Wieder offen</Btn>}
                   </div>
                 </Card>
@@ -100,6 +125,9 @@ export default function RechnungenPage() {
         </>
       )}
       <ExtrasDialog rechnung={extras} onOpenChange={(o) => { if (!o) setExtras(null); }} onSaved={laden} />
+      <ZahlungDialog rechnung={zahlung} onOpenChange={(o) => { if (!o) setZahlung(null); }} onSaved={laden} />
+      <SendenDialog rechnung={senden} kundeEmail={senden ? (kunden.find((k) => k.id === senden.customer_id)?.email || '') : ''} onOpenChange={(o) => { if (!o) setSenden(null); }} onSaved={laden} />
+      <GutschriftDialog open={gutschrift} onOpenChange={setGutschrift} kunden={kunden} projekte={projekte} onSaved={laden} />
       <ERechnungDialog rechnung={erech} onOpenChange={(o) => { if (!o) setErech(null); }} onSaved={laden} />
       <FotoAuswahlDialog open={!!fotoWahl} onOpenChange={(o) => { if (!o) setFotoWahl(null); }} fotos={fotoWahl?.fotos || []} busy={busy === 'fotos'} titel={fotoWahl ? `${fotoWahl.art === 'month' ? 'Monats-PDF' : 'Rechnung'} ${fotoWahl.r.number}` : ''} onConfirm={fotoWahlBestaetigt} />
     </Layout>

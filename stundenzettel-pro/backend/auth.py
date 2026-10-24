@@ -83,6 +83,7 @@ def nutzer_oeffentlich(u: dict) -> dict:
     aus = {k: v for k, v in u.items() if k not in verboten}
     aus["eingeladen"] = bool(u.get("einladung_token")) and not u.get("pw_hash")
     aus["rolle_name"] = ROLLEN_NAMEN.get(u.get("role"), u.get("role"))
+    aus["rechte"] = rechte_von(u)
     return aus
 
 
@@ -106,6 +107,56 @@ def rolle_noetig(mindestens: str):
 
 def hat_rolle(user: dict, mindestens: str) -> bool:
     return ROLLEN.get(user.get("role"), 0) >= ROLLEN[mindestens]
+
+
+# ---------------------------------------------------------------- Vergebbare Rechte (nur für Büro-Konten; der Inhaber hat alle, Mitarbeiter keine)
+RECHTE = {
+    "projekte": "Projekte anlegen und ändern",
+    "personal": "Zeiten, Stempelungen, Konten, Personalakten und Fotografen aller Mitarbeiter sehen und korrigieren",
+    "lohn": "Lohnvorbereitung, Lohndaten und DATEV-Export",
+    "rechnungen": "Rechnungen, E-Rechnungen und Zahlungen",
+    "angebote": "Angebote an Kunden erstellen, senden, annehmen und als Auftrag anlegen",
+    "plantafel": "Plantafel: Einsätze planen und Arbeitszeiten freigeben",
+    "kalkulation": "Angebote kalkulieren, Nachkalkulation und Deckungsbeiträge sehen",
+    "kostensaetze": "Interne Stundensätze, Einkaufspreise und Mitarbeiterkosten sehen",
+}
+RECHTE_BUERO_STANDARD = {"projekte": True, "personal": True, "lohn": True, "rechnungen": True, "angebote": True, "plantafel": True, "kalkulation": False, "kostensaetze": False}
+
+
+def rechte_von(user: dict) -> dict:
+    """Wirksame Rechte eines Nutzers: Inhaber alles; Büro Standard plus vom Inhaber gesetzte Abweichungen; andere nichts."""
+    rolle = user.get("role")
+    if rolle == "inhaber":
+        return {k: True for k in RECHTE}
+    if rolle == "buero":
+        eigene = user.get("rechte") or {}
+        return {k: bool(eigene.get(k, RECHTE_BUERO_STANDARD[k])) for k in RECHTE}
+    return {k: False for k in RECHTE}
+
+
+def hat_recht(user: dict, recht: str) -> bool:
+    return bool(rechte_von(user).get(recht))
+
+
+def recht_fehlt(recht: str) -> str:
+    return f"Dafür fehlt das Recht „{RECHTE.get(recht, recht)}“ – der Inhaber vergibt es unter Mitarbeiter → Rechte."
+
+
+def recht_noetig(recht: str):
+    """Abhängigkeit: Nutzer braucht dieses Recht (Inhaber immer, Büro je Vergabe)."""
+    async def pruefen(user: dict = Depends(aktueller_nutzer)) -> dict:
+        if not hat_recht(user, recht):
+            raise HTTPException(403, recht_fehlt(recht))
+        return user
+    return pruefen
+
+
+def schreibend_mit_recht(recht: str):
+    async def pruefen(user: dict = Depends(schreibender_nutzer)) -> dict:
+        if not hat_recht(user, recht):
+            raise HTTPException(403, recht_fehlt(recht))
+        return user
+    return pruefen
 
 
 # ---------------------------------------------------------------- Lizenz
@@ -163,17 +214,21 @@ def firmenabo_pruefen(firma: dict) -> None:
         raise HTTPException(402, FIRMENABO_HINWEIS.format(firma=PREISE["firma"], nutzer=PREISE["nutzer"]))
 
 
-def firmenabo_noetig(mindestens: str):
-    """Abhängigkeit: schreibender Nutzer mit Mindestrolle UND Firmenabo (Mitarbeiter, eigene Projekte, Rechnungen, Lohn, Schnittstellen)."""
+def firmenabo_noetig(mindestens: str, recht: Optional[str] = None):
+    """Abhängigkeit: schreibender Nutzer mit Mindestrolle (und Recht) UND Firmenabo (Mitarbeiter, eigene Projekte, Rechnungen, Lohn, Schnittstellen)."""
     async def pruefen(user: dict = Depends(schreibend(mindestens))) -> dict:
+        if recht and not hat_recht(user, recht):
+            raise HTTPException(403, recht_fehlt(recht))
         firmenabo_pruefen(user["_firma"])
         return user
     return pruefen
 
 
-def firmenabo_lesend(mindestens: str):
-    """Abhängigkeit für lesende Firmenfunktionen (z. B. Lohnvorbereitung), die das Firmenabo brauchen."""
+def firmenabo_lesend(mindestens: str, recht: Optional[str] = None):
+    """Abhängigkeit für lesende Firmenfunktionen (z. B. Lohnvorbereitung), die das Firmenabo (und ein Recht) brauchen."""
     async def pruefen(user: dict = Depends(rolle_noetig(mindestens))) -> dict:
+        if recht and not hat_recht(user, recht):
+            raise HTTPException(403, recht_fehlt(recht))
         firma = await firma_laden(user["firma_id"])
         firmenabo_pruefen(firma)
         user["_firma"] = firma

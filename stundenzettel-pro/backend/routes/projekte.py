@@ -6,11 +6,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
-from auth import aktueller_nutzer, firma_laden, firmenabo_noetig, hat_rolle, jetzt_iso, rolle_noetig, schreibend
+from auth import aktueller_nutzer, firma_laden, firmenabo_noetig, hat_recht, hat_rolle, jetzt_iso, rolle_noetig, schreibend, schreibend_mit_recht
 from dateien import KATEGORIEN_PROJEKT, datei_loeschen, datei_speichern, version_verknuepfen
 from db import db
 from feiertage import feiertage_set
-from gemeinsam import projekt_fotos
+from gemeinsam import foto_fuer_nutzer, projekt_fotos
 from gemeinsam import (budget_info, eintrag_anreichern, firma_oeffentlich, kunde_laden, kundenadresse, neue_id, nutzernamen,
                        projekt_fuer_nutzer, projekt_laden, projekt_leitung, projekt_normalisieren, projekt_sichtbar)
 from models import ChecklisteIn, ChecklisteUpdateIn, GuAboIn, KommentarIn, ProjektIn, UnterschriftIn
@@ -72,7 +72,7 @@ async def liste(archiviert: bool = False, user: dict = Depends(aktueller_nutzer)
 
 
 @router.post("/api/projekte")
-async def anlegen(body: ProjektIn, user: dict = Depends(firmenabo_noetig("buero"))):
+async def anlegen(body: ProjektIn, user: dict = Depends(firmenabo_noetig("buero", "projekte"))):
     daten = await _projektdaten(user, body)
     p = {**daten, "id": neue_id(), "firma_id": user["firma_id"], "created_at": jetzt_iso(),
          "total_minutes": 0, "entry_count": 0, "last_activity_at": None}
@@ -94,7 +94,7 @@ async def lesen(project_id: str, user: dict = Depends(aktueller_nutzer)):
 
 
 @router.put("/api/projekte/{project_id}")
-async def aendern(project_id: str, body: ProjektIn, user: dict = Depends(schreibend("buero"))):
+async def aendern(project_id: str, body: ProjektIn, user: dict = Depends(schreibend_mit_recht("projekte"))):
     alt = await projekt_laden(user, project_id)
     daten = await _projektdaten(user, body, alt)
     daten["updated_at"] = jetzt_iso()
@@ -153,8 +153,10 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     von, bis = rasterbereich(jahr, monat)
     namen = await nutzernamen(user["firma_id"])
     leitung = projekt_leitung(user, p)
+    # Zeiten aller Personen: Vorarbeiter als Projektleitung, Büro nur mit Personalrecht, Inhaber immer
+    alle_zeiten = leitung and (not hat_rolle(user, "buero") or hat_recht(user, "personal"))
     filt = {"firma_id": user["firma_id"], "project_id": project_id, "date": {"$gte": von, "$lte": bis}}
-    if not leitung:
+    if not alle_zeiten:
         # Mitarbeiter sehen im Kalender nur eigene Zeiten und die "Anzahl"-Einträge des Büros
         filt["$or"] = [{"user_id": user["id"]}, {"user_id": None}]
     eintraege = []
@@ -177,7 +179,7 @@ async def monat(project_id: str, jahr: int = Query(..., ge=2025, le=2100), monat
     frei = feiertage_set(sorted(jahre), firma.get("bundesland") or "")
     buero = hat_rolle(user, "buero")
     leistungen = [{"id": s["id"], "name": s["name"], **({"hourly_rate": s.get("hourly_rate") or 0} if buero else {})} async for s in db().services.find({"firma_id": user["firma_id"], "active": True}, {"_id": 0}).sort("sort", 1)]
-    fotos = await projekt_fotos(user["firma_id"], project_id, von, bis)
+    fotos = [foto_fuer_nutzer(user, f) for f in await projekt_fotos(user["firma_id"], project_id, von, bis)]
     return {"firma": firma_oeffentlich(firma, user), "projekt": projekt_fuer_nutzer(user, p), "eintraege": eintraege, "rechnung": rechnung, "fotos": fotos,
             "unterschriften": unterschriften, "mitarbeiter": mitarbeiter, "raster": {"von": von, "bis": bis},
             "leitung": leitung, "budget": budget_info(p, monatsminuten) if leitung else None,
@@ -195,7 +197,8 @@ async def zeiten(project_id: str, von: str, bis: str, user: dict = Depends(aktue
         raise HTTPException(400, str(exc))
     namen = await nutzernamen(user["firma_id"])
     filt = {"firma_id": user["firma_id"], "project_id": project_id, "date": {"$gte": von, "$lte": bis}}
-    if not projekt_leitung(user, await projekt_laden(user, project_id)):
+    p_ = await projekt_laden(user, project_id)
+    if not (projekt_leitung(user, p_) and (not hat_rolle(user, "buero") or hat_recht(user, "personal"))):
         filt["$or"] = [{"user_id": user["id"]}, {"user_id": None}]
     aus = []
     async for e in db().entries.find(filt, {"_id": 0}).sort([("date", 1), ("start_time", 1)]):
@@ -212,7 +215,7 @@ async def akte(project_id: str, user: dict = Depends(aktueller_nutzer)):
     async for k in db().comments.find({"firma_id": f, "project_id": project_id}, {"_id": 0}).sort("created_at", -1).limit(200):
         kommentare.append(k)
     async for d in db().documents.find({"firma_id": f, "scope": "project", "ref_id": project_id}, {"_id": 0, "path": 0}).sort("created_at", -1):
-        dateien.append(d)
+        dateien.append(foto_fuer_nutzer(user, d))
     async for c in db().checklists.find({"firma_id": f, "project_id": project_id}, {"_id": 0}).sort("created_at", -1):
         checklisten.append(c)
     async for s in db().signatures.find({"firma_id": f, "project_id": project_id}, {"_id": 0, "image": 0}).sort("week_monday", -1).limit(60):
@@ -258,7 +261,7 @@ async def datei_hochladen(project_id: str, datei: UploadFile = File(...), katego
     await db().documents.insert_one(dict(doc))
     await protokollieren(user, "projektakte.datei", p["name"], details={"datei": meta["filename"], "kategorie": doc["category"], "version": doc["version"]})
     doc.pop("path", None)
-    return {"dokument": doc}
+    return {"dokument": foto_fuer_nutzer(user, doc)}
 
 
 @router.post("/api/projekte/{project_id}/checklisten")

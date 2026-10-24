@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyRound, Copy, Trash2, Upload, Building2, BadgeCheck, Plug, Tag, Plus, Webhook, Send, Pencil } from 'lucide-react';
+import { KeyRound, Copy, Trash2, Upload, Building2, BadgeCheck, Plug, Tag, Plus, Webhook, Send, Pencil, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import CompanyForm from '../components/CompanyForm';
@@ -7,16 +7,17 @@ import { Btn, Card, Chip, Field, IconBtn, Segmented, TextInput, Toggle } from '.
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDate } from '../lib/dates';
+import AngeboteEinstellungenKarte from '../components/angebot/AngeboteEinstellungenKarte';
 import AbosKarte, { PreisListe } from '../components/AbosKarte';
 import { useDialoge } from '../components/Dialoge';
 
 const fmtZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–');
 
 export default function FirmaPage() {
-  const { firma, setFirma, isInhaber } = useAuth();
+  const { firma, setFirma, isInhaber, features, featureBeschreibung } = useAuth();
   const [tab, setTab] = useState('firma');
-  const optionen = [{ value: 'firma', label: 'Firmendaten', icon: Building2 }, { value: 'leistungen', label: 'Leistungen', icon: Tag }, { value: 'lizenz', label: 'Lizenz', icon: BadgeCheck }];
-  if (isInhaber) optionen.push({ value: 'api', label: 'Schnittstelle', icon: Plug }, { value: 'webhooks', label: 'Webhooks', icon: Webhook }, { value: 'import', label: 'Import', icon: Upload });
+  const optionen = [{ value: 'firma', label: 'Firmendaten', icon: Building2 }, { value: 'leistungen', label: 'Leistungen', icon: Tag }, { value: 'angebote', label: 'Angebote', icon: FileText }, { value: 'lizenz', label: 'Lizenz', icon: BadgeCheck }];
+  if (isInhaber) optionen.push({ value: 'api', label: 'Schnittstelle', icon: Plug }, { value: 'webhooks', label: 'Webhooks', icon: Webhook }, { value: 'import', label: 'Import', icon: Upload }, { value: 'module', label: 'Module', icon: Tag });
 
   const speichern = async (daten) => {
     const r = await api.put('/api/firma', daten);
@@ -28,10 +29,20 @@ export default function FirmaPage() {
       <div className="flex justify-center mb-5 overflow-x-auto no-scrollbar"><Segmented value={tab} onChange={setTab} options={optionen} /></div>
       {tab === 'firma' && <div className="max-w-3xl mx-auto space-y-5"><FirmenartKarte /><BenachrichtigungenKarte /><Card className="p-5 sm:p-8">{firma ? <CompanyForm company={firma} onSave={speichern} /> : <Ladeanzeige />}</Card></div>}
       {tab === 'leistungen' && <Leistungen />}
+      {tab === 'angebote' && <div className="max-w-3xl mx-auto space-y-5"><AngeboteEinstellungenKarte /></div>}
       {tab === 'lizenz' && <Lizenz />}
       {tab === 'api' && <Schnittstelle />}
       {tab === 'webhooks' && <Webhooks />}
       {tab === 'import' && <Import />}
+      {tab === 'module' && (
+        <div className="max-w-3xl mx-auto"><Card className="p-5 space-y-3">
+          <h2 className="text-[17px]">Module dieser Installation</h2>
+          <p className="text-[13px] text-[#6E6E73]">Unfertige oder optionale Module schaltet der Betreiber je Installation über die Umgebung frei (FEATURE_&lt;NAME&gt;=1|0, siehe BETRIEB.md). Abgeschaltete Module sind weder im Menü noch über die Schnittstelle erreichbar.</p>
+          <ul className="divide-y divide-black/[0.06] text-[14px]" data-testid="module-liste">
+            {Object.entries(features || {}).map(([name, an]) => <li key={name} className="py-2 flex items-center gap-3"><span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${an ? 'bg-[#E8F8EC] text-[#1B7F3B]' : 'bg-black/[0.06] text-[#6E6E73]'}`}>{an ? 'an' : 'aus'}</span><span className="font-medium">{name}</span><span className="text-[#6E6E73] flex-1 min-w-0 truncate">{featureBeschreibung?.[name] || ''}</span></li>)}
+          </ul>
+        </Card></div>
+      )}
     </Layout>
   );
 }
@@ -83,7 +94,31 @@ function BenachrichtigungenKarte() {
       <h2 className="text-[17px]">E-Mails an eure Firma</h2>
       <p className="text-[14px] text-[#6E6E73] mt-1 mb-2">Büro und Inhaber bekommen E-Mails zu Projekteinladungen, Ausschreibungen, Einreichungsnachweisen, Zuschlägen, Nachträgen und Abnahmen. Jede E-Mail steht als Nachweis unter „Protokoll → E-Mail-Nachweise“.</p>
       <div className="rounded-2xl bg-[#F5F5F7] px-4"><Toggle checked={an} onChange={(v) => { if (!busy && isInhaber) setzen(v); }} label="E-Mail-Benachrichtigungen" hint={isInhaber ? 'Nur der Inhaber ändert das.' : 'Ändern kann das nur der Inhaber.'} /></div>
+      <ErinnerungEinstellung firma={firma} isInhaber={isInhaber} refresh={refresh} />
     </Card>
+  );
+}
+
+/** Einsatz-Erinnerung am Vorabend: Uhrzeit und ob zusätzlich zur App-Mitteilung eine E-Mail geht. */
+function ErinnerungEinstellung({ firma, isInhaber, refresh }) {
+  const e = firma?.erinnerung || { uhrzeit: '18:00', email: true };
+  const [uhrzeit, setUhrzeit] = useState(e.uhrzeit || '18:00');
+  const [email, setEmail] = useState(e.email !== false);
+  const [busy, setBusy] = useState(false);
+  const speichern = async () => {
+    setBusy(true);
+    try { await api.put('/api/firma', { erinnerung: { uhrzeit, email } }); await refresh(); toast.success('Erinnerung gespeichert'); } catch (err) { toast.error(err.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-4 rounded-2xl bg-[#F5F5F7] px-4 py-3 space-y-2">
+      <div className="text-[14px] font-medium">Einsatz-Erinnerung am Vorabend</div>
+      <p className="text-[13px] text-[#6E6E73]">Jede eingeplante Person bekommt am Abend eine Mitteilung für den nächsten Tag (Projekt, Zeit, Adresse, Hinweis) – einmal je Einsatz, bei Planänderungen erneut.</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Uhrzeit"><TextInput type="time" value={uhrzeit} onChange={(ev) => setUhrzeit(ev.target.value)} disabled={!isInhaber} /></Field>
+        <div className="flex-1 min-w-[220px]"><Toggle checked={email} onChange={(v) => isInhaber && setEmail(v)} label="Zusätzlich per E-Mail" hint="In der App immer" /></div>
+        {isInhaber && <Btn size="sm" onClick={speichern} loading={busy}>Speichern</Btn>}
+      </div>
+    </div>
   );
 }
 
