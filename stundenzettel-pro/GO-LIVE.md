@@ -109,6 +109,17 @@ Offen: Erinnerungsdienst auf dem Zielserver beobachten (Protokoll `erinnerungen`
 
 Backend-Tests gesamt: 78 grün. Offen: echter E-Mail-Versand mit Anhang über SMTP auf dem Zielserver prüfen (Anhangsgröße, Spam-Bewertung).
 
+## 1g. Stufe D – Material, Eingangsrechnungen, Nachkalkulation (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| CSV-Import: Trennzeichen, Anführungszeichen mit Semikolon im Text, Dezimalkomma, Fehlerzeilen mit Nummer, Mehrfachnummern, Einkaufspreise ohne Recht | `test_material_20261024.py::test_01` |
+| Materialverbrauch: nur zugeteilte Projekte, Mitarbeiter nie Preise, Büro ohne Kostensätze ohne Preise, Prüfung nur mit Recht, geprüfte Buchung für Mitarbeiter gesperrt | `test_02` |
+| Eingangsrechnung: XRechnung-Vorschlag, Beleg-Zugriff, Aufteilung ≤ Netto, Brutto = Netto + USt, Dublette (409/erzwingen), prüfen/bezahlt/storno, Nachkalkulation Soll/Ist mit Hinweisen, Personenkosten nur mit Kostensätzen, Projektakte | `test_03` |
+| Browser (24.10.2026): Artikelliste und -dialog, Eingangsrechnungsliste und -dialog mit „Geprüft“, Projekt → Material (Büro mit Kosten, Prüfen; Mitarbeiterin bucht ohne Preise), Projekt → Nachkalkulation, Übersicht | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 81 grün. Offen: ZUGFeRD-Auslesen mit echten Lieferanten-PDFs prüfen (nur mit erzeugten XML getestet), Lohnnebenkosten je Firma einstellen (Standard 0).
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

@@ -71,8 +71,19 @@ def _positionen_normalisieren(positionen: list, alte: Optional[list[dict]] = Non
         aus.append({"id": pid, "art": d.get("art") or "leistung", "text": (d.get("text") or "").strip()[:300], "beschreibung": (d.get("beschreibung") or "")[:4000],
                     "menge": float(d.get("menge") or 0), "einheit": (d.get("einheit") or "Stk.")[:20], "einzelpreis": float(d.get("einzelpreis") or 0),
                     "rabatt_prozent": float(d.get("rabatt_prozent") or 0), "alternativ": bool(d.get("alternativ")), "eventual": bool(d.get("eventual")),
-                    "leistung_id": d.get("leistung_id") or None, "kalkulation": kalk})
+                    "leistung_id": d.get("leistung_id") or None, "artikel_id": d.get("artikel_id") or None, "kalkulation": kalk})
     return aus
+
+
+async def _artikel_vorbelegen(firma_id: str, positionen: list[dict]) -> list[dict]:
+    """Positionen aus dem Artikelstamm: Einkaufspreis × Menge als Material-Einkauf in die Kalkulation übernehmen, solange keine eigene Angabe da ist."""
+    for p in positionen:
+        if not p.get("artikel_id") or (p.get("kalkulation") or {}).get("material_ek") not in (None, ""):
+            continue
+        a = await db().artikel.find_one({"id": p["artikel_id"], "firma_id": firma_id}, {"_id": 0, "einkaufspreis": 1})
+        if a and a.get("einkaufspreis") is not None:
+            p["kalkulation"] = {**(p.get("kalkulation") or {}), "material_ek": ang.rund(float(a["einkaufspreis"]) * float(p.get("menge") or 0))}
+    return positionen
 
 
 def _berechnen(a: dict, firma: dict) -> dict:
@@ -221,7 +232,7 @@ async def anlegen(body: AngebotKundeIn, user: dict = Depends(firmenabo_noetig("b
         if getattr(body, feld) is not None:
             a[feld] = getattr(body, feld)
     if body.positionen or not body.vorlage_id:
-        a["positionen"] = _positionen_normalisieren(body.positionen)
+        a["positionen"] = await _artikel_vorbelegen(user["firma_id"], _positionen_normalisieren(body.positionen))
     a["gueltig_bis"] = body.gueltig_bis or a.get("gueltig_bis") or ang.gueltig_bis_standard(firma, a["datum"])
     await _kunde_setzen(user, a, body)
     await _projekt_setzen(user, a, body.project_id)
@@ -267,7 +278,7 @@ async def aendern(angebot_id: str, body: AngebotKundeIn, user: dict = Depends(fi
     if "zuschlaege" in felder:
         a["zuschlaege"] = [z.model_dump() for z in body.zuschlaege]
     if "positionen" in felder:
-        a["positionen"] = _positionen_normalisieren(body.positionen, a.get("positionen"))
+        a["positionen"] = await _artikel_vorbelegen(user["firma_id"], _positionen_normalisieren(body.positionen, a.get("positionen")))
     if "customer_id" in felder or "kunde_frei" in felder:
         await _kunde_setzen(user, a, body)
     if "project_id" in felder:

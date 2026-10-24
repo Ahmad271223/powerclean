@@ -33,6 +33,9 @@ import MeinEinsatzplanPage from './pages/MeinEinsatzplanPage';
 import AngebotePage from './pages/AngebotePage';
 import AngebotPage from './pages/AngebotPage';
 import AngebotOeffentlichPage from './pages/AngebotOeffentlichPage';
+import ArtikelPage from './pages/ArtikelPage';
+import EingangsrechnungenPage from './pages/EingangsrechnungenPage';
+import NachkalkulationPage from './pages/NachkalkulationPage';
 
 function CrashScreen({ error }) {
   return (
@@ -124,6 +127,9 @@ export default function App() {
             <Route path="/angebote" element={<Geschuetzt buero><AngebotePage /></Geschuetzt>} />
             <Route path="/angebote/:angebotId" element={<Geschuetzt buero><AngebotPage /></Geschuetzt>} />
             <Route path="/angebot/:token" element={<AngebotOeffentlichPage />} />
+            <Route path="/artikel" element={<Geschuetzt buero><ArtikelPage /></Geschuetzt>} />
+            <Route path="/eingangsrechnungen" element={<Geschuetzt buero><EingangsrechnungenPage /></Geschuetzt>} />
+            <Route path="/nachkalkulation" element={<Geschuetzt buero><NachkalkulationPage /></Geschuetzt>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </DialogProvider>

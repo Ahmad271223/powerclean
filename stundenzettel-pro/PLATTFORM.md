@@ -154,6 +154,31 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
 - Offen: Aufmaß-Mengen in Positionen, Artikelstamm statt freier Materialpositionen (Stufe D/F), Rechnung aus dem Auftrag (Stufe E), Unterschrift
   des Kunden auf dem Antwortlink, Erinnerung zum Nachfassen per E-Mail.
 
+## 1h. Stufe D – Artikel, Material, Eingangsrechnungen, Nachkalkulation (24.10.2026)
+
+- Sammlungen: `artikel` {id, firma_id, nummer (eindeutig je Firma), name, beschreibung, einheit, einkaufspreis, verkaufspreis, hersteller, lieferant, kategorie,
+  steuer_satz, aktiv, quelle manuell|csv}, `materialverbrauch` {id, firma_id, project_id, user_id, user_name, date, artikel_id, artikel_nummer, bezeichnung, menge,
+  einheit, einkaufspreis (Momentaufnahme), verkaufspreis, kosten, note, quelle, status erfasst|geprueft, geprueft_von/at}, `eingangsrechnungen` {id, firma_id,
+  lieferant, lieferant_ustid, rechnungsnummer, rechnungsdatum, faellig_am, netto, ust, brutto, zuordnungen[{project_id, projekt_name, betrag_netto, kostenart}],
+  kostenart, notiz, dokument_id, status erfasst|geprueft|bezahlt|storniert, bezahlt_am, zahlungsart, dublette, dublette_hinweis, verlauf[]}; Belege als
+  `documents` mit scope `eingangsrechnung` (Zugriff nur mit Recht `rechnungen`).
+- `material.py`: `csv_lesen`/`spalten_zuordnen`/`artikel_aus_csv` (Synonyme für Spaltennamen, `zahl()` für Dezimalkomma), `erechnung_auslesen` (CII-XML →
+  Vorschlag), `zugferd_xml_aus_pdf` (pikepdf-Anhang), `dublette_schluessel`, `kostensatz_mitarbeiter` (Stundenlohn × (1 + Lohnnebenkosten) | Monatsgehalt ÷
+  (Wochenstunden × 4,33) | Firmensatz | fehlt), `nachkalkulation(firma, projekt)`.
+- API: `/api/artikel` (GET mit q/kategorie/aktiv, POST, PUT, DELETE → deaktiviert bei Verwendung, `/auswahl` für Mitarbeiter ohne Preise, `/import` mit
+  `vorschau=1`), `/api/projekte/{id}/material` (GET/POST), `/api/material/{id}` (PUT/DELETE), `/api/material/{id}/pruefen` (Recht kalkulation; Preis setzen
+  braucht kostensaetze), `/api/eingangsrechnungen` (GET mit status/project_id, POST mit `erzwingen` bei Dublette, `/datei` Upload mit Vorschlag, GET/PUT/DELETE
+  `{id}`, `/pruefen`, `/bezahlt`, `/storno`), `/api/projekte/{id}/nachkalkulation`, `/api/nachkalkulation` (Übersicht mit `warnung`). Startseite:
+  `kostenabweichungen`, offene Punkte `eingangsrechnungen_pruefen`, `eingangsrechnungen_faellig`, `material_pruefen`. Projektakte: `07_Material/`,
+  `08_Eingangsrechnungen/` (CSV + Belege), `09_Nachkalkulation/nachkalkulation.json`.
+- Kostenmodell: `firmen.kalkulation.lohnnebenkosten_prozent` (neu, Standard 0 – bewusst nicht geraten). Geplante Zeit (Angebotskalkulation, Plantafel) und
+  tatsächliche Zeit (gebucht, davon freigegeben) werden nie vermischt; die Ist-Personalkosten rechnen mit allen gebuchten Stunden und benennen die ungeprüften.
+- Oberfläche: `ArtikelPage` (Suche, Dialog, CSV-Import mit Vorschau), `EingangsrechnungenPage` (Liste, Dialog mit Upload/Vorschlag/Aufteilung/Aktionen,
+  `?id=` öffnet direkt), `NachkalkulationPage` (Übersicht, aufklappbar), `components/material/{MaterialTab,NachkalkulationTab}` als Projekt-Reiter,
+  Angebotspositionen „Aus Artikel übernehmen“. Tests `tests/test_material_20261024.py` (3 Tests).
+- Offen: Lager (Bestände, Ein-/Ausgang, Inventur, Reservierung), DATANORM-Import (Stufe F), Positionen der Eingangsrechnung einzeln erfassen, OCR für
+  Bild-/PDF-Belege ohne E-Rechnung (Stufe H, Feature-Flag), Teilzahlungen (Stufe E).
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

@@ -144,7 +144,7 @@ class FirmaIn(BaseModel):
         if v is None:
             return v
         aus = {}
-        for k in ("stundensatz", "gemeinkosten_prozent", "risiko_prozent", "gewinn_prozent"):
+        for k in ("stundensatz", "gemeinkosten_prozent", "risiko_prozent", "gewinn_prozent", "lohnnebenkosten_prozent"):
             if v.get(k) in (None, ""):
                 continue
             try:
@@ -1126,6 +1126,7 @@ class AngebotPositionKundeIn(BaseModel):
     alternativ: bool = False
     eventual: bool = False
     leistung_id: Optional[str] = Field(default=None, max_length=64)
+    artikel_id: Optional[str] = Field(default=None, max_length=64)
     kalkulation: Optional[dict] = None   # vertraulich: {stunden, stundensatz, material_ek, fremd, geraete, transport, sonstige, gemeinkosten_prozent, risiko_prozent, gewinn_prozent}
 
 
@@ -1219,3 +1220,91 @@ class AngebotAntwortIn(BaseModel):
 
 class KalkulationIn(BaseModel):
     positionen: dict[str, dict] = Field(default_factory=dict)   # Positions-ID → Kalkulationseingaben
+
+
+# ---------------------------------------------------------------- Artikel, Material, Eingangsrechnungen (Stufe D)
+
+class ArtikelIn(BaseModel):
+    nummer: str = Field(min_length=1, max_length=60)
+    name: str = Field(min_length=1, max_length=200)
+    beschreibung: Optional[str] = Field(default="", max_length=4000)
+    einheit: str = Field(default="Stk.", max_length=20)
+    einkaufspreis: Optional[float] = Field(default=None, ge=0, le=1e9)   # nur mit Recht „kostensaetze“
+    verkaufspreis: Optional[float] = Field(default=None, ge=0, le=1e9)
+    hersteller: Optional[str] = Field(default="", max_length=120)
+    lieferant: Optional[str] = Field(default="", max_length=120)
+    kategorie: Optional[str] = Field(default="", max_length=80)
+    steuer_satz: Optional[float] = Field(default=None, ge=0, le=100)
+    aktiv: bool = True
+
+
+class MaterialIn(BaseModel):
+    date: Optional[str] = None
+    artikel_id: Optional[str] = Field(default=None, max_length=64)
+    bezeichnung: Optional[str] = Field(default="", max_length=200)
+    menge: float = Field(gt=0, le=1e9)
+    einheit: Optional[str] = Field(default="", max_length=20)
+    note: Optional[str] = Field(default=None, max_length=500)
+    einkaufspreis: Optional[float] = Field(default=None, ge=0, le=1e9)   # nur Büro mit Recht „kostensaetze“
+
+    @field_validator("date")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return None
+        datum_pruefen(v)
+        return v
+
+
+class MaterialPruefenIn(BaseModel):
+    einkaufspreis: Optional[float] = Field(default=None, ge=0, le=1e9)
+    menge: Optional[float] = Field(default=None, gt=0, le=1e9)
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class EingangZuordnungIn(BaseModel):
+    project_id: str = Field(min_length=1, max_length=64)
+    betrag_netto: float = Field(ge=0, le=1e9)
+    kostenart: str = Field(default="material", pattern="^(material|fremdleistung|geraete|transport|sonstiges|gemeinkosten)$")
+
+
+class EingangsrechnungIn(BaseModel):
+    lieferant: str = Field(min_length=1, max_length=160)
+    lieferant_ustid: Optional[str] = Field(default="", max_length=40)
+    rechnungsnummer: str = Field(min_length=1, max_length=60)
+    rechnungsdatum: str
+    faellig_am: Optional[str] = None
+    netto: float = Field(ge=0, le=1e9)
+    ust: float = Field(default=0, ge=0, le=1e9)
+    brutto: Optional[float] = Field(default=None, ge=0, le=1e9)
+    zuordnungen: list[EingangZuordnungIn] = Field(default_factory=list, max_length=50)
+    kostenart: str = Field(default="material", pattern="^(material|fremdleistung|geraete|transport|sonstiges|gemeinkosten)$")
+    notiz: Optional[str] = Field(default="", max_length=2000)
+    dokument_id: Optional[str] = Field(default=None, max_length=64)
+    erzwingen: bool = False   # trotz Dublettenhinweis anlegen
+
+    @field_validator("rechnungsdatum", "faellig_am")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return None
+        datum_pruefen(v)
+        return v
+
+    @model_validator(mode="after")
+    def _brutto(self):
+        if self.brutto is None:
+            self.brutto = round(self.netto + self.ust, 2)
+        elif abs(self.brutto - self.netto - self.ust) > 0.02:
+            raise ValueError("Brutto muss Netto plus Umsatzsteuer sein.")
+        return self
+
+
+class EingangBezahltIn(BaseModel):
+    am: Optional[str] = None
+    zahlungsart: Optional[str] = Field(default="", max_length=60)
+    betrag: Optional[float] = Field(default=None, ge=0, le=1e9)
+
+
+class EingangStornoIn(BaseModel):
+    grund: str = Field(min_length=1, max_length=500)

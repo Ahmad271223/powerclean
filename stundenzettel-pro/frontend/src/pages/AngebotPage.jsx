@@ -98,6 +98,7 @@ export default function AngebotPage() {
   const [kunden, setKunden] = useState([]);
   const [projekte, setProjekte] = useState([]);
   const [leistungen, setLeistungen] = useState([]);
+  const [artikel, setArtikel] = useState([]);
   const [dialog, setDialog] = useState('');
   const [kundeDialog, setKundeDialog] = useState(false);
   const [busy, setBusy] = useState('');
@@ -109,6 +110,7 @@ export default function AngebotPage() {
     api.get('/api/kunden').then((r) => setKunden(r.kunden)).catch(() => {});
     api.get('/api/projekte').then((r) => setProjekte((r.projekte || r).filter((p) => !p.archived && !p.verknuepft))).catch(() => {});
     api.get('/api/leistungen').then((r) => setLeistungen(r.leistungen)).catch(() => {});
+    api.get('/api/artikel?aktiv=true').then((r) => setArtikel(r.artikel)).catch(() => {});
   }, []);
   const a = d?.angebot;
   const bearbeitbar = !!a && (a.status === 'entwurf' || a.status === 'anfrage');
@@ -212,7 +214,7 @@ export default function AngebotPage() {
           </Card>
           <Card className="p-5">
             <h2 className="text-[17px] mb-3">Positionen</h2>
-            <PositionenEditor positionen={form.positionen} onChange={(p) => set({ positionen: p })} leistungen={leistungen} readOnly={!bearbeitbar} />
+            <PositionenEditor positionen={form.positionen} onChange={(p) => set({ positionen: p })} leistungen={leistungen} artikel={artikel} readOnly={!bearbeitbar} />
           </Card>
           <Card className="p-5">
             <h2 className="text-[17px] mb-3">Texte</h2>

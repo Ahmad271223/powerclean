@@ -31,7 +31,7 @@ OFFEN = ("anfrage", "entwurf", "gesendet")
 POSITIONSARTEN = {"titel": "Titel / Gruppe", "leistung": "Leistung", "stunden": "Stundenposition", "material": "Material", "pauschal": "Pauschale", "text": "Textzeile"}
 EINHEITEN = ["Stk.", "Std.", "m", "m²", "m³", "lfm", "kg", "l", "Psch.", "Tag", "Monat", "Fahrt"]
 KALKULATION_FELDER = ("stunden", "stundensatz", "material_ek", "fremd", "geraete", "transport", "sonstige", "gemeinkosten_prozent", "risiko_prozent", "gewinn_prozent")
-KALKULATION_STANDARD = {"stundensatz": 0.0, "gemeinkosten_prozent": 15.0, "risiko_prozent": 3.0, "gewinn_prozent": 10.0}
+KALKULATION_STANDARD = {"stundensatz": 0.0, "gemeinkosten_prozent": 15.0, "risiko_prozent": 3.0, "gewinn_prozent": 10.0, "lohnnebenkosten_prozent": 0.0}
 
 
 def rund(x) -> float:

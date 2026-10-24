@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 
 const FELDER = ['angebot_prefix', 'angebot_gueltig_tage', 'angebot_einleitung', 'angebot_zahlungsbedingungen', 'angebot_schluss'];
-const KALK = [['stundensatz', 'Interner Stundensatz (Lohnkosten je Stunde)', '€/Std.'], ['gemeinkosten_prozent', 'Gemeinkostenzuschlag', '%'], ['risiko_prozent', 'Risikozuschlag', '%'], ['gewinn_prozent', 'Gewinnzuschlag', '%']];
+const KALK = [['stundensatz', 'Interner Stundensatz (Lohnkosten je Stunde)', '€/Std.'], ['gemeinkosten_prozent', 'Gemeinkostenzuschlag', '%'], ['risiko_prozent', 'Risikozuschlag', '%'], ['gewinn_prozent', 'Gewinnzuschlag', '%'], ['lohnnebenkosten_prozent', 'Lohnnebenkosten (Aufschlag auf Stundenlohn/Gehalt in der Nachkalkulation)', '%']];
 
 /** Firma → Angebote: Nummernkreis, Gültigkeit und Standardtexte der Kundenangebote; Kalkulationssätze nur mit Recht „kostensaetze“. */
 export default function AngeboteEinstellungenKarte() {
@@ -16,7 +16,7 @@ export default function AngeboteEinstellungenKarte() {
   useEffect(() => {
     if (!firma) return;
     setForm(Object.fromEntries(FELDER.map((f) => [f, firma[f] ?? ''])));
-    setKalk({ stundensatz: '', gemeinkosten_prozent: '', risiko_prozent: '', gewinn_prozent: '', ...(firma.kalkulation || {}) });
+    setKalk({ stundensatz: '', gemeinkosten_prozent: '', risiko_prozent: '', gewinn_prozent: '', lohnnebenkosten_prozent: '', ...(firma.kalkulation || {}) });
   }, [firma]);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const speichern = async () => {

@@ -264,6 +264,25 @@ Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berec
   Gewinn, **Aufschlag** (auf die Kosten), **Marge** (am Verkaufspreis) und **Deckungsbeitrag** (Verkauf minus direkte Kosten) – ausdrücklich getrennt.
   Unvollständig kalkulierte Angebote zeigen keinen irreführenden Gewinn. Nichts davon erreicht Kunden, Mitarbeiter oder GU-Partner.
 
+## Artikel, Material, Eingangsrechnungen, Nachkalkulation (24.10.2026, Stufe D)
+
+- **Artikelstamm** (Seite „Artikel & Material“, Recht `angebote`): Artikelnummer, Bezeichnung, Einheit, Einkaufs- und Verkaufspreis, Hersteller, Lieferant,
+  Kategorie, Steuersatz. Einkaufspreise sieht und setzt nur, wer das Recht `kostensaetze` hat. CSV-Import mit Vorschau (Semikolon/Komma/Tab,
+  Anführungszeichen, Dezimalkomma, UTF-8/Windows) und Fehlerzeilen mit Zeilennummer – nichts wird stillschweigend ausgelassen. Artikel lassen sich in
+  Angebotspositionen übernehmen; der Einkaufspreis wandert automatisch in die interne Kalkulation.
+- **Materialverbrauch** (Projekt → Material): Mitarbeiter buchen auf zugewiesene Projekte, was verbraucht wurde (Artikel oder frei benannt), ohne Preise
+  zu sehen. Der Einkaufspreis wird beim Buchen als Momentaufnahme übernommen; das Büro prüft (Recht `kalkulation`) – erst geprüfte Buchungen zählen.
+  Lieferungen (Termine) und Verbrauch bleiben getrennte Vorgänge; eine Lagerverwaltung gibt es bewusst noch nicht.
+- **Eingangsrechnungen** (Recht `rechnungen`): Lieferantenrechnung mit Beleg (PDF, Foto, XML). Aus XRechnung-XML oder ZUGFeRD-PDF werden Lieferant,
+  Nummer, Datum, Fälligkeit und Beträge als Vorschlag gelesen – nie ungeprüft gebucht. Aufteilung auf mehrere Projekte und Kostenarten (Material,
+  Fremdleistung, Geräte, Transport, Sonstiges, Gemeinkosten), Dublettenprüfung (Lieferant + Nummer), Status erfasst → geprüft → bezahlt, Storno mit Grund.
+- **Nachkalkulation** (Projekt → Nachkalkulation und Seite „Nachkalkulation“, Recht `kalkulation`): Auftragswert plus freigegebene Nachträge gegen
+  Plan (Kalkulation des angenommenen Angebots) und Ist je Kostenart: Personal = gebuchte Stunden × Kostensatz (Stundenlohn oder Monatsgehalt aus den
+  Lohndaten plus Lohnnebenkosten, sonst Kalkulationsstundensatz der Firma; fehlende Sätze werden ausgewiesen), geprüftes Material, geprüfte
+  Eingangsrechnungen, Gemeinkostenzuschlag. Geplante, gebuchte und freigegebene Stunden stehen getrennt. Ein „Ergebnis nach allen Kosten“ gibt es erst,
+  wenn alle Zeiten freigegeben und alle Buchungen und Rechnungen geprüft sind; vorher zeigt die Seite die offenen Punkte. Personenkosten nur mit `kostensaetze`.
+  Startseite: „Projekte mit Kostenabweichung“ (über 10 % oder negativer Deckungsbeitrag).
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).

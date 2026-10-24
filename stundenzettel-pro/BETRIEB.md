@@ -100,6 +100,14 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
   Der Token ist 32 Zeichen lang und zufällig; abgelaufene Angebote lassen sich darüber nicht mehr annehmen.
 - Nummernkreis `firmen.angebotszaehler.{jahr}` zählt nie zurück (gelöschte Entwürfe hinterlassen Lücken – gewollt, wie bei Rechnungen).
 
+## 4h. Eingangsrechnungen und Nachkalkulation
+
+- Belege der Eingangsrechnungen liegen wie alle Dokumente unter `DATA_DIR` (Sammlung `documents`, scope `eingangsrechnung`) und gehören in die Sicherung.
+- Die Nachkalkulation rechnet bei jedem Aufruf neu (keine gespeicherten Zwischenstände); die Übersicht `/api/nachkalkulation` und die Startseiten-Kachel
+  gehen über alle aktiven Projekte mit Auftragswert – bei sehr vielen Projekten lohnt ein Zwischenspeicher (offen).
+- Kostenmodell je Firma unter Firma → Angebote → Kalkulationssätze: interner Stundensatz (Rückfall), Lohnnebenkosten in Prozent (Aufschlag auf Stundenlohn
+  oder Monatsgehalt aus den Lohndaten). Ohne Lohndaten und ohne Firmensatz werden Stunden als „ohne Lohnsatz“ ausgewiesen, nie geraten.
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

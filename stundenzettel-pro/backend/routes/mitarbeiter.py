@@ -225,6 +225,11 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
         return d
     if d.get("firma_id") != user["firma_id"]:
         raise HTTPException(404, "Dokument nicht gefunden.")
+    if d["scope"] == "eingangsrechnung":
+        from auth import hat_recht, recht_fehlt
+        if not hat_recht(user, "rechnungen"):
+            raise HTTPException(403, recht_fehlt("rechnungen"))
+        return d
     if d["scope"] == "user":
         _selbst_oder_buero(user, d["ref_id"])
     elif d["scope"] == "project" and not hat_rolle(user, "buero"):

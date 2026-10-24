@@ -253,6 +253,32 @@ async def _eigene_daten(z: _Zip, user: dict, firma: dict, projekt: dict, namen: 
         z.schreiben("06_Angebote/angebote.csv", _csv(zeilen), "angebote_kunde_liste")
     if projekt.get("auftrag"):
         z.schreiben("06_Angebote/auftrag.json", _json(projekt["auftrag"]), "auftrag")
+    # Material, Eingangsrechnungen (Belege), Nachkalkulation (Stufe D)
+    material = [m async for m in db().materialverbrauch.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("date", 1)])]
+    if material:
+        z.schreiben("07_Material/material.csv", _csv([["Datum", "Mitarbeiter", "Artikelnummer", "Material", "Menge", "Einheit", "Einkaufspreis", "Kosten", "Status", "Geprüft von", "Notiz"]] +
+                                                  [[m.get("date"), m.get("user_name"), m.get("artikel_nummer") or "", m.get("bezeichnung"), m.get("menge"), m.get("einheit"), m.get("einkaufspreis"), m.get("kosten"), m.get("status"), m.get("geprueft_von") or "", m.get("note") or ""] for m in material]), "material")
+    eingang = [r async for r in db().eingangsrechnungen.find({"firma_id": fid, "zuordnungen.project_id": pid}, {"_id": 0}).sort([("rechnungsdatum", 1)])]
+    if eingang:
+        zeilen = [["Lieferant", "Rechnungsnummer", "Rechnungsdatum", "Fällig", "Netto gesamt", "Brutto gesamt", "Anteil Projekt netto", "Kostenart", "Status", "Bezahlt am", "Beleg"]]
+        for r in eingang:
+            for zu in r.get("zuordnungen") or []:
+                if zu.get("project_id") != pid:
+                    continue
+                beleg = ""
+                if r.get("dokument_id"):
+                    d = await db().documents.find_one({"id": r["dokument_id"]}, {"_id": 0})
+                    if d:
+                        beleg = f"08_Eingangsrechnungen/{_name(r.get('rechnungsnummer') or r['id'], 60)}_{_dateiname(d)}"
+                        z.datei(beleg, d.get("path") or "", "eingangsrechnungen_belege")
+                zeilen.append([r.get("lieferant"), r.get("rechnungsnummer"), r.get("rechnungsdatum"), r.get("faellig_am") or "", r.get("netto"), r.get("brutto"), zu.get("betrag_netto"), zu.get("kostenart"), r.get("status"), r.get("bezahlt_am") or "", beleg])
+        z.schreiben("08_Eingangsrechnungen/eingangsrechnungen.csv", _csv(zeilen), "eingangsrechnungen")
+    if projekt.get("auftrag") or material or eingang:
+        try:
+            import material as material_modul
+            z.schreiben("09_Nachkalkulation/nachkalkulation.json", _json(await material_modul.nachkalkulation(firma, projekt)), "nachkalkulation")
+        except Exception as exc:  # noqa: BLE001
+            z.hinweise.append(f"Nachkalkulation konnte nicht erzeugt werden: {exc}")
 
 
 async def _angebot_schreiben(z: _Zip, ordner: str, a: dict, g: dict, namen_frei: bool) -> None:

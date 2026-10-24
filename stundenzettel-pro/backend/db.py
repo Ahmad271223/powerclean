@@ -103,6 +103,14 @@ async def indizes_anlegen(d) -> None:
         ("kundenangebote", [("firma_id", 1), ("project_id", 1)], {"name": "projekt"}),
         ("kundenangebote", [("token", 1)], {"name": "antwortlink"}),
         ("angebotsvorlagen", [("firma_id", 1), ("name", 1)], {"name": "firma_name"}),
+        # Artikel, Material, Eingangsrechnungen (Stufe D)
+        ("artikel", [("firma_id", 1), ("nummer", 1)], {"unique": True, "name": "nummer_je_firma"}),
+        ("artikel", [("firma_id", 1), ("aktiv", 1), ("name", 1)], {"name": "firma_name"}),
+        ("materialverbrauch", [("firma_id", 1), ("project_id", 1), ("date", -1)], {"name": "projekt_datum"}),
+        ("materialverbrauch", [("firma_id", 1), ("user_id", 1), ("date", -1)], {"name": "person_datum"}),
+        ("eingangsrechnungen", [("firma_id", 1), ("status", 1), ("rechnungsdatum", -1)], {"name": "firma_status_datum"}),
+        ("eingangsrechnungen", [("firma_id", 1), ("dublette", 1)], {"name": "dublette"}),
+        ("eingangsrechnungen", [("firma_id", 1), ("zuordnungen.project_id", 1)], {"name": "projekt"}),
         ("benachrichtigungen", [("id", 1)], {"name": "kennung"}),
         ("webhook_ausgang", [("firma_id", 1), ("webhook_id", 1), ("status", 1)], {"name": "firma_hook"}),
     ]

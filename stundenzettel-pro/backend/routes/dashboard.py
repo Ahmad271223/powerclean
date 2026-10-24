@@ -77,6 +77,7 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
             "monat": {"minuten": minuten_monat, "umsatz_netto": round(umsatz, 2)},
             "antraege_offen": offen_antraege, "rechnungen_offen": {"anzahl": rech_offen, "summe": round(rech_summe, 2)},
             "angebote_offen": await _angebote_offen(f) if hat_recht(user, "angebote") else None,
+            "kostenabweichungen": await _kostenabweichungen(firma) if hat_recht(user, "kalkulation") else None,
             "letzte_projekte": aktiv[:6], "abwesend_heute": abwesend,
             "arbzg_warnungen": len(warn_tage), "budget_warnungen": budgets, "lange_stempelungen": lange,
             "vormonat": {"jahr": vormonat.year, "monat": vormonat.month, "abgeschlossen": vormonat_zu},
@@ -103,6 +104,24 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
                     "antraege_offen": antraege, "projekte_sichtbar": sichtbar,
                     "saldo_minuten": konto["saldo_minuten"] if konto else None, "resturlaub": urlaub["rest"], "urlaub": urlaub})
     return aus
+
+
+async def _kostenabweichungen(firma: dict) -> dict:
+    """Projekte mit Auftragswert, deren Ist-Kosten den Plan um mehr als 10 % übersteigen oder deren Deckungsbeitrag negativ ist."""
+    import material as mat
+    warnungen, gesamt = [], 0
+    async for p in db().projects.find({"firma_id": firma["id"], "archived": {"$ne": True}}, {"_id": 0}):
+        if not (p.get("auftrag") or float(p.get("pauschale_netto") or 0)):
+            continue
+        gesamt += 1
+        try:
+            n = await mat.nachkalkulation(firma, p)
+        except Exception:  # noqa: BLE001 – die Startseite darf an einer Nachkalkulation nicht scheitern
+            continue
+        db_akt = n["deckungsbeitrag"]["aktuell"]
+        if (n["abweichung"] is not None and n["plan"]["gesamt"] and n["abweichung"] > 0.1 * n["plan"]["gesamt"]) or (db_akt is not None and db_akt < 0):
+            warnungen.append({"project_id": p["id"], "name": p["name"], "abweichung": n["abweichung"], "deckungsbeitrag": db_akt})
+    return {"anzahl": len(warnungen), "projekte": gesamt, "liste": warnungen[:5]}
 
 
 async def _angebote_offen(firma_id: str) -> dict:
@@ -179,6 +198,11 @@ async def aufgaben(user: dict = Depends(aktueller_nutzer)):
             punkt("angebote_nachfassen", "Gesendete Angebote laufen in 7 Tagen ab – nachfassen",
                   await db().kundenangebote.count_documents({"firma_id": f, "status": "gesendet", "gueltig_bis": {"$gte": heute, "$lte": (heute_d + timedelta(days=7)).isoformat()}}), "/angebote?status=gesendet", 2)
             punkt("auftraege_anlegen", "Angenommene Angebote als Auftrag anlegen", await db().kundenangebote.count_documents({"firma_id": f, "status": "angenommen", "auftrag": None}), "/angebote?status=angenommen", 1)
+        if hat_recht(user, "rechnungen"):
+            punkt("eingangsrechnungen_pruefen", "Eingangsrechnungen prüfen", await db().eingangsrechnungen.count_documents({"firma_id": f, "status": "erfasst"}), "/eingangsrechnungen?status=erfasst", 2)
+            punkt("eingangsrechnungen_faellig", "Überfällige Eingangsrechnungen bezahlen", await db().eingangsrechnungen.count_documents({"firma_id": f, "status": {"$in": ["erfasst", "geprueft"]}, "faellig_am": {"$lt": heute}}), "/eingangsrechnungen", 1)
+        if hat_recht(user, "kalkulation"):
+            punkt("material_pruefen", "Materialbuchungen prüfen", await db().materialverbrauch.count_documents({"firma_id": f, "status": "erfasst"}), "/projekte", 3)
         punkt("maengel_firma", "Überfällige Mängel beheben", await db().maengel.count_documents({"firma_id": f, "status": {"$nin": ["abgenommen"]}, "frist": {"$lt": heute}}), "/zusammenarbeit", 2)
         # Eigentümerseite: Vergaben, Angebote, Rückfragen, Fristen, Nachträge, Abnahmen, Berichte
         punkt("vergaben_freigeben", "Vergabevorschläge freigeben", await db().vergaben.count_documents({"owner_firma_id": f, "status": "vorgeschlagen"}), "/ausschreibungen", 1)

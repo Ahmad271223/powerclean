@@ -7,7 +7,7 @@ const num = (v) => (v === '' || v === null || v === undefined ? '' : v);
 
 /** Positionen eines Angebots: Titel gliedern, Positionen mit Menge/Einheit/Einzelpreis, Nachlass je Position, Alternativ-/Eventualkennzeichen.
  *  Im Lesemodus (gesendete Angebote) werden dieselben Zeilen ohne Eingabefelder gezeigt. */
-export default function PositionenEditor({ positionen, onChange, leistungen = [], readOnly = false }) {
+export default function PositionenEditor({ positionen, onChange, leistungen = [], artikel = [], readOnly = false }) {
   const [offen, setOffen] = useState({});   // Beschreibung/Details je Position aufgeklappt
   const liste = nummerieren(positionen || []);
   const set = (i, patch) => onChange(positionen.map((p, j) => (j === i ? { ...p, ...patch } : p)));
@@ -20,6 +20,11 @@ export default function PositionenEditor({ positionen, onChange, leistungen = []
     onChange(neu);
   };
   const anfuegen = (art) => onChange([...(positionen || []), leerePosition(art)]);
+  const ausArtikel = (id) => {
+    const a = artikel.find((x) => x.id === id);
+    if (!a) return;
+    onChange([...(positionen || []), { ...leerePosition('material'), text: a.name, beschreibung: a.beschreibung || '', einheit: a.einheit || 'Stk.', einzelpreis: Number(a.verkaufspreis) || 0, artikel_id: a.id }]);
+  };
   const ausLeistung = (id) => {
     const l = leistungen.find((x) => x.id === id);
     if (!l) return;
@@ -109,8 +114,14 @@ export default function PositionenEditor({ positionen, onChange, leistungen = []
         <Btn size="sm" variant="soft" onClick={() => anfuegen('leistung')}><Plus size={15} /> Position</Btn>
         <Btn size="sm" variant="soft" onClick={() => anfuegen('titel')}><Plus size={15} /> Titel</Btn>
         <Btn size="sm" variant="ghost" onClick={() => anfuegen('text')}><Plus size={15} /> Textzeile</Btn>
+        {artikel.length > 0 && (
+          <Select value="" onChange={(e) => ausArtikel(e.target.value)} className="ml-auto">
+            <option value="">Aus Artikel übernehmen …</option>
+            {artikel.map((a) => <option key={a.id} value={a.id}>{a.nummer} · {a.name}{a.verkaufspreis ? ` – ${fmtGeld(a.verkaufspreis)}/${a.einheit}` : ''}</option>)}
+          </Select>
+        )}
         {leistungen.length > 0 && (
-          <Select value="" onChange={(e) => ausLeistung(e.target.value)} className="ml-auto">
+          <Select value="" onChange={(e) => ausLeistung(e.target.value)} className={artikel.length ? '' : 'ml-auto'}>
             <option value="">Aus Leistung übernehmen …</option>
             {leistungen.map((l) => <option key={l.id} value={l.id}>{l.name}{l.hourly_rate ? ` – ${fmtGeld(l.hourly_rate)}/Std.` : ''}</option>)}
           </Select>

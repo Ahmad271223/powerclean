@@ -155,7 +155,26 @@ if r.status_code == 200:
             kalk[p["id"]] = {"stunden": 5, "material_ek": 15}
     ok(c.put("/api/kundenangebote/" + ag["id"] + "/kalkulation", json={"positionen": kalk}, headers=H))
     ok(c.post("/api/kundenangebote/" + ag["id"] + "/senden", json={"ohne_email": True}, headers=H))
+    # Zweites Angebot (Kopie) ist angenommen und als Auftrag am Sparkassen-Projekt angelegt → Nachkalkulation hat Soll-Werte
+    ag2 = ok(c.post("/api/kundenangebote/" + ag["id"] + "/kopieren", headers=H))["angebot"]
+    ok(c.post("/api/kundenangebote/" + ag2["id"] + "/senden", json={"ohne_email": True}, headers=H))
+    ok(c.post("/api/kundenangebote/" + ag2["id"] + "/annahme", json={"von_name": "Frau Richter", "art": "unterschrift"}, headers=H))
+    ok(c.post("/api/kundenangebote/" + ag2["id"] + "/auftrag", json={"project_id": p1["id"]}, headers=H))
     ok(c.post("/api/kundenangebote", json={"status": "anfrage", "titel": "Treppenhausreinigung Wohnanlage Nord",
                                       "kunde_frei": {"name": "Hausverwaltung Nord GmbH", "contact": "Frau Schulz", "email": "schulz@hv-nord.example", "street": "Nordring 5", "zip_code": "12345", "city": "Musterstadt"},
                                       "anfrage": {"text": "Bitte Angebot für die wöchentliche Treppenhausreinigung: 3 Aufgänge, je 4 Etagen, inkl. Fenster im Treppenhaus.", "kanal": "Telefon"}}, headers=H))
+    # Stufe D: Artikel, Materialbuchung der Mitarbeiterin, Eingangsrechnung mit Aufteilung, Lohnnebenkosten für die Nachkalkulation
+    ok(c.put("/api/firma", json={"kalkulation": {"stundensatz": 22, "gemeinkosten_prozent": 12, "risiko_prozent": 2, "gewinn_prozent": 12, "lohnnebenkosten_prozent": 22}}, headers=H))
+    art = {}
+    for a in ({"nummer": "RM-100", "name": "Allzweckreiniger 10 l", "einheit": "Kanister", "einkaufspreis": 18.9, "verkaufspreis": 29.9, "kategorie": "Reinigungsmittel", "lieferant": "Reinigungsbedarf Nord"},
+              {"nummer": "RM-210", "name": "Glasreiniger 5 l", "einheit": "Kanister", "einkaufspreis": 12.4, "verkaufspreis": 19.9, "kategorie": "Reinigungsmittel", "lieferant": "Reinigungsbedarf Nord"},
+              {"nummer": "VM-050", "name": "Mikrofasertücher 40×40 (10er)", "einheit": "Pack", "einkaufspreis": 6.5, "verkaufspreis": 11.0, "kategorie": "Verbrauchsmaterial"},
+              {"nummer": "MS-300", "name": "Scheuersaugmaschine Miete", "einheit": "Tag", "einkaufspreis": 45.0, "verkaufspreis": 80.0, "kategorie": "Maschinen"}):
+        art[a["nummer"]] = ok(c.post("/api/artikel", json=a, headers=H))["artikel"]
+    ok(c.post("/api/projekte/" + p1["id"] + "/material", json={"artikel_id": art["RM-100"]["id"], "menge": 2, "date": heute}, headers=HM))
+    ok(c.post("/api/projekte/" + p1["id"] + "/material", json={"artikel_id": art["VM-050"]["id"], "menge": 3, "date": heute, "note": "für die Glasflächen"}, headers=HM))
+    beleg_xml = c.post("/api/eingangsrechnungen/datei", files={"datei": ("rechnung-nord.pdf", b"%PDF-1.4\n% Demo-Beleg\n", "application/pdf")}, headers=H).json()
+    ok(c.post("/api/eingangsrechnungen", json={"lieferant": "Reinigungsbedarf Nord GmbH", "rechnungsnummer": "RN-2026-4471", "rechnungsdatum": heute, "faellig_am": frist, "netto": 420.0, "ust": 79.8,
+                                               "zuordnungen": [{"project_id": p1["id"], "betrag_netto": 300.0, "kostenart": "material"}, {"project_id": p2["id"], "betrag_netto": 120.0, "kostenart": "material"}],
+                                               "dokument_id": beleg_xml.get("dokument", {}).get("id"), "notiz": "Monatslieferung Reinigungsmittel"}, headers=H))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

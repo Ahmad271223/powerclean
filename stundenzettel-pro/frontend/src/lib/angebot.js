@@ -83,5 +83,5 @@ export function summen(positionen, zuschlaege, rabattProzent, steuer) {
 /** Positionen für PUT/POST: temporäre IDs weglassen, Zahlen als Zahlen, Kalkulation nicht mitschicken (eigener Endpunkt). */
 export const positionenFuerServer = (positionen) => (positionen || []).map((p) => ({
   ...(istNeu(p) ? {} : { id: p.id }), art: p.art || 'leistung', text: p.text || '', beschreibung: p.beschreibung || '', menge: Number(p.menge) || 0, einheit: p.einheit || 'Stk.',
-  einzelpreis: Number(p.einzelpreis) || 0, rabatt_prozent: Number(p.rabatt_prozent) || 0, alternativ: !!p.alternativ, eventual: !!p.eventual, leistung_id: p.leistung_id || null,
+  einzelpreis: Number(p.einzelpreis) || 0, rabatt_prozent: Number(p.rabatt_prozent) || 0, alternativ: !!p.alternativ, eventual: !!p.eventual, leistung_id: p.leistung_id || null, artikel_id: p.artikel_id || null,
 }));
