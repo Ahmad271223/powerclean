@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, FileText, Gavel, Megaphone, MessageCircleQuestion, Paperclip, Pencil, Scale, Send, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Gavel, Megaphone, MessageCircleQuestion, Paperclip, Pencil, Scale, Send, Trash2, Users, X, Upload, FileCode } from 'lucide-react';
 import { toast } from 'sonner';
+import PositionenImportDialog from '../components/angebot/PositionenImportDialog';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import Bild from '../components/Bild';
 import AusschreibungDialog from '../components/ausschreibung/AusschreibungDialog';
@@ -25,6 +26,7 @@ export default function AusschreibungPage() {
   const [d, setD] = useState(null);
   const [tab, setTab] = useState('uebersicht');
   const [edit, setEdit] = useState(false);
+  const [lvImport, setLvImport] = useState(false);
   const [einladen, setEinladen] = useState(false);
   const [busy, setBusy] = useState('');
   const { fragen } = useDialoge();
@@ -103,7 +105,7 @@ export default function AusschreibungPage() {
 
       {tab === 'positionen' && (
         <Card className="p-5 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[15px]">Leistungsverzeichnis</h2><div className="flex gap-2">{(d.positionen || []).length > 0 && <Btn size="sm" variant="soft" onClick={() => download(`/api/ausschreibungen/${d.id}/positionen.csv`).catch((err) => toast.error(err.message))}><Download size={14} /> CSV</Btn>}{leitung && !['vergeben', 'aufgehoben'].includes(d.status) && <Btn size="sm" variant="soft" onClick={() => setEdit(true)}><Pencil size={14} /> Bearbeiten</Btn>}</div></div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[15px]">Leistungsverzeichnis</h2><div className="flex gap-2">{(d.positionen || []).length > 0 && <Btn size="sm" variant="soft" onClick={() => download(`/api/ausschreibungen/${d.id}/positionen.csv`).catch((err) => toast.error(err.message))}><Download size={14} /> CSV</Btn>}{(d.positionen || []).length > 0 && <Btn size="sm" variant="soft" onClick={() => download(`/api/ausschreibungen/${d.id}/lv.x83`).catch((err) => toast.error(err.message))} title="Leistungsverzeichnis als GAEB DA XML X83"><FileCode size={14} /> GAEB X83</Btn>}{leitung && !['vergeben', 'aufgehoben'].includes(d.status) && <Btn size="sm" variant="soft" onClick={() => setLvImport(true)}><Upload size={14} /> Datei</Btn>}{leitung && !['vergeben', 'aufgehoben'].includes(d.status) && <Btn size="sm" variant="soft" onClick={() => setEdit(true)}><Pencil size={14} /> Bearbeiten</Btn>}</div></div>
           {(d.positionen || []).length === 0 ? <p className="text-[13px] text-[#86868B]">Kein Leistungsverzeichnis – Angebote erfolgen pauschal oder nach Stunden.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-[13px]"><thead><tr className="text-left text-[11px] uppercase tracking-wider text-[#86868B]"><th className="py-1 pr-3">Nr</th><th className="py-1 pr-3">Leistung</th><th className="py-1 pr-3 text-right">Menge</th><th className="py-1">Einheit</th></tr></thead>
               <tbody>{d.positionen.map((p) => <tr key={p.nr} className="border-t border-black/[0.06]"><td className="py-1.5 pr-3 font-mono">{p.nr}</td><td className="py-1.5 pr-3">{p.leistung}{p.beschreibung ? <span className="block text-[12px] text-[#6E6E73]">{p.beschreibung}</span> : null}</td><td className="py-1.5 pr-3 text-right">{p.menge}</td><td className="py-1.5">{p.einheit}</td></tr>)}</tbody></table></div>
@@ -127,6 +129,7 @@ export default function AusschreibungPage() {
 
       <AusschreibungDialog open={edit} onOpenChange={setEdit} ausschreibung={d} gewerke={d.gewerke} onSaved={laden} />
       <FirmenEinladenDialog open={einladen} onOpenChange={setEinladen} ausschreibungId={d.id} bereits={(d.einladungen || []).map((e) => e.firma_id)} gewerk={d.gewerk} onDone={laden} />
+          <PositionenImportDialog open={lvImport} onOpenChange={setLvImport} url={`/api/ausschreibungen/${d?.id}/positionen/datei`} onDone={() => laden()} />
     </Layout>
   );
 }

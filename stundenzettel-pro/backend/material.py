@@ -96,8 +96,23 @@ def spalten_zuordnen(kopf: list[str]) -> dict[str, int]:
 
 
 def artikel_aus_csv(roh: bytes) -> dict:
-    """Vorschau eines Artikelimports: erkannte Spalten, gültige Zeilen, Fehlerzeilen mit Zeilennummer und Grund."""
+    """Vorschau eines Artikelimports (CSV): erkannte Spalten, gültige Zeilen, Fehlerzeilen mit Zeilennummer und Grund."""
     kopf, zeilen, trenner = csv_lesen(roh)
+    return artikel_aus_tabelle(kopf, zeilen, trenner)
+
+
+def artikel_aus_datei(roh: bytes, dateiname: str = "") -> dict:
+    """CSV, Excel (.xlsx) oder DATANORM (A-/P-Sätze) → Artikelvorschau mit Fehlerzeilen."""
+    import importe
+    name = (dateiname or "").lower()
+    if name.endswith(".xlsx") or roh[:4] == b"PK\x03\x04":
+        return importe.artikel_aus_xlsx(roh)
+    if importe.ist_datanorm(roh, dateiname):
+        return importe.artikel_aus_datanorm(roh)
+    return artikel_aus_csv(roh)
+
+
+def artikel_aus_tabelle(kopf: list[str], zeilen: list[list[str]], trenner: str = ";") -> dict:
     if not kopf:
         return {"spalten": {}, "trenner": trenner, "artikel": [], "fehler": [{"zeile": 1, "grund": "Die Datei ist leer oder hat keine Kopfzeile."}], "kopf": []}
     sp = spalten_zuordnen(kopf)

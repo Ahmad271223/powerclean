@@ -225,6 +225,13 @@ async def _dokument_zugriff(user: dict, dokument_id: str) -> dict:
         return d
     if d.get("firma_id") != user["firma_id"]:
         raise HTTPException(404, "Dokument nicht gefunden.")
+    if d["scope"] == "aufmass":
+        a = await db().aufmasse.find_one({"id": d["ref_id"], "firma_id": user["firma_id"]}, {"_id": 0, "project_id": 1})
+        if not a:
+            raise HTTPException(404, "Dokument nicht gefunden.")
+        from gemeinsam import projekt_laden as _pl
+        await _pl(user, a["project_id"])
+        return d
     if d["scope"] == "eingangsrechnung":
         from auth import hat_recht, recht_fehlt
         if not hat_recht(user, "rechnungen"):

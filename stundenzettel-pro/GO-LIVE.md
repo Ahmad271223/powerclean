@@ -132,6 +132,18 @@ Backend-Tests gesamt: 81 grün. Offen: ZUGFeRD-Auslesen mit echten Lieferanten-P
 Backend-Tests gesamt: 84 grün. Vor dem Go-live: Rechnungs-PDFs der neuen Arten vom Steuerberater prüfen lassen (Abschlag/Schluss-Darstellung, § 13b,
 Gutschrift), Mahnfristen und -gebühren mit den eigenen AGB abstimmen (Standard 0 €), XRechnung-Validator (KoSIT) gegen Abschlag/Storno laufen lassen.
 
+## 1i. Stufe F – Aufmaß, GAEB, DATANORM (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Formelparser: Dezimalkomma, Teilmengen, Klammern, Vorzeichen, ×/x; Ablehnung von `**`, Namen, Code, Division durch null, offenen Klammern | `test_aufmass_gaeb_20261024.py::test_01` |
+| Aufmaß: Positionen aus Angebot/Auftrag, Erfassen mit Fehlern, Foto-Zugriff nur mit Projektzugang, Prüfung nur Büro, Änderung setzt Prüfung zurück, Summen, Übernahme in Angebot (nur geprüft) und Auftrag (Pauschal nur erzwungen), Aufmaßblatt, Projektakte | `test_02` |
+| GAEB X83 lesen (Hierarchie, Texte, Mengen, Hinweise, Fehlerfälle), Ausschreibung Import/Export mit Rücklesen, Bieter-X84 mit UP/IT/Total, Kundenangebot CSV/Excel/X83 mit Fehlerzeilen und X84, DATANORM und Excel für Artikel | `test_03` |
+| Browser (24.10.2026): Aufmaß-Reiter (Mitarbeiterin: Live-Berechnung, Speichern; Inhaber: Prüfen, Übernahme-Dialog), Angebot: CSV-Import mit Vorschau und X84-Knopf, Ausschreibung: X83-Import mit Vorschau, Export-Knöpfe | ohne Konsolenfehler |
+
+Backend-Tests gesamt: 87 grün. Vor dem Go-live: GAEB-Dateien echter Auftraggeber (X83 aus AVA-Programmen) und DATANORM-Kataloge echter Lieferanten
+durch den Import laufen lassen; X84-Ausgabe mit einem GAEB-Prüfprogramm validieren (keine XSD-Prüfung im Server).
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

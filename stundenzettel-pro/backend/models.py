@@ -1145,6 +1145,7 @@ class AngebotPositionKundeIn(BaseModel):
     eventual: bool = False
     leistung_id: Optional[str] = Field(default=None, max_length=64)
     artikel_id: Optional[str] = Field(default=None, max_length=64)
+    import_nr: Optional[str] = Field(default="", max_length=40)   # Ordnungszahl aus GAEB/Tabelle (für X84-Antwort)
     kalkulation: Optional[dict] = None   # vertraulich: {stunden, stundensatz, material_ek, fremd, geraete, transport, sonstige, gemeinkosten_prozent, risiko_prozent, gewinn_prozent}
 
 
@@ -1391,3 +1392,40 @@ class MahnungIn(BaseModel):
 class RechnungSendenIn(BaseModel):
     an: Optional[str] = Field(default=None, max_length=200)
     nachricht: Optional[str] = Field(default="", max_length=4000)
+
+
+# ---------------------------------------------------------------- Aufmaß und Importe (Stufe F)
+
+class FormelIn(BaseModel):
+    formel: str = Field(min_length=1, max_length=500)
+
+
+class AufmassIn(BaseModel):
+    bezeichnung: str = Field(min_length=1, max_length=200)
+    raum: Optional[str] = Field(default="", max_length=120)
+    typ: str = Field(default="flaeche", pattern="^(laenge|flaeche|volumen|stueck|gewicht|sonstiges)$")
+    formel: str = Field(min_length=1, max_length=500)
+    einheit: Optional[str] = Field(default="", max_length=20)
+    position_nr: Optional[str] = Field(default="", max_length=40)
+    messdatum: Optional[str] = None
+    note: Optional[str] = Field(default="", max_length=500)
+
+    @field_validator("messdatum")
+    @classmethod
+    def _datum(cls, v):
+        if v in (None, ""):
+            return None
+        datum_pruefen(v)
+        return v
+
+
+class AufmassUebernahmeIn(BaseModel):
+    ziel: str = Field(default="auftrag", pattern="^(angebot|auftrag)$")
+    angebot_id: Optional[str] = Field(default=None, max_length=64)
+    erzwingen: bool = False
+
+
+class PositionenUebernahmeIn(BaseModel):
+    """Vorschau-Ergebnis eines Dateiimports übernehmen: anhängen oder ersetzen."""
+    positionen: list = Field(default_factory=list, max_length=1000)
+    modus: str = Field(default="ersetzen", pattern="^(ersetzen|anhaengen)$")

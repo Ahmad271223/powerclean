@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 
 import angebote as ang
@@ -71,7 +71,7 @@ def _positionen_normalisieren(positionen: list, alte: Optional[list[dict]] = Non
         aus.append({"id": pid, "art": d.get("art") or "leistung", "text": (d.get("text") or "").strip()[:300], "beschreibung": (d.get("beschreibung") or "")[:4000],
                     "menge": float(d.get("menge") or 0), "einheit": (d.get("einheit") or "Stk.")[:20], "einzelpreis": float(d.get("einzelpreis") or 0),
                     "rabatt_prozent": float(d.get("rabatt_prozent") or 0), "alternativ": bool(d.get("alternativ")), "eventual": bool(d.get("eventual")),
-                    "leistung_id": d.get("leistung_id") or None, "artikel_id": d.get("artikel_id") or None, "kalkulation": kalk})
+                    "leistung_id": d.get("leistung_id") or None, "artikel_id": d.get("artikel_id") or None, "import_nr": (d.get("import_nr") or "")[:40], "kalkulation": kalk})
     return aus
 
 
@@ -329,6 +329,45 @@ async def als_vorlage(angebot_id: str, body: AngebotVorlageIn, user: dict = Depe
     await db().angebotsvorlagen.insert_one(dict(v))
     await protokollieren(user, "angebotsvorlage.angelegt", v["name"], details={"aus": a["nummer"]})
     return {"vorlage": v}
+
+
+@router.post("/api/kundenangebote/{angebot_id}/positionen/datei")
+async def positionen_datei(angebot_id: str, datei: UploadFile = File(...), vorschau: str = Form("0"), modus: str = Form("ersetzen"), user: dict = Depends(firmenabo_noetig("buero", "angebote"))):
+    """Positionen aus CSV, Excel oder GAEB X83 in einen Angebotsentwurf übernehmen (Titel bleiben Titel) – mit Vorschau und Fehlerzeilen."""
+    import importe
+    a = await _laden(user, angebot_id)
+    _bearbeitbar(a)
+    try:
+        ergebnis = importe.positionen_aus_datei(await datei.read(), datei.filename or "")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    neu = []
+    for p in ergebnis["positionen"]:
+        art = p.get("art") or "leistung"
+        neu.append({"art": art if art in ang.POSITIONSARTEN else "leistung", "text": p.get("leistung") or p.get("text") or "", "beschreibung": p.get("beschreibung") or "", "menge": float(p.get("menge") or 0) if art not in ("titel", "text") else 0,
+                    "einheit": p.get("einheit") or "Stk.", "einzelpreis": float(p.get("einzelpreis") or 0), "rabatt_prozent": 0, "alternativ": bool(p.get("alternativ")), "eventual": bool(p.get("eventual")), "import_nr": p.get("nr") or ""})
+    if vorschau == "1" or not neu:
+        return {"positionen": neu, "fehler": ergebnis["fehler"], "quelle": ergebnis.get("quelle"), "vorschau": True}
+    firma = await _firma(user)
+    bestehend = a.get("positionen") or [] if modus == "anhaengen" else []
+    a["positionen"] = bestehend + _positionen_normalisieren(neu)
+    a["verlauf"] = (a.get("verlauf") or []) + [ang.schritt(user, "import", f"{len(neu)} Positionen aus {ergebnis.get('quelle')} ({modus})")]
+    a["updated_at"] = jetzt_iso()
+    _berechnen(a, firma)
+    await db().kundenangebote.update_one({"id": a["id"]}, {"$set": {k: v for k, v in a.items() if k != "id"}})
+    return {"angebot": ang.fuer_nutzer(a, user, firma), "fehler": ergebnis["fehler"], "quelle": ergebnis.get("quelle"), "vorschau": False}
+
+
+@router.get("/api/kundenangebote/{angebot_id}/angebot.x84")
+async def angebot_x84(angebot_id: str, user: dict = Depends(recht_noetig("angebote"))):
+    """Kundenangebot als GAEB DA XML X84 (Angebotsabgabe) – für Auftraggeber, die ein X83 geschickt haben."""
+    import gaeb
+    a = await _laden(user, angebot_id)
+    firma = await _firma(user)
+    positionen = [{"nr": p.get("import_nr") or p.get("nr"), "leistung": p.get("text"), "beschreibung": p.get("beschreibung"), "menge": p.get("menge"), "einheit": p.get("einheit"), "einzelpreis": p.get("einzelpreis"), "art": p.get("art")}
+                  for p in a.get("positionen") or [] if not p.get("alternativ") and not p.get("eventual")]
+    inhalt = gaeb.schreiben(positionen, "84", {"titel": a.get("titel") or a.get("nummer"), "projekt": a.get("projekt_name") or a.get("titel"), "auftraggeber": (a.get("kunde") or {}).get("name"), "bieter": firma.get("name")})
+    return Response(content=inhalt, media_type="application/xml", headers={"Content-Disposition": f'attachment; filename="Angebot_{a.get("nummer", "")}.x84"'})
 
 
 @router.get("/api/kundenangebote/{angebot_id}/angebot.pdf")

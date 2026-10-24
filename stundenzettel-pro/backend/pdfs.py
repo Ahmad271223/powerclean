@@ -450,3 +450,32 @@ def mahnung_pdf(firma: dict, kunde: dict, rechnung: dict, mahnung: dict, art_nam
               Paragraph("Mit freundlichen Grüßen", st["n"]), Spacer(1, 8 * mm), Paragraph(esc(f.get("owner") or f.get("name")), st["n"]), Paragraph(esc(f.get("name")), st["k"])]
     doc.build(story)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------- Aufmaßblatt (Stufe F)
+
+def aufmass_pdf(firma: dict, projekt: dict, aufmasse: list[dict], summen: list[dict]) -> bytes:
+    """Aufmaßblatt: alle Aufmaße des Projekts mit Formel, Menge, Status; Summen je Position."""
+    st = _stile()
+    buf = io.BytesIO()
+    doc = _doc(buf, f"Aufmaß {projekt.get('name')}", firma.get("name") or "")
+    story = [Paragraph(f"Aufmaßblatt – {esc(projekt.get('name'))}", st["h1"]),
+             Paragraph(f"{esc(firma.get('name'))} · {esc(projekt.get('customer_name') or '')} · {esc(projekt.get('address') or '')} · Stand {de(date.today().isoformat())}", st["k"]), Spacer(1, 4 * mm)]
+    zeilen = [[Paragraph(t, st["z"]) for t in ("Pos.", "Bezeichnung / Raum", "Datum", "Formel", "Menge", "Status")]]
+    for a in aufmasse:
+        pos = (a.get("position") or {}).get("nr") or "–"
+        zeilen.append([Paragraph(esc(pos), st["z"]), Paragraph(f"{esc(a.get('bezeichnung'))}{('<br/><font size=7 color=#666666>' + esc(a.get('raum')) + '</font>') if a.get('raum') else ''}", st["z"]),
+                       Paragraph(de(a.get("messdatum")), st["z"]), Paragraph(esc(a.get("formel")), st["z"]), Paragraph(f"{float(a.get('menge') or 0):,.3f} {esc(a.get('einheit'))}".replace(",", "X").replace(".", ",").replace("X", "."), st["z"]),
+                       Paragraph("geprüft" if a.get("status") == "geprueft" else "erfasst", st["z"])])
+    story += [_tabelle(zeilen, [16 * mm, 58 * mm, 20 * mm, 44 * mm, 24 * mm, 16 * mm]), Spacer(1, 6 * mm)]
+    if summen:
+        story.append(Paragraph("Summen je Position (nur geprüfte Mengen zählen für die Übernahme)", st["h2"]))
+        z2 = [[Paragraph(t, st["z"]) for t in ("Pos.", "Position", "Aufmaße", "Gesamt", "Geprüft")]]
+        for s_ in summen:
+            z2.append([Paragraph(esc(s_.get("nr")), st["z"]), Paragraph(esc(s_.get("text")), st["z"]), Paragraph(str(s_.get("anzahl")), st["z"]),
+                       Paragraph(f"{float(s_.get('gesamt') or 0):,.3f} {esc(s_.get('einheit'))}".replace(",", "X").replace(".", ",").replace("X", "."), st["z"]),
+                       Paragraph(f"{float(s_.get('geprueft') or 0):,.3f} {esc(s_.get('einheit'))}".replace(",", "X").replace(".", ",").replace("X", "."), st["z"])])
+        story.append(_tabelle(z2, [18 * mm, 80 * mm, 20 * mm, 30 * mm, 30 * mm]))
+    story += _unterschriften(st, "Aufgemessen (Firma)", "Bestätigt (Auftraggeber)")
+    doc.build(story)
+    return buf.getvalue()

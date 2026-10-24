@@ -118,6 +118,12 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
 - Bestehende MongoDB-Installationen: der neue Index `invoices.mahnwesen` wird beim Start angelegt; der alte eindeutige Index bleibt gültig, weil
   Nicht-Monatsrechnungen `month = -seq` tragen.
 
+## 4j. Aufmaß und Importe
+
+- Aufmaß-Fotos sind Dokumente (scope `aufmass`) unter `DATA_DIR`; Aufmaßblätter werden bei Bedarf erzeugt (kein Snapshot).
+- Importe laufen synchron mit Vorschau; Dateigrenzen: Positionen 20 MB/1000 Positionen, Artikel 10 MB. Excel braucht `openpyxl` (requirements.txt).
+- GAEB: Dateien von Auftraggebern, die der Import ablehnt, bitte aufbewahren und als Beispiel für die Erweiterung einreichen (Meldung nennt den Grund).
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

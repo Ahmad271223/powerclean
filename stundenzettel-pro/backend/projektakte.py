@@ -273,6 +273,20 @@ async def _eigene_daten(z: _Zip, user: dict, firma: dict, projekt: dict, namen: 
                         z.datei(beleg, d.get("path") or "", "eingangsrechnungen_belege")
                 zeilen.append([r.get("lieferant"), r.get("rechnungsnummer"), r.get("rechnungsdatum"), r.get("faellig_am") or "", r.get("netto"), r.get("brutto"), zu.get("betrag_netto"), zu.get("kostenart"), r.get("status"), r.get("bezahlt_am") or "", beleg])
         z.schreiben("08_Eingangsrechnungen/eingangsrechnungen.csv", _csv(zeilen), "eingangsrechnungen")
+    aufmasse = [a async for a in db().aufmasse.find({"firma_id": fid, "project_id": pid}, {"_id": 0}).sort([("messdatum", 1)])]
+    if aufmasse:
+        z.schreiben("10_Aufmass/aufmasse.csv", _csv([["Datum", "Position", "Bezeichnung", "Raum", "Typ", "Formel", "Menge", "Einheit", "Status", "Erfasst von", "Geprüft von"]] +
+                                                  [[a.get("messdatum"), (a.get("position") or {}).get("nr") or "", a.get("bezeichnung"), a.get("raum") or "", a.get("typ"), a.get("formel"), a.get("menge"), a.get("einheit"), a.get("status"), a.get("user_name") or "", a.get("geprueft_von") or ""] for a in aufmasse]), "aufmasse")
+        try:
+            import aufmass as aufmass_modul
+            z.schreiben("10_Aufmass/Aufmassblatt.pdf", pdfs.aufmass_pdf(firma, projekt, aufmasse, list(aufmass_modul.summen_je_position(aufmasse).values())), "aufmassblatt")
+        except Exception as exc:  # noqa: BLE001
+            z.hinweise.append(f"Aufmaßblatt konnte nicht erzeugt werden: {exc}")
+        for a in aufmasse:
+            for f_ in a.get("fotos") or []:
+                d = await db().documents.find_one({"id": f_.get("id")}, {"_id": 0})
+                if d:
+                    z.datei(f"10_Aufmass/Fotos/{_name((a.get('position') or {}).get('nr') or 'ohne', 20)}_{_dateiname(d)}", d.get("path") or "", "aufmass_fotos")
     if projekt.get("auftrag") or material or eingang:
         try:
             import material as material_modul

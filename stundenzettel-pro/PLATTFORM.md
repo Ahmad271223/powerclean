@@ -205,6 +205,28 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
 - Bewusst nicht: automatische Mahnläufe, Verzugszinsen, Inkasso-Übergabe, Skonto-Automatik, Sammelrechnungen über mehrere Projekte, Zahlungsabgleich
   per Kontoauszug (CAMT/MT940) – offen für spätere Stufen.
 
+## 1j. Stufe F – Aufmaß, GAEB, DATANORM, Tabellenimporte (24.10.2026)
+
+- `aufmass.py`: Tokenizer + rekursiver Abstieg (`berechnen(formel)`), erlaubt Zahlen mit Komma/Punkt, + − * / x × ( ), Vorzeichen, Teilmengen mit „;“
+  oder Zeilenumbruch; kein `eval`, Ergebnis auf drei Stellen gerundet, unplausible Ergebnisse abgewiesen. `TYPEN`, `summen_je_position`.
+- Sammlung `aufmasse` {id, firma_id, project_id, bezeichnung, raum, typ, formel, menge, einheit, position {quelle angebot|auftrag, nr, text, einheit, …},
+  messdatum, note, user_id, user_name, status erfasst|geprueft, geprueft_von/at, fotos[]} – Fotos als `documents` mit scope `aufmass` (Zugriff über das Projekt).
+- API (`routes/aufmass.py`): `POST /api/aufmass/formel` (Vorschau), `GET/POST /api/projekte/{id}/aufmasse` (Positionen des Projekts aus `projects.auftrag.positionen`,
+  sonst aus dem jüngsten Kundenangebot), `PUT/DELETE /api/aufmasse/{id}` (eigene erfasste oder Büro; geänderte Menge setzt die Prüfung zurück),
+  `POST /api/aufmasse/{id}/fotos`, `POST /api/aufmasse/{id}/pruefen` (Büro), `POST /api/projekte/{id}/aufmasse/uebernehmen` (ziel angebot|auftrag,
+  nur geprüfte Mengen, nur gleiche Einheit, Pauschalauftrag nur mit `erzwingen`; Auftrag behält `netto_vor_aufmass`), `GET /api/projekte/{id}/aufmass.pdf`.
+- `gaeb.py`: `lesen()` (namespace-tolerant, BoQCtgy rekursiv, Item mit Qty/QU/UP, OutlineText/DetailTxt, Hinweise zu übersprungenen Elementen),
+  `schreiben(positionen, phase, info)` (Baum aus Ordnungszahlen, X83 ohne/X84 mit UP, IT, Totals). `importe.py`: `positionen_aus_datei` (CSV/XLSX/GAEB,
+  Spaltensynonyme, feste Reihenfolge ohne Kopfzeile), `artikel_aus_datanorm`, `artikel_aus_xlsx`; `material.artikel_aus_datei` verteilt. `openpyxl` neu in requirements.
+- Routen: Ausschreibung `POST …/positionen/gaeb` (echt, `vorschau`), `POST …/positionen/datei`, `GET …/lv.x83`; Bieter `GET /api/angebote/{id}/angebot.x84`;
+  Kundenangebot `POST /api/kundenangebote/{id}/positionen/datei` (modus ersetzen|anhaengen, nur Entwurf; Ordnungszahl in `import_nr`),
+  `GET /api/kundenangebote/{id}/angebot.x84`; Artikel `POST /api/artikel/import` erkennt CSV/XLSX/DATANORM.
+- Oberfläche: `components/aufmass/AufmassTab` (Projekt-Reiter „Aufmaß“), `components/angebot/PositionenImportDialog` (Angebot und Ausschreibung),
+  Knöpfe „Positionen aus Datei“/„GAEB X84“ im Angebot, „Datei“/„GAEB X83“ im Leistungsverzeichnis, Artikelimport mit Excel/DATANORM.
+  Tests `tests/test_aufmass_gaeb_20261024.py` (3 Tests); `test_ausschreibung::test_04` erwartet seit Stufe F die Klartext-Ablehnung leerer GAEB-Dateien.
+- Grenzen (dokumentiert): GAEB-Teilmenge (keine Zuschlags-/Bedarfs-/Alternativkennzeichen, keine Textergänzungen, keine XSD-Validierung offline),
+  DATANORM ohne Dimensions-/Rabattgruppensätze, Aufmaß ohne Zeichnungsbezug/Raumbuch.
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:

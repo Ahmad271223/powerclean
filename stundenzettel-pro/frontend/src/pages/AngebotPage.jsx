@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Briefcase, Check, Copy, FileDown, GitBranch, LayoutTemplate, Link2, Mail, Plus, Save, Send, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, Briefcase, Check, Copy, FileDown, GitBranch, LayoutTemplate, Link2, Mail, Plus, Save, Send, Trash2, Undo2, X, Upload, FileCode } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import { Btn, Card, Field, IconBtn, Select, Sheet, TextArea, TextInput, Toggle } from '../components/ui';
@@ -8,7 +8,8 @@ import KundeDialog from '../components/KundeDialog';
 import { useDialoge } from '../components/Dialoge';
 import PositionenEditor from '../components/angebot/PositionenEditor';
 import KalkulationPanel from '../components/angebot/KalkulationPanel';
-import { api, openFile } from '../lib/api';
+import PositionenImportDialog from '../components/angebot/PositionenImportDialog';
+import { api, download, openFile } from '../lib/api';
 import { ANNAHMEARTEN, STATUS_CLS, STATUS_NAMEN, fmtGeld, fmtMenge, positionenFuerServer, summen } from '../lib/angebot';
 import { fmtDate, fromKey, todayKey } from '../lib/dates';
 
@@ -101,6 +102,7 @@ export default function AngebotPage() {
   const [artikel, setArtikel] = useState([]);
   const [dialog, setDialog] = useState('');
   const [kundeDialog, setKundeDialog] = useState(false);
+  const [importDialog, setImportDialog] = useState(false);
   const [busy, setBusy] = useState('');
 
   const uebernehmen = useCallback((r) => { setD(r); setForm(formAus(r.angebot)); setDirty(false); }, []);
@@ -176,6 +178,8 @@ export default function AngebotPage() {
         {(a.status === 'entwurf' || a.status === 'anfrage') && <Btn variant="ghost" onClick={ablehnen} loading={busy === 'ablehnen'}><X size={16} /> Absage</Btn>}
         <Btn variant="ghost" onClick={kopieren} loading={busy === 'kopieren'}><Copy size={16} /> Kopieren</Btn>
         <Btn variant="ghost" onClick={alsVorlage} loading={busy === 'vorlage'}><LayoutTemplate size={16} /> Als Vorlage</Btn>
+        {bearbeitbar && <Btn variant="ghost" onClick={async () => { if (dirty) { try { await speichern(true); } catch { return; } } setImportDialog(true); }}><Upload size={16} /> Positionen aus Datei</Btn>}
+        {a.positionen?.length > 0 && <Btn variant="ghost" onClick={() => download(`/api/kundenangebote/${angebotId}/angebot.x84`).catch((e) => toast.error(e.message))} title="Angebot als GAEB DA XML X84 (Angebotsabgabe)"><FileCode size={16} /> GAEB X84</Btn>}
         {bearbeitbar && <Btn variant="ghost" onClick={loeschen} loading={busy === 'loeschen'} className="text-[#C41E3A]"><Trash2 size={16} /> Löschen</Btn>}
       </div>
 
@@ -265,6 +269,7 @@ export default function AngebotPage() {
       {d.kann_kalkulation && a.status !== 'ersetzt' && (
         <div className="mt-5"><KalkulationPanel angebotId={a.id} positionen={a.positionen} kalkulation={a.kalkulation} bearbeitbar={bearbeitbar} onAngebot={(neu) => { setD((x) => ({ ...x, angebot: neu })); if (!dirty) setForm(formAus(neu)); }} /></div>
       )}
+      <PositionenImportDialog open={importDialog} onOpenChange={setImportDialog} url={`/api/kundenangebote/${angebotId}/positionen/datei`} mitModus onDone={() => laden()} />
       <SendenDialog open={dialog === 'senden'} onOpenChange={(v) => setDialog(v ? 'senden' : '')} kunde={k} onSenden={senden} />
       <AnnahmeDialog open={dialog === 'annahme'} onOpenChange={(v) => setDialog(v ? 'annahme' : '')} onAnnahme={annahme} />
       <AuftragDialog open={dialog === 'auftrag'} onOpenChange={(v) => setDialog(v ? 'auftrag' : '')} angebot={a} projekte={projekte} onAuftrag={auftrag} />

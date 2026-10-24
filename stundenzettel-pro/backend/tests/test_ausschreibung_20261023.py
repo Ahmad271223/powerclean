@@ -346,7 +346,7 @@ def test_04_ablehnung_versionen_speicher_csv_gaeb(client):
     assert r.status_code == 200 and r.json()["positionen"][0]["menge"] == 450.5 and len(r.json()["positionen"]) == 2
     assert client.post(f"/api/ausschreibungen/{aid}/positionen/import", json={"csv": "010;A;1;m\n010;B;1;m\n"}, headers=s["pl"]).status_code == 400
     r = client.post(f"/api/ausschreibungen/{aid}/positionen/gaeb", files={"datei": ("lv.x83", b"<?xml version='1.0'?><GAEB xmlns='http://www.gaeb.de/GAEB_DA_XML/DA83/3.2'></GAEB>", "application/xml")}, headers=s["pl"])
-    assert r.status_code == 501 and "GAEB DA XML" in r.json()["detail"]
+    assert r.status_code == 400 and "Leistungsverzeichnis" in r.json()["detail"]   # seit Stufe F echter Import: leere GAEB-Datei wird mit Klartext abgewiesen
     # Dokumentversionen in der Projektakte (Ordner wird übernommen, Vorgänger nicht mehr aktuell)
     v1 = s["intern"]
     r = client.post(f"/api/projekte/{pid}/dateien", data={"kategorie": "Skizzen & Pläne", "ersetzt_id": v1["id"]}, files={"datei": ("grundriss-v2.pdf", b"%PDF-1.4 v2", "application/pdf")}, headers=s["pl"])

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
-import { ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check, Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera, Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen, Gavel, FileSignature, Package, Calculator } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Settings2, FileText, Download, Loader2, Receipt, FileStack, Archive, PenLine, Check, Repeat, MessageSquare, Paperclip, ListChecks, Trash2, Plus, ExternalLink, Image as ImageIcon, QrCode, Lock, AlertTriangle, Printer, Camera, Building2, ClipboardList, Users, FileCheck2, Share2, Handshake, Truck, Flag, BookOpen, FolderOpen, Gavel, FileSignature, Package, Calculator, Ruler } from 'lucide-react';
 import Layout from '../components/Layout';
 import ProjectDialog from '../components/ProjectDialog';
 import EntryDialog from '../components/EntryDialog';
@@ -27,6 +27,7 @@ import AuftragTab from '../components/angebot/AuftragTab';
 import MaterialTab from '../components/material/MaterialTab';
 import NachkalkulationTab from '../components/material/NachkalkulationTab';
 import AbrechnungTab from '../components/rechnungen/AbrechnungTab';
+import AufmassTab from '../components/aufmass/AufmassTab';
 import NachtraegeTab from '../components/plattform/NachtraegeTab';
 import AbnahmenTab from '../components/plattform/AbnahmenTab';
 import ProjektakteKarte from '../components/ProjektakteKarte';
@@ -183,6 +184,7 @@ export default function ProjektPage() {
         : [{ value: 'aufgaben', label: 'Aufgaben', icon: ClipboardList }]),
     ...(isBuero && !verknuepft ? [{ value: 'auftrag', label: 'Angebot & Auftrag', icon: FileText }] : []),
     { value: 'material', label: 'Material', icon: Package },
+    { value: 'aufmass', label: 'Aufmaß', icon: Ruler },
     ...(isBuero && kann('rechnungen') ? [{ value: 'abrechnung', label: 'Abrechnung', icon: Receipt }] : []),
     ...(isBuero && kann('kalkulation') ? [{ value: 'nachkalkulation', label: 'Nachkalkulation', icon: Calculator }] : []),
   ];
@@ -361,6 +363,7 @@ export default function ProjektPage() {
       {tab === 'vertrag' && <><NachtraegeTab projectId={plattformId} /><AbnahmenTab projectId={plattformId} className="mt-6" /></>}
       {tab === 'auftrag' && <AuftragTab projekt={project} />}
       {tab === 'material' && <MaterialTab projekt={project} />}
+      {tab === 'aufmass' && <AufmassTab projekt={project} />}
       {tab === 'abrechnung' && <AbrechnungTab projekt={project} kunde={data.kunde} />}
       {tab === 'nachkalkulation' && <NachkalkulationTab projekt={project} />}
 

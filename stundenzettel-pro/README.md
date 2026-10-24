@@ -300,6 +300,21 @@ Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berec
   jede Stufe wird von Hand freigegeben, als PDF erzeugt und auf Wunsch per E-Mail mit Nachweis geschickt; Stufen werden nicht übersprungen, Fristen
   nur ausdrücklich. Startseite: „Überfällige Zahlungen“ und der offene Punkt „Mahnschritt fällig“.
 
+## Aufmaß, GAEB, DATANORM und Tabellenimporte (24.10.2026, Stufe F)
+
+- **Digitales Aufmaß** (Projekt → Aufmaß, für alle mit Projektzugang): Länge, Fläche, Volumen, Stück, Gewicht mit Formel wie auf dem Aufmaßblatt
+  („3,20 x 2,60; 1,10 x 2,60“ – Teilmengen werden addiert, Klammern und + − × / erlaubt), berechnet von einem eigenen Parser ohne `eval`, mit
+  Live-Vorschau und Klartextfehlern. Raum/Bauteil, Messdatum, Notiz, Fotos oder Skizzen, Positionsbezug zu Auftrags- oder Angebotspositionen.
+  Das Büro prüft; geprüfte Mengen werden je Position summiert und in den Angebotsentwurf oder die Auftragspositionen übernommen (nur bei
+  passender Einheit; Pauschalaufträge nur ausdrücklich). Aufmaßblatt als PDF, alles in der Projektakte (`10_Aufmass/`). Mitarbeiterbezug der
+  Einträge nur mit Recht `personal`.
+- **GAEB DA XML**: Leistungsverzeichnisse (X83 u. a.) werden gelesen – Gliederung (Titel/Lose), Ordnungszahlen, Kurz-/Langtext, Mengen, Einheiten,
+  bei X84 auch Preise; nicht unterstützte Elemente (Zuschläge, Vorbemerkungen) werden gezählt statt verschwiegen. Export: LV einer Ausschreibung als
+  X83, Bieterangebot und Kundenangebot als X84 (Einheits- und Gesamtpreise, Summe). GAEB 90/2000 (Satzformat) wird mit Klartext abgewiesen.
+- **Positionen aus Datei** in Angebotsentwürfe und Ausschreibungen: CSV (Trennzeichen, Anführungszeichen, Dezimalkomma, Kopfzeilen-Synonyme),
+  Excel (.xlsx) oder GAEB – immer mit Vorschau und Fehlerzeilen, anhängen oder ersetzen.
+- **Artikelimport** zusätzlich aus Excel und DATANORM 4/5 (A-, P-, T-Sätze; Preise in Cent, Preiseinheiten je 1/10/100/1000; Windows-/DOS-Zeichensatz).
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).

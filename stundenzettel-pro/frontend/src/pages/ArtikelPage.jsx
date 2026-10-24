@@ -69,9 +69,9 @@ function ImportDialog({ open, onOpenChange, onDone }) {
     } catch (err) { toast.error(err.message); } finally { setBusy(false); }
   };
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title="Artikel aus CSV importieren" subtitle="Semikolon, Komma oder Tab; Anführungszeichen; Dezimalkomma; UTF-8 oder Windows. Spalten: Artikelnummer, Bezeichnung, Einheit, EK, VK, Kategorie, Hersteller, Lieferant, Beschreibung." width="sm:max-w-2xl"
+    <Sheet open={open} onOpenChange={onOpenChange} title="Artikel importieren" subtitle="CSV (Semikolon/Komma/Tab, Anführungszeichen, Dezimalkomma), Excel (.xlsx) oder DATANORM 4/5 (A-, P-, T-Sätze, Dateien .001/.dat). Spalten: Artikelnummer, Bezeichnung, Einheit, EK, VK, Kategorie, Hersteller, Lieferant, Beschreibung." width="sm:max-w-2xl"
       footer={<><Btn variant="ghost" onClick={() => onOpenChange(false)}>Schließen</Btn><Btn variant="soft" onClick={() => lesen(false)} loading={busy}>Vorschau</Btn><Btn onClick={() => lesen(true)} loading={busy} disabled={!vorschau || !vorschau.anzahl}>Importieren ({vorschau?.anzahl || 0})</Btn></>}>
-      <input ref={datei} type="file" accept=".csv,text/csv,text/plain" className="block w-full text-[14px]" />
+      <input ref={datei} type="file" accept=".csv,.txt,.xlsx,.001,.002,.003,.dat,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="block w-full text-[14px]" />
       {vorschau && (
         <div className="mt-3 text-[13px] space-y-2">
           <div>Erkannte Spalten: {Object.keys(vorschau.spalten || {}).join(', ') || 'keine'} · Trennzeichen „{vorschau.trenner === '\t' ? 'Tab' : vorschau.trenner}“ · {vorschau.anzahl} gültige Artikel{vorschau.vorschau === false ? ` · ${vorschau.angelegt} angelegt, ${vorschau.aktualisiert} aktualisiert` : ''}</div>
@@ -100,13 +100,13 @@ export default function ArtikelPage() {
   useEffect(() => { const t = setTimeout(laden, 200); return () => clearTimeout(t); }, [laden]);
   return (
     <Layout title="Artikel & Material" subtitle="Euer Materialkatalog: Einkaufs- und Verkaufspreise, Einheiten, Lieferanten. Einkaufspreise sieht nur, wer das Recht „Kostensätze“ hat."
-      action={<div className="flex gap-2"><Btn variant="soft" onClick={() => setImportDialog(true)}><Upload size={16} /> <span className="hidden sm:inline">CSV-Import</span></Btn><Btn onClick={() => { setEdit(null); setDialog(true); }}><Plus size={16} /> Artikel</Btn></div>}>
+      action={<div className="flex gap-2"><Btn variant="soft" onClick={() => setImportDialog(true)}><Upload size={16} /> <span className="hidden sm:inline">Import (CSV, Excel, DATANORM)</span></Btn><Btn onClick={() => { setEdit(null); setDialog(true); }}><Plus size={16} /> Artikel</Btn></div>}>
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Suche Nummer, Name, Hersteller, Lieferant" className="w-full sm:w-80" />
         <Select value={kategorie} onChange={(e) => setKategorie(e.target.value)}><option value="">Alle Kategorien</option>{(d?.kategorien || []).map((k) => <option key={k} value={k}>{k}</option>)}</Select>
         <Chip active={nurAktiv} onClick={() => setNurAktiv((v) => !v)}>Nur aktive</Chip>
       </div>
-      {!d ? <Ladeanzeige /> : d.artikel.length === 0 ? <Card><Empty icon={Package} title="Noch keine Artikel" text="Lege Artikel an oder importiere eure Preisliste als CSV." action={<Btn onClick={() => setImportDialog(true)}><Upload size={16} /> CSV-Import</Btn>} /></Card> : (
+      {!d ? <Ladeanzeige /> : d.artikel.length === 0 ? <Card><Empty icon={Package} title="Noch keine Artikel" text="Lege Artikel an oder importiere eure Preisliste (CSV, Excel, DATANORM)." action={<Btn onClick={() => setImportDialog(true)}><Upload size={16} /> Import</Btn>} /></Card> : (
         <Card className="overflow-x-auto">
           <table className="w-full text-[13px] min-w-[720px]">
             <thead><tr className="text-left text-[#6E6E73] text-[12px]"><th className="px-4 py-2">Nr.</th><th className="py-2 pr-2">Bezeichnung</th><th className="py-2 pr-2">Einheit</th>{d.ek_sichtbar && <th className="py-2 pr-2 text-right">EK</th>}<th className="py-2 pr-2 text-right">VK</th><th className="py-2 pr-2">Kategorie</th><th className="py-2 pr-4">Lieferant</th></tr></thead>

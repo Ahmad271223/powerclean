@@ -181,4 +181,8 @@ if r.status_code == 200:
     ab = ok(c.post("/api/rechnungen/auftrag", json={"project_id": p1["id"], "art": "abschlag", "leistungsstand_prozent": 30, "text": "Abschlag nach Montage der ersten Etage"}, headers=H))["rechnung"]
     c.get("/api/rechnungen/" + ab["id"] + "/rechnung.pdf", headers=H)   # stellt die Rechnung aus (PDF, kein JSON)
     ok(c.post("/api/rechnungen/" + ab["id"] + "/zahlungen", json={"betrag": 300.0, "art": "ueberweisung", "notiz": "Teilzahlung"}, headers=H))
+    # Stufe F: Aufmaße der Mitarbeiterin am Sparkassen-Projekt (Fläche, Länge), eines vom Büro geprüft
+    auf = ok(c.post("/api/projekte/" + p1["id"] + "/aufmasse", json={"bezeichnung": "Glasfläche Schalterhalle", "raum": "EG Schalterhalle", "typ": "flaeche", "formel": "3,20 x 2,60; 1,10 x 2,60", "position_nr": "2.1", "messdatum": heute}, headers=HM))["aufmass"]
+    ok(c.post("/api/projekte/" + p1["id"] + "/aufmasse", json={"bezeichnung": "Sockelleisten Flur", "raum": "EG Flur", "typ": "laenge", "formel": "12,4 + 8,75 + 3,1", "messdatum": heute, "note": "ohne Türen"}, headers=HM))
+    ok(c.post("/api/aufmasse/" + auf["id"] + "/pruefen", headers=H))
     print("Plattform-Testdaten: Elektro Mustermann GmbH (chef@elektro-mustermann.de, gleiches Passwort wie Inhaber) ist am Projekt Sparkasse beteiligt.")

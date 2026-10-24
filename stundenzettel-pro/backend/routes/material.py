@@ -100,11 +100,14 @@ async def artikel_loeschen(artikel_id: str, user: dict = Depends(schreibend_mit_
 
 @router.post("/api/artikel/import")
 async def artikel_import(datei: UploadFile = File(...), vorschau: str = Form("0"), user: dict = Depends(schreibend_mit_recht("angebote"))):
-    """CSV-Import (Semikolon, Komma oder Tab; Anführungszeichen; Dezimalkomma; UTF-8 oder Windows). Mit vorschau=1 wird nur gelesen."""
+    """Import aus CSV (Semikolon/Komma/Tab, Anführungszeichen, Dezimalkomma, UTF-8/Windows), Excel (.xlsx) oder DATANORM (A-/P-Sätze). Mit vorschau=1 wird nur gelesen."""
     roh = await datei.read()
     if len(roh) > 10 * 1024 * 1024:
         raise HTTPException(413, "Die Datei ist zu groß (max. 10 MB).")
-    ergebnis = mat.artikel_aus_csv(roh)
+    try:
+        ergebnis = mat.artikel_aus_datei(roh, datei.filename or "")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     if not hat_recht(user, "kostensaetze"):
         for a in ergebnis["artikel"]:
             a["einkaufspreis"] = None
