@@ -30,7 +30,14 @@ export default function ExportePage() {
   const abschluesseLaden = useCallback(() => api.get('/api/abschluss').then((r) => setAbschluesse(r.abschluesse)).catch(() => {}), []);
   useEffect(() => { abschluesseLaden(); }, [abschluesseLaden]);
 
-  const holen = async (key, pfad) => { setBusy(key); try { await download(pfad); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
+  const holen = async (key, pfad) => {
+    setBusy(key);
+    try { await download(pfad); }
+    catch (err) {
+      const datei = pfad.split('?')[0].split('/').pop() || 'Export';
+      toast.error(`Export ${datei} fehlgeschlagen: ${err.message}`, { duration: 8000 });
+    } finally { setBusy(''); }
+  };
   const vorschauLaden = async () => { setBusy('vorschau'); try { setVorschau(await api.get(`/api/lohn/vorbereitung?jahr=${jahr}&monat=${monat + 1}`)); } catch (err) { toast.error(err.message); } finally { setBusy(''); } };
   const nachweis = async () => {
     if (!ma) return;

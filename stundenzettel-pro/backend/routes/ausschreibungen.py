@@ -17,7 +17,7 @@ from ausschreibung import (ABRECHNUNGSARTEN, ANGEBOT_STATUS_NAMEN, ANNAHME_TEXT,
                            einladung_der_firma, frist_offen, frist_tage, heute, interessierte_firmen, leitung_benachrichtigen, leitung_noetig,
                            neue_vergabe_pruefen, nummer_vergeben, oeffentliche_ansicht, positionen_berechnen, schritt, vergabe_schritt,
                            vergabe_zugang, zweites_augenpaar)
-from abo import gu_abo_aktivieren, ist_auftraggeber
+from abo import gu_abo_aktivieren, gu_freigeschaltet, ist_auftraggeber
 from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, rolle_noetig, schreibend
 from preise import PREISE
 from dateien import datei_speichern, speicher_belegt, speicher_grenze, version_verknuepfen
@@ -49,6 +49,9 @@ async def _auftraggeber_noetig(user: dict) -> dict:
     if not ist_auftraggeber(firma):
         raise HTTPException(403, "Formale Ausschreibungen können nur Auftraggeber-Konten anlegen und veröffentlichen (Firma → Firmendaten → Firmenart „Auftraggeber“ oder „Beides“). "
                                  "Partnerfirmen lassen sich weiterhin direkt unter „Zusammenarbeit“ zum Projekt einladen.")
+    if not gu_freigeschaltet(firma):
+        raise HTTPException(403, "Nach der Testphase brauchen formale Ausschreibungen die GU-Freischaltung durch den Anbieter "
+                                 "(Projektabo 50,99 € netto je aktivem Bauprojekt). Bitte den Anbieter kontaktieren – Partnerfirmen lassen sich weiterhin unter „Zusammenarbeit“ einladen.")
     user["_firma"] = firma
     return firma
 

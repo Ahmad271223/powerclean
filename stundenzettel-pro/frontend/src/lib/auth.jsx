@@ -52,6 +52,8 @@ export function AuthProvider({ children }) {
     isBuero: ['buero', 'inhaber'].includes(state.user?.role),
     isInhaber: state.user?.role === 'inhaber',
     isVorarbeiter: state.user?.role === 'vorarbeiter',
+    rechte: state.user?.rechte || {},
+    kann: (recht) => state.user?.role === 'inhaber' || !!state.user?.rechte?.[recht],
     canWrite: state.plan ? state.plan.schreiben !== false : true,
     login: async (email, password) => uebernehmen(await api.post('/api/auth/login', { email, password })),
     register: async (daten) => uebernehmen(await api.post('/api/auth/registrieren', daten)),

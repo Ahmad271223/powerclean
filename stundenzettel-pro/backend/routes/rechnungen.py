@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pymongo.errors import DuplicateKeyError
 
-from auth import firma_laden, firmenabo_noetig, jetzt_iso, rolle_noetig, schreibend
+from auth import firma_laden, firmenabo_noetig, jetzt_iso, recht_noetig, rolle_noetig, schreibend, schreibend_mit_recht
 from auth import hat_rolle
 from db import db
 import erechnung
@@ -39,7 +39,7 @@ def _summen(calc: dict) -> dict:
 
 @router.get("")
 async def liste(jahr: Optional[int] = Query(None, ge=2025, le=2100), status: Optional[str] = None, limit: int = Query(500, ge=1, le=3000),
-                offset: int = Query(0, ge=0), user: dict = Depends(rolle_noetig("buero"))):
+                offset: int = Query(0, ge=0), user: dict = Depends(recht_noetig("rechnungen"))):
     filt = {"firma_id": user["firma_id"]}
     if jahr:
         filt["year"] = jahr
@@ -94,7 +94,7 @@ async def _festschreiben(user: dict, r: dict, anlass: str) -> dict:
 
 
 @router.post("/anlegen")
-async def anlegen(body: RechnungAnlegenIn, user: dict = Depends(firmenabo_noetig("buero"))):
+async def anlegen(body: RechnungAnlegenIn, user: dict = Depends(firmenabo_noetig("buero", "rechnungen"))):
     """Bestehende Rechnung des Monats zurückgeben (nur Entwürfe werden neu berechnet, ausgestellte nie) oder mit nächster Nummer anlegen.
     Mit nur_pruefen wird nichts angelegt und keine Nummer vergeben."""
     p = await projekt_laden(user, body.project_id)
@@ -138,7 +138,7 @@ async def _laden(user: dict, rechnung_id: str) -> dict:
 
 
 @router.get("/{rechnung_id}/daten")
-async def daten(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+async def daten(rechnung_id: str, user: dict = Depends(recht_noetig("rechnungen"))):
     """Alles für das PDF: Firma, Projekt, Rechnung, Einträge des Wochenrasters, Kunden-Unterschriften."""
     r = await _laden(user, rechnung_id)
     r = await _festschreiben(user, r, "pdf")
@@ -157,7 +157,7 @@ async def daten(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
 
 
 @router.put("/{rechnung_id}/extras")
-async def extras(rechnung_id: str, body: ExtrasIn, user: dict = Depends(schreibend("buero"))):
+async def extras(rechnung_id: str, body: ExtrasIn, user: dict = Depends(schreibend_mit_recht("rechnungen"))):
     """Zusatzpositionen (Material, Anfahrt, Pauschalen) setzen – nur bei offenen Rechnungen; Summen werden neu berechnet."""
     r = await _laden(user, rechnung_id)
     if r.get("status", "offen") != "offen":
@@ -173,7 +173,7 @@ async def extras(rechnung_id: str, body: ExtrasIn, user: dict = Depends(schreibe
 
 
 @router.put("/{rechnung_id}")
-async def status(rechnung_id: str, body: RechnungStatusIn, user: dict = Depends(schreibend("buero"))):
+async def status(rechnung_id: str, body: RechnungStatusIn, user: dict = Depends(schreibend_mit_recht("rechnungen"))):
     r = await _laden(user, rechnung_id)
     aenderung = {"status": body.status, "updated_at": jetzt_iso()}
     if body.status == "bezahlt":
@@ -200,7 +200,7 @@ async def status(rechnung_id: str, body: RechnungStatusIn, user: dict = Depends(
 
 
 @router.post("/{rechnung_id}/neu-berechnen")
-async def neu_berechnen(rechnung_id: str, erzwingen: bool = False, user: dict = Depends(schreibend("buero"))):
+async def neu_berechnen(rechnung_id: str, erzwingen: bool = False, user: dict = Depends(schreibend_mit_recht("rechnungen"))):
     """Entwürfe neu berechnen. Ausgestellte Rechnungen nur ausdrücklich durch den Inhaber (erzwingen) – mit Korrekturvermerk und alten Summen."""
     r = await _laden(user, rechnung_id)
     if r.get("status", "offen") != "offen":
@@ -223,14 +223,14 @@ async def neu_berechnen(rechnung_id: str, erzwingen: bool = False, user: dict = 
 
 
 @router.post("/{rechnung_id}/festschreiben")
-async def festschreiben(rechnung_id: str, user: dict = Depends(schreibend("buero"))):
+async def festschreiben(rechnung_id: str, user: dict = Depends(schreibend_mit_recht("rechnungen"))):
     """Rechnung ausdrücklich ausstellen (z. B. nachdem die PDF im Browser erzeugt wurde)."""
     r = await _laden(user, rechnung_id)
     return {"rechnung": await _festschreiben(user, r, "ausgestellt")}
 
 
 @router.delete("/{rechnung_id}")
-async def loeschen(rechnung_id: str, user: dict = Depends(schreibend("buero"))):
+async def loeschen(rechnung_id: str, user: dict = Depends(schreibend_mit_recht("rechnungen"))):
     """Rechnungsnummer zurücksetzen (nur offene Rechnungen; bezahlte/stornierte bleiben als Beleg)."""
     r = await _laden(user, rechnung_id)
     if r.get("status", "offen") != "offen":
@@ -257,7 +257,7 @@ def _datei(inhalt: bytes, name: str, typ: str) -> Response:
 
 
 @router.get("/{rechnung_id}/erechnung")
-async def erechnung_status(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+async def erechnung_status(rechnung_id: str, user: dict = Depends(recht_noetig("rechnungen"))):
     """Vorab-Prüfung: Was fehlt noch für XRechnung bzw. ZUGFeRD? Nichts wird erzeugt."""
     daten, _, r = await _erechnung(user, rechnung_id)
     k = daten["kaeufer"]
@@ -278,20 +278,20 @@ async def _freigeben(user: dict, rechnung_id: str, profil: str) -> tuple[dict, d
 
 
 @router.get("/{rechnung_id}/xrechnung.xml")
-async def xrechnung_xml(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+async def xrechnung_xml(rechnung_id: str, user: dict = Depends(recht_noetig("rechnungen"))):
     daten, _, _ = await _freigeben(user, rechnung_id, "xrechnung")
     return _datei(erechnung.cii_xml(daten, "xrechnung"), "XRechnung_" + erechnung.dateiname(daten, "xml"), "application/xml")
 
 
 @router.get("/{rechnung_id}/zugferd.pdf")
-async def zugferd_pdf(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+async def zugferd_pdf(rechnung_id: str, user: dict = Depends(recht_noetig("rechnungen"))):
     daten, firma, _ = await _freigeben(user, rechnung_id, "zugferd")
     pdf = pdfbasis.pdfa3_mit_xml(erechnung.rechnung_pdf(daten), erechnung.cii_xml(daten, "zugferd"), f"Rechnung {daten['nummer']}", firma.get("name") or "")
     return _datei(pdf, "ZUGFeRD_" + erechnung.dateiname(daten, "pdf"), "application/pdf")
 
 
 @router.get("/{rechnung_id}/rechnung.pdf")
-async def rechnung_pdf(rechnung_id: str, user: dict = Depends(rolle_noetig("buero"))):
+async def rechnung_pdf(rechnung_id: str, user: dict = Depends(recht_noetig("rechnungen"))):
     """Serverseitige Rechnung ohne XML (PDF/A-3b), gleicher Aufbau wie die ZUGFeRD-Rechnung."""
     daten, firma, r = await _erechnung(user, rechnung_id)
     await _festschreiben(user, r, "pdf")

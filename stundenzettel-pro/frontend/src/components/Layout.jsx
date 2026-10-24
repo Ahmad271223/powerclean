@@ -12,12 +12,12 @@ const NAV_BETRIEB = [
   { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
   { to: '/projekte', label: 'Projekte', icon: FolderKanban },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
-  { to: '/rechnungen', label: 'Rechnungen', icon: Receipt },
+  { to: '/rechnungen', label: 'Rechnungen', icon: Receipt, recht: 'rechnungen' },
   { to: '/mitteilungen', label: 'Mitteilungen', icon: Bell },
   { to: '/ausschreibungen', label: 'Aufträge & Angebote', icon: Gavel },
   { to: '/zusammenarbeit', label: 'Zusammenarbeit', icon: Handshake },
   { to: '/aufgaben', label: 'Aufgaben', icon: ClipboardList },
-  { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
+  { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users, recht: 'personal' },
   { to: '/auswertung', label: 'Auswertung', icon: BarChart3 },
   { to: '/kunden', label: 'Kunden', icon: Contact },
   { to: '/abwesenheiten', label: 'Abwesenheiten', icon: CalendarOff },
@@ -36,7 +36,7 @@ const NAV_AUFTRAGGEBER = [
   { to: '/projektleiter', label: 'Projektleiter & Rechte', icon: UserCog },
   { to: '/abos', label: 'Projektabos', icon: BadgeEuro },
   { to: '/exporte', label: 'Archiv & Berichte', icon: FileArchive },
-  { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users },
+  { to: '/mitarbeiter', label: 'Mitarbeiter', icon: Users, recht: 'personal' },
   { to: '/stempeluhr', label: 'Stempeluhr', icon: Timer },
   { to: '/abwesenheiten', label: 'Abwesenheiten', icon: CalendarOff },
   { to: '/firma', label: 'Firma', icon: Building2 },
@@ -77,12 +77,13 @@ function PlanHinweis() {
 }
 
 export default function Layout({ children, title, subtitle, action, wide = false }) {
-  const { user, firma, logout, isBuero } = useAuth();
+  const { user, firma, logout, isBuero, kann } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mehr, setMehr] = useState(false);
   const art = firma?.art || 'betrieb';
-  const nav = isBuero ? (art === 'auftraggeber' ? NAV_AUFTRAGGEBER : art === 'beides' ? NAV_BEIDES : NAV_BETRIEB) : NAV_MITARBEITER;
+  const navBasis = isBuero ? (art === 'auftraggeber' ? NAV_AUFTRAGGEBER : art === 'beides' ? NAV_BEIDES : NAV_BETRIEB) : NAV_MITARBEITER;
+  const nav = navBasis.filter((n) => !n.recht || kann(n.recht));
   const tabs = nav.slice(0, 4);
   const rest = nav.slice(4);
   const restAktiv = rest.some((n) => location.pathname.startsWith(n.to) && n.to !== '/');

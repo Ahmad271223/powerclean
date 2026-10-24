@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth import firma_laden, rolle_noetig
+from auth import firma_laden, hat_recht, rolle_noetig
 from db import db
 from gemeinsam import nutzernamen, projekt_normalisieren
 from zeiten import datum_pruefen, eintrag_minuten, eintrag_satz
@@ -14,6 +14,8 @@ GRUPPEN = ("kunde", "projekt", "mitarbeiter", "leistung", "monat")
 
 @router.get("")
 async def auswertung(von: str, bis: str, gruppe: str = Query("projekt"), user: dict = Depends(rolle_noetig("buero"))):
+    if gruppe == "mitarbeiter" and not hat_recht(user, "personal"):
+        raise HTTPException(403, "Die Auswertung je Mitarbeiter sieht nur, wer das Personalrecht hat.")
     try:
         datum_pruefen(von)
         datum_pruefen(bis)

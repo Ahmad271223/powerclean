@@ -30,6 +30,14 @@ def ist_auftraggeber(firma: dict) -> bool:
     return (firma.get("art") or "betrieb") in ("auftraggeber", "beides")
 
 
+def gu_freigeschaltet(firma: dict) -> bool:
+    """Formale Ausschreibungen nach der Testphase nur mit Freischaltung durch den Betreiber (nach Zahlungsbestätigung);
+    die Firmenart allein (vom Inhaber änderbar) reicht nicht."""
+    if plan_status(firma).get("status") == "test":
+        return True
+    return bool((firma.get("freischaltungen") or {}).get("gu"))
+
+
 def _heute() -> date:
     return lokal_jetzt().date()
 
@@ -129,7 +137,7 @@ async def firma_abos(firma_id: str) -> dict:
     kosten_projekte = round(len(aktiv) * PREISE["projekt_gu"], 2)
     firmenabo = st["stufe"] == "firma" and st["status"] in ("test", "aktiv")
     kosten_firma = firmenabo_kosten(nutzer) if firmenabo else 0.0
-    return {"plan": st, "art": firma.get("art") or "betrieb", "nutzer_aktiv": nutzer, "preise": PREISE, "projekte": projekte,
+    return {"plan": st, "art": firma.get("art") or "betrieb", "gu_freigeschaltet": gu_freigeschaltet(firma), "nutzer_aktiv": nutzer, "preise": PREISE, "projekte": projekte,
             "gu_projekte_aktiv": len(aktiv), "kosten_projekte_monat": kosten_projekte, "kosten_firma_monat": kosten_firma,
             "kosten_monat": round(kosten_projekte + kosten_firma, 2), "firmenabo": firmenabo, "periode": "Kalendermonat",
             "fair_use": {"speicher_gb": float(((firma.get("plan") or {}).get("speicher_gb")) or __import__("config").SPEICHER_GB), "max_datei_mb": __import__("config").MAX_DATEI_MB,

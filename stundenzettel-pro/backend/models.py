@@ -160,6 +160,7 @@ class MitarbeiterUpdateIn(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=60)
     notes: Optional[str] = Field(default=None, max_length=1000)
     active: Optional[bool] = None
+    rechte: Optional[dict[str, bool]] = None   # nur Inhaber, nur für Büro-Konten (siehe auth.RECHTE)
     weekly_hours: Optional[float] = Field(default=None, ge=0, le=80)
     vacation_days: Optional[float] = Field(default=None, ge=0, le=100)
     workdays: Optional[list[int]] = Field(default=None, max_length=7)
@@ -236,6 +237,12 @@ class ProjektIn(BaseModel):
     lat: Optional[float] = Field(default=None, ge=-90, le=90)
     lon: Optional[float] = Field(default=None, ge=-180, le=180)
     kostenlos: bool = False   # bewusst ohne Stundensatz: 0 € bleibt 0 € (sonst gilt der Firmenstandard)
+    abrechnungsart_projekt: str = Field(default="stunden", pattern="^(stunden|pauschal)$")   # Grundlage der Kalkulation (Rechnung weiter nach Stunden)
+    pauschale_netto: float = Field(default=0, ge=0, le=1e12)
+    abrechnungsart_projekt: str = Field(default="stunden", pattern="^(stunden|pauschal)$")   # Grundlage der Kalkulation (Rechnung weiter nach Stunden)
+    pauschale_netto: float = Field(default=0, ge=0, le=1e12)
+    abrechnungsart_projekt: str = Field(default="stunden", pattern="^(stunden|pauschal)$")   # Grundlage der Kalkulation (Rechnung weiter nach Stunden)
+    pauschale_netto: float = Field(default=0, ge=0, le=1e12)
 
     @field_validator("baubeginn", "bauende")
     @classmethod
@@ -482,6 +489,9 @@ class PlanIn(BaseModel):
     test_bis: Optional[str] = None
     hinweis: Optional[str] = Field(default="", max_length=300)
     stufe: Optional[str] = Field(default=None, pattern="^(pro|plus|firma|teilnahme)$")   # firma = Firmenabo, teilnahme = kostenlose Projektteilnahme
+    gu: Optional[bool] = None   # GU-Freischaltung (Ausschreibungen nach der Testphase) – nach Zahlungsbestätigung durch den Betreiber
+    gu: Optional[bool] = None   # GU-Freischaltung (Ausschreibungen nach der Testphase) – nach Zahlungsbestätigung durch den Betreiber
+    gu: Optional[bool] = None   # GU-Freischaltung (Ausschreibungen nach der Testphase) – nach Zahlungsbestätigung durch den Betreiber
 
 
 class GuAboIn(BaseModel):

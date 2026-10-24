@@ -50,6 +50,7 @@ export default function AbosKarte({ className = '', onLoaded }) {
         <span>Firmenabo: <strong>{abos.firmenabo ? `${fmtGeld(abos.kosten_firma_monat)} (${abos.nutzer_aktiv} Nutzer)` : 'kostenlose Projektteilnahme'}</strong>{abos.plan.status === 'test' ? ' – in der Testphase noch frei' : ''}</span>
         <span>GU-Projekte aktiv: <strong>{abos.gu_projekte_aktiv} × {fmtGeld(abos.preise.projekt_gu)}</strong></span>
         <span>Summe: <strong>{fmtGeld(abos.kosten_monat)}</strong> je Monat</span>
+        {abos.art !== 'betrieb' && <span>GU-Freischaltung: <strong>{abos.gu_freigeschaltet ? 'ja' : 'nein'}</strong>{abos.plan.status === 'test' ? ' (in der Testphase frei)' : abos.gu_freigeschaltet ? '' : ' – nach der Testphase durch den Anbieter'}</span>}
       </div>
       {abos.projekte.length > 0 && (
         <ul className="divide-y divide-black/[0.06]">

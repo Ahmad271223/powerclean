@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends
 
-from auth import aktueller_nutzer, firma_laden, hat_rolle, plan_status
+from auth import aktueller_nutzer, firma_laden, hat_recht, hat_rolle, plan_status
 from db import db
 from gemeinsam import budget_info, nutzernamen, projekt_normalisieren, projekt_sichtbar
 from konten import kontoverlauf, urlaubskonto
@@ -68,6 +68,8 @@ async def dashboard(user: dict = Depends(aktueller_nutzer)):
         abwesend = []
         async for a in db().absences.find({"firma_id": f, "from_date": {"$lte": heute}, "to_date": {"$gte": heute}, "status": "genehmigt"}, {"_id": 0}):
             abwesend.append({"user_name": namen.get(a["user_id"], ""), "type": a["type"], "to_date": a["to_date"]})
+        if not hat_recht(user, "personal"):   # Büro ohne Personalrecht: keine Namen und Stempelungen einzelner Personen
+            lange, abwesend = [], []
         vormonat = (heute_d.replace(day=1) - timedelta(days=1))
         vormonat_zu = await db().abschluesse.find_one({"firma_id": f, "year": vormonat.year, "month": vormonat.month}) is not None
         aus.update({

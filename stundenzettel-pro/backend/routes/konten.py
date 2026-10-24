@@ -5,7 +5,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth import aktueller_nutzer, firma_laden, hat_rolle, jetzt_iso, rolle_noetig, schreibend
+from auth import aktueller_nutzer, firma_laden, hat_recht, hat_rolle, jetzt_iso, recht_noetig, rolle_noetig, schreibend, schreibend_mit_recht
 from db import db
 from feiertage import BUNDESLAENDER, feiertage
 from gemeinsam import neue_id
@@ -25,8 +25,8 @@ async def feiertage_lesen(jahr: int = Query(..., ge=2025, le=2100), user: dict =
 
 
 async def _nutzer(user: dict, user_id: str) -> dict:
-    if user["id"] != user_id and not hat_rolle(user, "buero"):
-        raise HTTPException(403, "Dafür fehlt die Berechtigung.")
+    if user["id"] != user_id and not hat_recht(user, "personal"):
+        raise HTTPException(403, "Konten anderer Mitarbeiter sieht nur, wer das Personalrecht hat.")
     u = await db().users.find_one({"id": user_id, "firma_id": user["firma_id"]}, {"_id": 0, "pw_hash": 0, "einladung_token": 0})
     if not u:
         raise HTTPException(404, "Mitarbeiter nicht gefunden.")
@@ -57,7 +57,7 @@ async def meins(user: dict = Depends(aktueller_nutzer)):
 
 
 @router.post("/api/mitarbeiter/{user_id}/konto/buchungen")
-async def buchen(user_id: str, body: BuchungIn, user: dict = Depends(schreibend("buero"))):
+async def buchen(user_id: str, body: BuchungIn, user: dict = Depends(schreibend_mit_recht("personal"))):
     u = await _nutzer(user, user_id)
     b = {"id": neue_id(), "firma_id": user["firma_id"], "user_id": user_id, "date": body.date, "minutes": body.minutes, "type": body.type,
          "note": (body.note or "").strip(), "created_by": user.get("name"), "created_at": jetzt_iso()}
@@ -67,7 +67,7 @@ async def buchen(user_id: str, body: BuchungIn, user: dict = Depends(schreibend(
 
 
 @router.delete("/api/konto/buchungen/{buchung_id}")
-async def buchung_loeschen(buchung_id: str, user: dict = Depends(schreibend("buero"))):
+async def buchung_loeschen(buchung_id: str, user: dict = Depends(schreibend_mit_recht("personal"))):
     b = await db().zeitkonto.find_one({"id": buchung_id, "firma_id": user["firma_id"]}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Buchung nicht gefunden.")
@@ -77,7 +77,7 @@ async def buchung_loeschen(buchung_id: str, user: dict = Depends(schreibend("bue
 
 
 @router.get("/api/konto/uebersicht")
-async def uebersicht(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(rolle_noetig("buero"))):
+async def uebersicht(jahr: int = Query(..., ge=2025, le=2100), monat: int = Query(..., ge=1, le=12), user: dict = Depends(recht_noetig("personal"))):
     """Alle aktiven Mitarbeiter: Soll, Ist, Saldo des Monats, kumulierter Saldo, Resturlaub."""
     firma = await firma_laden(user["firma_id"])
     aus = []
