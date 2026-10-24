@@ -134,6 +134,13 @@ Erzeugen: `python -c "import secrets; print(secrets.token_urlsafe(48))"` bzw. `p
 - Projektakten im Hintergrund: Status `laeuft` bleibt nach einem Serverneustart stehen – die Akte dann einfach neu erstellen (Datensatz kann der Inhaber löschen).
   Prüfsummen: `manifest.json` in der ZIP; Nachweis mit `sha256sum` gegen die entpackten Dateien.
 
+## 4l. KI-Entwürfe (optional)
+
+- Einschalten: `FEATURE_KI=1`, `ANTHROPIC_API_KEY=…` (nur in der `.env`, nie im Repo), optional `KI_MODELL` (Standard claude-opus-5-5), `pip install anthropic`.
+  Stand prüfen: `GET /api/ki/status` (zeigt nie den Schlüssel). Kosten entstehen je Anfrage beim Anbieter; Länge der Eingabe ist auf 20 000 Zeichen begrenzt.
+- Datenschutz: Der eingegebene Text wird an den Anbieter übertragen – Vertrag zur Auftragsverarbeitung abschließen, Nutzer anweisen, keine Personaldaten einzugeben.
+  Das Protokoll speichert nur Längen, Modell und Dauer.
+
 ## 5. Mehrbenutzer- und Lastprobe vor dem Go-live
 
 - Vier Testkonten (Inhaber, Büro, Vorarbeiter, Mitarbeiter) in einer Testfirma, Abnahmeliste in `GO-LIVE.md` durchgehen.

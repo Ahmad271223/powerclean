@@ -8,6 +8,7 @@ import { useDialoge } from '../components/Dialoge';
 import { api, openFile } from '../lib/api';
 import { fmtGeld } from '../lib/angebot';
 import { fmtDate, fromKey, todayKey } from '../lib/dates';
+import KiEntwurfDialog from '../components/ki/KiEntwurfDialog';
 
 const STATUS_CLS = { erfasst: 'bg-[#FFF4E5] text-[#B25E00]', geprueft: 'bg-[#E8F0FE] text-[#1D4ED8]', bezahlt: 'bg-[#E8F8EC] text-[#1B7F3B]', storniert: 'bg-black/[0.06] text-[#6E6E73]' };
 const FILTER = [['', 'Alle'], ['erfasst', 'Zu prüfen'], ['geprueft', 'Geprüft (offen)'], ['bezahlt', 'Bezahlt'], ['storniert', 'Storniert']];
@@ -94,7 +95,7 @@ function RechnungDialog({ open, onOpenChange, rechnung, projekte, kostenarten, o
       </>}>
       <div className="space-y-3">
         <div className="rounded-2xl bg-[#F5F5F7] px-4 py-3">
-          <div className="text-[13px] font-semibold mb-1 flex items-center gap-2"><Paperclip size={14} /> Beleg</div>
+          <div className="text-[13px] font-semibold mb-1 flex items-center gap-2"><Paperclip size={14} /> Beleg{bearbeitbar && <span className="ml-auto"><KiEntwurfDialog art="beleg" onUebernehmen={(v) => setF((x) => ({ ...x, lieferant: v.lieferant || x.lieferant, lieferant_ustid: v.lieferant_ustid || x.lieferant_ustid, rechnungsnummer: v.rechnungsnummer || x.rechnungsnummer, rechnungsdatum: v.rechnungsdatum || x.rechnungsdatum, faellig_am: v.faellig_am || x.faellig_am, netto: v.netto ?? x.netto, ust: v.ust ?? x.ust, brutto: v.brutto ?? x.brutto }))}>KI aus Text</KiEntwurfDialog></span>}</div>
           {beleg ? <div className="text-[13px] flex items-center gap-2 flex-wrap"><button type="button" className="text-[#C41E3A] font-medium" onClick={() => openFile(`/api/dokumente/${beleg.id}/datei`).catch((e) => toast.error(e.message))}>{beleg.filename}</button><span className="text-[#6E6E73]">{Math.round((beleg.size || 0) / 1024)} KB</span>{vorschlag && <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 bg-[#E8F0FE] text-[#1D4ED8]">aus {vorschlag.quelle === 'zugferd' ? 'ZUGFeRD' : 'XRechnung'} vorausgefüllt – bitte prüfen</span>}</div> : <div className="text-[13px] text-[#6E6E73]">Noch kein Beleg.</div>}
           {bearbeitbar && <div className="flex items-center gap-2 mt-2"><input ref={datei} type="file" accept=".pdf,.xml,image/*,application/pdf,application/xml,text/xml" className="text-[13px]" /><Btn size="sm" variant="soft" onClick={hochladen} loading={busy === 'upload'}>Hochladen</Btn></div>}
         </div>

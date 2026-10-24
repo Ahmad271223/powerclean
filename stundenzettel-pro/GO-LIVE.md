@@ -157,6 +157,16 @@ durch den Import laufen lassen; X84-Ausgabe mit einem GAEB-Prüfprogramm validie
 Backend-Tests gesamt: 91 grün. Vor dem Go-live: `NACHRICHTEN_DIENST` läuft mit Datenbank automatisch; E-Mail-Texte im Ausgang prüfen, Wartezeit
 (`nachrichten.WARTEZEIT_MINUTEN`) bei Bedarf anpassen; Feature-Flags in der `.env` bewusst setzen (`FEATURE_KI=0`, `FEATURE_LAGER=0` bleiben aus).
 
+## 1k. Stufe H – KI-Entwürfe (24.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Flag aus → 404 mit Klartext; Flag an ohne Schlüssel → Status `bereit: false` ohne Schlüsselpreisgabe, Entwurf 503 mit Klartext, kein Netzaufruf; Eingabegrenzen | `test_stufe_h_20261024.py::test_01` |
+| Angebotsentwurf mit Firmenkontext (Stundensatz im Prompt), tolerantes Parsen (unbekannte Art, Strings, Dezimalkomma, kaputte Zeilen), `unsicher`-Markierung, keine Speicherung, Protokoll ohne Inhalt, Übernahme nur über die Angebotsroute; Belegvorschlag mit Code-Zaun und Rechenprüfung, Recht `rechnungen`, 502 bei unlesbarer Antwort | `test_02` |
+
+Backend-Tests gesamt: 93 grün. Browser: Flag ist aus – kein KI-Element sichtbar (Standardzustand geprüft). Vor dem Einschalten: Anbieter-Vertrag/AVV, Schlüssel
+nur in der `.env`, `FEATURE_KI=1` bewusst setzen und mit einem echten Beispielangebot prüfen.
+
 ## 2. Abnahmetests Stempeluhr (vor dem Go-live auf dem echten Server)
 
 Automatisiert (Backend): Zeitstempel/Server-Uhr, Pausen sekundengenau, > 24 h, Nachtarbeit, Offline-Übernahme, doppelte Übertragung, Serverfehler beim Synchronisieren, Monatsabschluss/Projektlöschung mit laufender Stempelung.

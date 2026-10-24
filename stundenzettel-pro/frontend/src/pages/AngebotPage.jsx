@@ -12,6 +12,7 @@ import PositionenImportDialog from '../components/angebot/PositionenImportDialog
 import { api, download, openFile } from '../lib/api';
 import { ANNAHMEARTEN, STATUS_CLS, STATUS_NAMEN, fmtGeld, fmtMenge, positionenFuerServer, summen } from '../lib/angebot';
 import { fmtDate, fromKey, todayKey } from '../lib/dates';
+import KiEntwurfDialog from '../components/ki/KiEntwurfDialog';
 
 const formAus = (a) => ({
   titel: a.titel || '', customer_id: a.customer_id || '', kunde: { name: '', contact: '', street: '', zip_code: '', city: '', email: '', phone: '', ...(a.kunde || {}) },
@@ -217,7 +218,7 @@ export default function AngebotPage() {
             </div>
           </Card>
           <Card className="p-5">
-            <h2 className="text-[17px] mb-3">Positionen</h2>
+            <div className="flex items-center justify-between gap-2 mb-3"><h2 className="text-[17px]">Positionen</h2>{bearbeitbar && <KiEntwurfDialog art="angebot" onUebernehmen={(pos) => set({ positionen: [...form.positionen, ...pos.map((p) => ({ art: p.art, text: p.text, beschreibung: p.beschreibung || '', menge: p.menge ?? 1, einheit: p.einheit || 'Stk.', einzelpreis: p.einzelpreis ?? 0, rabatt_prozent: 0, alternativ: false, eventual: false }))] })} />}</div>
             <PositionenEditor positionen={form.positionen} onChange={(p) => set({ positionen: p })} leistungen={leistungen} artikel={artikel} readOnly={!bearbeitbar} />
           </Card>
           <Card className="p-5">

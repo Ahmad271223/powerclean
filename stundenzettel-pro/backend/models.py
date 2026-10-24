@@ -1498,3 +1498,8 @@ class BerichtsvorlageIn(BaseModel):
         aus = {k: val for k, val in (v or {}).items() if k in erlaubt}
         TagesberichtIn(datum="2026-01-01", **aus)   # dieselben Grenzen wie der Bericht selbst
         return aus
+
+
+class KiTextIn(BaseModel):
+    """Stufe H: Text für einen KI-Entwurf (nie Passwörter oder Personaldaten – der Text geht an den KI-Anbieter)."""
+    text: str = Field(min_length=1, max_length=20000)

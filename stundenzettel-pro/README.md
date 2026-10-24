@@ -334,6 +334,15 @@ Go-live-Befunde (`test_golive_20261023.py`, `test_audit4_20261023.py`) und Berec
   (aus), `FEATURE_LAGER` (aus, nicht gebaut) = `1|0`. Abgeschaltete Module verschwinden aus dem Menü und antworten über die API mit 404 und Klartext.
   Übersicht unter „Firma → Module“ (Inhaber).
 
+## KI-Entwürfe – optional, standardmäßig aus (24.10.2026, Stufe H)
+
+- Modul hinter `FEATURE_KI=1` plus `ANTHROPIC_API_KEY` auf dem Server (Modell `KI_MODELL`, Standard claude-opus-5-5; Paket `anthropic`). Ohne Flag
+  ist nichts davon sichtbar oder erreichbar; ohne Schlüssel antwortet der Server mit Klartext (503).
+- Zwei Entwürfe, beide nur Vorschlag: **Angebotspositionen aus einer Beschreibung** (Angebot → Positionen → „KI-Entwurf“; nutzt Stundensatz,
+  Leistungen und Artikel der Firma als Kontext, erfindet keine Preise – unsichere Zeilen sind markiert) und **Felder einer Eingangsrechnung aus
+  Belegtext** (Eingangsrechnung → „KI aus Text“). Gespeichert wird erst, wenn ein Mensch „übernehmen“ drückt – und dann über die normalen Routen.
+- Protokoll nur mit Längen, Modell und Dauer (nie Inhalte). Der eingegebene Text geht an den KI-Anbieter: keine Passwörter, keine Personaldaten.
+
 ## Go-live und Betrieb
 
 Befunde der externen Audits, Maßnahmen und Abnahmeliste: **`GO-LIVE.md`**. Sicherung, Wiederherstellung, Geheimnisse und Startprüfung: **`BETRIEB.md`** (`backup.sh`).

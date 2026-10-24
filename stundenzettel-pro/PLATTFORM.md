@@ -259,6 +259,20 @@ weiterhin nur Stempeluhr, Zeiten, Projekte, Aufgaben und Abwesenheit.
 - Grenzen (dokumentiert): kein Push/WebSocket (Nachladen alle 20 s im Chat, 60 s Zähler), keine Lesebestätigung je Person in der Oberfläche, keine Suche in Chats;
   Projektakten im Hintergrund laufen im Serverprozess (bei Neustart bleibt Status `laeuft` stehen – Akte neu erstellen).
 
+## 1l. Stufe H – KI-Entwürfe (optional, Flag `ki` aus) (24.10.2026)
+
+- `ki.py`: `eingerichtet()` (Schlüssel vorhanden, Paket installiert, Modell – ohne den Schlüssel zu zeigen), `anfragen(anweisung, text)` (Anthropic-SDK,
+  `client.beta.messages.create` mit `fallbacks="default"` und Beta `server-side-fallback-2026-07-01`, Effort medium, 120 s; Fehler des Anbieters → 503 mit Klartext,
+  Ablehnung → 422), `angebot_entwurf(text, firma, artikel, leistungen)` und `beleg_vorschlag(text)` – beide parsen das JSON der Antwort tolerant (Code-Zaun,
+  Dezimalkomma), begrenzen Felder, markieren Positionen ohne Preis als `unsicher`, prüfen Netto + USt = Brutto und liefern `hinweise`. Tests ersetzen `anfragen`.
+- `routes/ki.py` (Präfix `/api/ki`, Router-Dependency `feature_noetig("ki")`): `GET /status`, `POST /angebot-entwurf` (Recht `angebote`), `POST /beleg-vorschlag`
+  (Recht `rechnungen`); Body `KiTextIn` {text ≤ 20 000 Zeichen}. Keine Route schreibt in die Datenbank; Protokoll `ki.angebot_entwurf`/`ki.beleg_vorschlag` nur mit
+  Zeichen, Positionen, Modell, Dauer.
+- Oberfläche: `components/ki/KiEntwurfDialog` (nur mit `feature('ki')`): Text → „Entwurf erzeugen“ → Tabelle/Felder mit Hinweisen → „übernehmen“ hängt Positionen an den
+  Angebotsentwurf (Preis 0 bei unsicher) bzw. füllt das Eingangsrechnungsformular vor; beides bleibt ungespeichert, bis der Nutzer regulär speichert.
+  Tests `tests/test_stufe_h_20261024.py` (2 Tests, ohne Netz).
+- Grenzen: kein Dokument-Upload an die KI (nur Text), keine Lernschleife, keine automatische Verbuchung; Kosten/Datenschutz beim Betreiber (Anbieter-Vertrag, AVV).
+
 ## 2. Architekturentscheidung
 
 Eigentümer, Projekt und Zugriff werden getrennt:
