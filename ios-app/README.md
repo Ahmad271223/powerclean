@@ -1,4 +1,8 @@
-# Stundenzettel Pro – iPhone-App (SwiftUI)
+# Stundenzettel Pro – iPhone-App (SwiftUI) · Prototyp, nicht weitergeführt
+
+> **Stand 24.11.2026:** Entscheidung „Eine App für alle“ – die bestehende App unter `stundenzettel-pro/frontend` (React + Capacitor)
+> ist die Haupt-App für iPhone und Android. Dieser Ordner bleibt als Vorlage (Datumsregeln, Tests); neue Funktionen kommen in die
+> bestehende App, iPhone-Besonderheiten (WhisperKit, Apple-KI) als nativer Swift-Baustein darin.
 
 Native iPhone-App für die Plantafel von Stundenzettel Pro. Kennung `de.stundenzettelpro.ios`, ab iOS 17.
 Die bisherige Capacitor-App unter `stundenzettel-pro/frontend/ios` bleibt unverändert.

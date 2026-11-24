@@ -47,6 +47,7 @@ export function LoginPage() {
         <Btn type="submit" size="lg" className="w-full" loading={busy}><LogIn size={18} /> Anmelden</Btn>
       </form>
       <p className="text-[13px] text-[#6E6E73] mt-6 text-center">Neue Firma? <Link to="/registrieren" className="text-[#C41E3A] font-medium">14 Tage kostenlos testen</Link></p>
+      <p className="text-[12px] text-[#86868B] mt-3 text-center"><Link to="/lizenzen" className="hover:underline">Über / Lizenzen</Link></p>
     </Rahmen>
   );
 }

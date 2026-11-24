@@ -11,7 +11,8 @@
     "cap:sync": "npm run build:app && npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
-    "assets": "node scripts/assets.mjs && npx capacitor-assets generate --android --ios --iconBackgroundColor \"#F5F5F7\" --iconBackgroundColorDark \"#1D1D1F\" --splashBackgroundColor \"#F5F5F7\" --splashBackgroundColorDark \"#1D1D1F\""
+    "assets": "node scripts/assets.mjs && npx capacitor-assets generate --android --ios --iconBackgroundColor \"#F5F5F7\" --iconBackgroundColorDark \"#1D1D1F\" --splashBackgroundColor \"#F5F5F7\" --splashBackgroundColorDark \"#1D1D1F\"",
+    "lizenzen": "node scripts/lizenzen-pruefen.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.2",

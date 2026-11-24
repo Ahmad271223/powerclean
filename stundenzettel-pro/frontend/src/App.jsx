@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './lib/auth';
 import { DialogProvider } from './components/Dialoge';
 import { Btn, Card } from './components/ui';
 import { LoginPage, RegisterPage, EinladungPage } from './pages/LoginPage';
+import LizenzenPage from './pages/LizenzenPage';
 import ZusammenarbeitPage, { ProjektEinladungPage } from './pages/ZusammenarbeitPage';
 import MeineAufgabenPage from './pages/MeineAufgabenPage';
 import AusschreibungenPage from './pages/AusschreibungenPage';
@@ -100,6 +101,7 @@ export default function App() {
             <Route path="/login" element={<Oeffentlich><LoginPage /></Oeffentlich>} />
             <Route path="/registrieren" element={<Oeffentlich><RegisterPage /></Oeffentlich>} />
             <Route path="/einladung/:token" element={<EinladungPage />} />
+            <Route path="/lizenzen" element={<LizenzenPage />} />
             <Route path="/projekteinladung/:token" element={<ProjektEinladungPage />} />
             <Route path="/" element={<Geschuetzt><Start /></Geschuetzt>} />
             <Route path="/stempeluhr" element={<Geschuetzt><StempeluhrPage /></Geschuetzt>} />
