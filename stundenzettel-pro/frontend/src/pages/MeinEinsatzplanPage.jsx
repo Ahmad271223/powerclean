@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, CalendarRange, Clock, MapPin, Navigation, Play, Users } from 'lucide-react';
+import { Bell, CalendarRange, Check, CheckCircle2, Clock, MapPin, Navigation, Play, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
 import { AppIcon, Btn, Card, Empty } from '../components/ui';
@@ -12,10 +12,21 @@ const ABGLEICH_CLS = { freigegeben: 'bg-[#E8F8EC] text-[#1B7F3B]', passt: 'bg-[#
 const tagText = (key) => `${WEEKDAYS_LONG_DE[fromKey(key).getDay() === 0 ? 6 : fromKey(key).getDay() - 1]}, ${fmtDate(fromKey(key))}`;
 
 /** Eine Einsatzkarte: Projekt, Zeit, Adresse mit Navigation, Hinweise, Kolonne – und die passenden Aktionen für den Tag. */
-export function EinsatzKarte({ e, heute, kompakt = false }) {
+export function EinsatzKarte({ e: start, heute, kompakt = false }) {
   const navigate = useNavigate();
+  const [e, setE] = useState(start);
+  const [sendet, setSendet] = useState(false);
+  useEffect(() => setE(start), [start]);
   const istHeute = e.date === heute;
   const vergangen = e.date < heute;
+  const q = e.quittung || {};
+  // Lesebestätigung (wie in der iPhone-App): gilt für die aktuelle Version, nach einer Planänderung wieder offen
+  const bestaetigen = async () => {
+    setSendet(true);
+    try { setE((await api.post(`/api/einsatzplan/${e.id}/bestaetigen`)).einsatz); toast.success('Einsatz bestätigt'); }
+    catch (err) { toast.error(err.message); }
+    finally { setSendet(false); }
+  };
   return (
     <Card className={`p-4 ${istHeute ? 'ring-2 ring-[#C41E3A]/40' : ''}`}>
       <div className="flex items-start gap-3">
@@ -31,6 +42,11 @@ export function EinsatzKarte({ e, heute, kompakt = false }) {
           {vergangen && e.abgleich && <span className={`inline-block mt-1.5 text-[11px] font-semibold rounded-full px-2 py-0.5 ${ABGLEICH_CLS[e.abgleich.status] || ''}`}>{e.abgleich.status_name}</span>}
         </div>
       </div>
+      {!kompakt && !vergangen && e.status === 'geplant' && (
+        q.bestaetigt
+          ? <div className="mt-3 flex items-center gap-1.5 text-[13px] font-semibold text-[#1B7F3B]"><CheckCircle2 size={16} /> Bestätigt</div>
+          : <Btn className="mt-3 w-full" onClick={bestaetigen} disabled={sendet}><Check size={16} /> Gelesen & bestätigt</Btn>
+      )}
       {!kompakt && (
         <div className="mt-3 flex flex-wrap gap-2">
           {e.navigation && <a href={e.navigation} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-[#1D1D1F] text-white text-[13px] font-semibold"><Navigation size={14} /> Navigation</a>}
@@ -62,6 +78,14 @@ export default function MeinEinsatzplanPage() {
     api.get(`/api/einsatzplan?von=${h}&bis=${h}`).then((r) => setErinnerung(r.erinnerung)).catch(() => {});
   }, []);
   useEffect(() => { laden(); }, [laden]);
+  // Angesehene kommende Einsätze als „gelesen“ melden (einmal je Version; der Chef sieht zugestellt → gelesen → bestätigt)
+  useEffect(() => {
+    if (!d) return;
+    const tag = new Date().toISOString().slice(0, 10);
+    [...d.heute, ...d.morgen, ...d.woche, ...d.naechste_woche]
+      .filter((e, i, alle) => e.date >= tag && e.status === 'geplant' && !e.quittung?.gelesen && alle.findIndex((x) => x.id === e.id) === i)
+      .forEach((e) => api.post(`/api/einsatzplan/${e.id}/gelesen`).catch(() => {}));
+  }, [d]);
   if (!d) return <Layout title="Meine Einsätze"><Ladeanzeige /></Layout>;
   const heute = new Date().toISOString().slice(0, 10);
   const nichts = !d.heute.length && !d.morgen.length && !d.woche.length && !d.naechste_woche.length && !d.spaeter.length;
