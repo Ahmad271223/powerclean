@@ -1,9 +1,14 @@
 """Plattform: Zusammenarbeit mehrerer Firmen – Definition-of-Done-Szenario, Einladungen, Projektleiter, Berechtigungen (2026-10-23)."""
 import io
+from datetime import timedelta
 
 from PIL import Image
 
 from conftest import einladen, projekt, registrieren, zeit
+from zeiten import lokal_jetzt
+
+# Aufgabentermin relativ zu heute: „Meine Aufgaben“ zeigt nur die letzten 14 Tage (fester Termin 26.10.2026 lief am 9.11.2026 aus der Ansicht)
+AUFGABE_TAG = (lokal_jetzt().date() + timedelta(days=2)).isoformat()
 
 
 def _png() -> bytes:
@@ -71,7 +76,7 @@ def test_01_definition_of_done_szenario(client):
 
     # 11: GOLDBECK erstellt eine Aufgabe für die Elektrofirma
     r = client.post(f"/api/projekte/{p['id']}/aufgaben", json={"titel": "Kabeltrassen in Halle B montieren", "beschreibung": "Trasse 3 bis 7", "gewerk": "Elektro",
-                                                               "firma_id": el_daten["firma"]["id"], "datum": "2026-10-26", "start_time": "07:00", "end_time": "15:30",
+                                                               "firma_id": el_daten["firma"]["id"], "datum": AUFGABE_TAG, "start_time": "07:00", "end_time": "15:30",
                                                                "prioritaet": "hoch", "bereich": "Halle B"}, headers=pl1_kopf)
     assert r.status_code == 200, r.text
     aufgabe = r.json()["aufgabe"]

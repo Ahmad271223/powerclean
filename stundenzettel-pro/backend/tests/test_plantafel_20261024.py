@@ -11,6 +11,8 @@ from zeiten import lokal_jetzt
 HEUTE = lokal_jetzt().date()
 GESTERN = (HEUTE - timedelta(days=1)).isoformat()
 MORGEN = (HEUTE + timedelta(days=1)).isoformat()
+# Kolonnentag relativ zu heute: „Meine Einsätze“ zeigt nur ab sieben Tagen zurück (fester Tag 16.11.2026 lief am 24.11.2026 aus der Ansicht)
+KOLONNE_TAG = (HEUTE + timedelta(days=10)).isoformat()
 SERIE = {"from_date": "2026-11-02", "to_date": "2026-11-06", "weekdays": [0, 1, 2, 3, 4], "start_time": "08:00", "end_time": "16:00", "pause_minutes": 30, "address": "Hauptstraße 12, Hannover", "note": "Treffpunkt Tor B"}
 
 
@@ -75,10 +77,10 @@ def test_02_verschieben_kopieren_absagen_rueckgaengig_kolonnen(client):
     assert k.status_code == 200 and k.json()["kolonne"]["vorarbeiter_id"] == s["anna_id"]
     kid = k.json()["kolonne"]["id"]
     assert client.get("/api/einsatzplan/kolonnen", headers=s["anna"]).json()["kolonnen"][0]["mitglieder"][0]["name"] in ("Anna", "Ben")
-    r = client.post("/api/einsatzplan", json={"project_id": s["p"]["id"], "user_ids": [s["anna_id"], s["ben_id"]], "dates": ["2026-11-16"], "start_time": "07:00", "end_time": "15:00", "kolonne_id": kid}, headers=s["chef"])
+    r = client.post("/api/einsatzplan", json={"project_id": s["p"]["id"], "user_ids": [s["anna_id"], s["ben_id"]], "dates": [KOLONNE_TAG], "start_time": "07:00", "end_time": "15:00", "kolonne_id": kid}, headers=s["chef"])
     assert r.status_code == 200 and all(x["kolonne"] == "Trupp 1" for x in r.json()["einsaetze"])
     meine = client.get("/api/einsatzplan/meine?tage=40", headers=s["anna"]).json()
-    assert any(x["date"] == "2026-11-16" and x["kollegen"] == ["Ben"] for x in meine["spaeter"] + meine["naechste_woche"] + meine["woche"])
+    assert any(x["date"] == KOLONNE_TAG and x["kollegen"] == ["Ben"] for x in meine["spaeter"] + meine["naechste_woche"] + meine["woche"])
     # Planänderung für morgen → sofortige Mitteilung an die betroffene Person (einmal je Version)
     e2 = client.post("/api/einsatzplan", json={"project_id": s["p"]["id"], "user_ids": [s["ben_id"]], "dates": [MORGEN], "start_time": "08:00", "end_time": "16:00"}, headers=s["chef"]).json()["einsaetze"][0]
     assert client.put(f"/api/einsatzplan/{e2['id']}", json={"start_time": "07:00"}, headers=s["chef"]).status_code == 200
