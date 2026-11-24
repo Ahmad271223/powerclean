@@ -48,6 +48,18 @@ targets:
         # Nur für die Entwicklung: http zu localhost/LAN-Servern; im Betrieb spricht die App ausschließlich https
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+  StundenzettelProUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: StundenzettelPro
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: de.stundenzettelpro.ios.uitests
+        TEST_TARGET_NAME: StundenzettelPro
 schemes:
   StundenzettelPro:
     build:
@@ -55,5 +67,9 @@ schemes:
         StundenzettelPro: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - StundenzettelProUITests
     archive:
       config: Release

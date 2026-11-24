@@ -30,6 +30,7 @@ struct MeineEinteilungenAnsicht: View {
         .navigationDestination(for: Einsatz.self) { e in EinsatzDetailAnsicht(einsatzId: e.id) }
         .refreshable { await laden() }
         .task { await laden() }
+        .onAppear { if daten != nil { Task { await laden() } } }   // nach dem Zurückkehren aus dem Einsatz: Stand aktualisieren
     }
 
     @ViewBuilder

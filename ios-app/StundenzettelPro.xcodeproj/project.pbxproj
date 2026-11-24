@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1115024BCAA367C8EF694146 /* MikrofonKnopf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B6713F766D63AB6BFC6A315 /* MikrofonKnopf.swift */; };
 		219B928969F40077CC01F9DE /* StundenzettelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D72E557DFA6E32F95D030DE /* StundenzettelApp.swift */; };
+		38498BA732CA7E27B9BD8444 /* AblaufTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700F0832215AB19292ED611B /* AblaufTests.swift */; };
 		4E44739ACD2A288045FEA12F /* EinsatzDetailAnsicht.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49CB6615F11858B2316FEE7D /* EinsatzDetailAnsicht.swift */; };
 		5F38151620C277F392FD2A2E /* PlantafelWochenAnsicht.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220D6484C392EB5D1C34A209 /* PlantafelWochenAnsicht.swift */; };
 		624DCFA17AC3F0AA7B020794 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3E44911B887778F5E957FCC3 /* Assets.xcassets */; };
@@ -20,8 +21,19 @@
 		FECEE0E980D0D11EA006F7BC /* AnmeldeAnsicht.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91DBF616F2732921F0414ACF /* AnmeldeAnsicht.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		EB6A47F15D3EF3056191C0C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5AAF90D284D685C407F6A9A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 41DB4B844BD76DC90DAE6F7F;
+			remoteInfo = StundenzettelPro;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		220D6484C392EB5D1C34A209 /* PlantafelWochenAnsicht.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlantafelWochenAnsicht.swift; sourceTree = "<group>"; };
+		26856AF7F5DD2A647E02AC8B /* StundenzettelProUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StundenzettelProUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D72E557DFA6E32F95D030DE /* StundenzettelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StundenzettelApp.swift; sourceTree = "<group>"; };
 		2E53353D1E084F3EEEC4D15D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		36A0C7D3DEC4472ADEA6801E /* StundenzettelPro.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StundenzettelPro.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -30,6 +42,7 @@
 		4B6713F766D63AB6BFC6A315 /* MikrofonKnopf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MikrofonKnopf.swift; sourceTree = "<group>"; };
 		4DF12D8C8E3A63A40D215817 /* MeineEinteilungenAnsicht.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeineEinteilungenAnsicht.swift; sourceTree = "<group>"; };
 		5CFDACBEADBE8A494252400C /* EinstellungenAnsicht.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EinstellungenAnsicht.swift; sourceTree = "<group>"; };
+		700F0832215AB19292ED611B /* AblaufTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AblaufTests.swift; sourceTree = "<group>"; };
 		7730692A197DA4AEF567CC81 /* Bausteine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bausteine.swift; sourceTree = "<group>"; };
 		8B5941A212BC2E1A01A8121B /* Kern */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Kern; path = Kern; sourceTree = SOURCE_ROOT; };
 		91DBF616F2732921F0414ACF /* AnmeldeAnsicht.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnmeldeAnsicht.swift; sourceTree = "<group>"; };
@@ -48,6 +61,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		28C240AD298176E952AC7133 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				700F0832215AB19292ED611B /* AblaufTests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
 		6FC5E81C840AEFD8BDBA3C64 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -61,6 +82,7 @@
 			children = (
 				D93881889645FDD158C0BCAD /* App */,
 				6FC5E81C840AEFD8BDBA3C64 /* Packages */,
+				28C240AD298176E952AC7133 /* UITests */,
 				AEC7D997BD4E42B8A583D435 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -69,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				36A0C7D3DEC4472ADEA6801E /* StundenzettelPro.app */,
+				26856AF7F5DD2A647E02AC8B /* StundenzettelProUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -122,6 +145,24 @@
 			productReference = 36A0C7D3DEC4472ADEA6801E /* StundenzettelPro.app */;
 			productType = "com.apple.product-type.application";
 		};
+		7850D6E3CCEFBF595B9AC223 /* StundenzettelProUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 64C2A4C73D50527C7C9E0C8F /* Build configuration list for PBXNativeTarget "StundenzettelProUITests" */;
+			buildPhases = (
+				3DBF3D8FC72FD05226821FDE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5C1BF0CE0DDA68B76164393F /* PBXTargetDependency */,
+			);
+			name = StundenzettelProUITests;
+			packageProductDependencies = (
+			);
+			productName = StundenzettelProUITests;
+			productReference = 26856AF7F5DD2A647E02AC8B /* StundenzettelProUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -134,6 +175,10 @@
 					41DB4B844BD76DC90DAE6F7F = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
+					};
+					7850D6E3CCEFBF595B9AC223 = {
+						DevelopmentTeam = "";
+						TestTargetID = 41DB4B844BD76DC90DAE6F7F;
 					};
 				};
 			};
@@ -155,6 +200,7 @@
 			projectRoot = "";
 			targets = (
 				41DB4B844BD76DC90DAE6F7F /* StundenzettelPro */,
+				7850D6E3CCEFBF595B9AC223 /* StundenzettelProUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -187,7 +233,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3DBF3D8FC72FD05226821FDE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				38498BA732CA7E27B9BD8444 /* AblaufTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5C1BF0CE0DDA68B76164393F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 41DB4B844BD76DC90DAE6F7F /* StundenzettelPro */;
+			targetProxy = EB6A47F15D3EF3056191C0C3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2166A0B269E7D2D680CC6508 /* Release */ = {
@@ -335,6 +397,23 @@
 			};
 			name = Release;
 		};
+		A92B349384E3B3AFA8F9E537 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.stundenzettelpro.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StundenzettelPro;
+			};
+			name = Debug;
+		};
 		C07BE6021DDD8CEF3F778282 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -355,9 +434,35 @@
 			};
 			name = Debug;
 		};
+		F0A347F21706023C673CF450 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.stundenzettelpro.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StundenzettelPro;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		64C2A4C73D50527C7C9E0C8F /* Build configuration list for PBXNativeTarget "StundenzettelProUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A92B349384E3B3AFA8F9E537 /* Debug */,
+				F0A347F21706023C673CF450 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		A9EC66EEE1EA1017F6E1895E /* Build configuration list for PBXProject "StundenzettelPro" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

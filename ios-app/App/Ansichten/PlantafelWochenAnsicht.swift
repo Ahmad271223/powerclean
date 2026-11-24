@@ -35,6 +35,7 @@ struct PlantafelWochenAnsicht: View {
         .navigationTitle("Plantafel")
         .navigationDestination(for: Einsatz.self) { e in EinsatzDetailAnsicht(einsatzId: e.id) }
         .task(id: montag) { await laden() }
+        .onAppear { if tafel != nil { Task { await laden() } } }
     }
 
     private var wochenwahl: some View {
@@ -45,7 +46,9 @@ struct PlantafelWochenAnsicht: View {
             .buttonStyle(.bordered)
             .accessibilityLabel("Vorige Woche")
             VStack(spacing: 2) {
-                Text(Kalender.wochenTitel(montag)).font(.headline.monospacedDigit())
+                let titel = Kalender.wochenTitel(montag).components(separatedBy: " · ")
+                Text(titel[0]).font(.title3.bold())
+                Text(titel.last ?? "").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                 if Kalender.iso(montag) != Kalender.iso(Kalender.montag(von: Date())) {
                     Button("Diese Woche") { montag = Kalender.montag(von: Date()) }.font(.subheadline)
                 }

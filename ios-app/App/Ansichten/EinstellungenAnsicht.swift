@@ -25,8 +25,11 @@ struct EinstellungenAnsicht: View {
             }
         }
         .navigationTitle("Einstellungen")
-        .confirmationDialog("Wirklich abmelden?", isPresented: $abmeldenFragen, titleVisibility: .visible) {
+        .alert("Wirklich abmelden?", isPresented: $abmeldenFragen) {
+            Button("Abbrechen", role: .cancel) {}
             Button("Abmelden", role: .destructive) { sitzung.abmelden() }
+        } message: {
+            Text("Zum Wiederkommen brauchst du E-Mail und Passwort.")
         }
     }
 }
