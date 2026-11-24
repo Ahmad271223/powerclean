@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Bell, CalendarRange, Check, CheckCircle2, Clock, MapPin, Navigation, Play, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
@@ -71,6 +71,19 @@ function Abschnitt({ titel, liste, heute, leer }) {
 /** Mein Einsatzplan (Mitarbeiter und Vorarbeiter): heute, morgen, diese Woche, nächste Woche – nie die Einsätze anderer. */
 export default function MeinEinsatzplanPage() {
   const [d, setD] = useState(null);
+  // Aus einer Push-Nachricht geöffnet: /einsaetze?einsatz=<id> → genau diesen Einsatz oben zeigen
+  const [params] = useSearchParams();
+  const zielId = params.get('einsatz');
+  const [ziel, setZiel] = useState(null);
+  useEffect(() => {
+    if (!zielId) { setZiel(null); return; }
+    api.get(`/api/einsatzplan/${encodeURIComponent(zielId)}`).then(async (r) => {
+      let e = r.einsatz;
+      if (e.status === 'geplant' && !e.quittung?.gelesen) e = (await api.post(`/api/einsatzplan/${e.id}/gelesen`).catch(() => r)).einsatz;
+      setZiel(e);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }).catch((err) => toast.error(err.message));
+  }, [zielId]);
   const [erinnerung, setErinnerung] = useState(null);
   const laden = useCallback(() => {
     api.get('/api/einsatzplan/meine?tage=28').then(setD).catch((err) => toast.error(err.message));
@@ -92,8 +105,14 @@ export default function MeinEinsatzplanPage() {
   return (
     <Layout title="Meine Einsätze" subtitle="Wo du wann eingeplant bist – mit Adresse, Zeiten und Hinweisen vom Büro. Zeiten anderer Mitarbeiter siehst du hier nie.">
       {erinnerung && <p className="text-[13px] text-[#6E6E73] mb-4 flex items-center gap-1.5"><Bell size={14} /> Jeden Abend um {erinnerung.uhrzeit} Uhr bekommst du eine Erinnerung für den nächsten Tag{erinnerung.email ? ' (in der App und per E-Mail)' : ' (in der App)'}.</p>}
-      {nichts ? <Card><Empty icon={CalendarRange} title="Noch nichts eingeplant" text="Sobald das Büro dich einteilt, stehen deine Einsätze hier." /></Card> : (
+      {nichts && !ziel ? <Card><Empty icon={CalendarRange} title="Noch nichts eingeplant" text="Sobald das Büro dich einteilt, stehen deine Einsätze hier." /></Card> : (
         <div className="space-y-6">
+          {ziel && (
+            <section>
+              <h2 className="text-[17px] mb-2">Aus der Benachrichtigung{ziel.status === 'abgesagt' ? ' · abgesagt' : ''}</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3"><EinsatzKarte e={ziel} heute={heute} /></div>
+            </section>
+          )}
           <Abschnitt titel="Heute" liste={d.heute} heute={heute} leer="Heute kein Einsatz geplant." />
           <Abschnitt titel="Morgen" liste={d.morgen} heute={heute} leer="Morgen kein Einsatz geplant." />
           <Abschnitt titel="Diese Woche" liste={d.woche.filter((e) => e.date > heute && !d.morgen.some((m) => m.id === e.id))} heute={heute} leer="Keine weiteren Einsätze in dieser Woche." />

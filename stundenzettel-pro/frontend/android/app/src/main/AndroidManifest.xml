@@ -39,6 +39,8 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Push-Nachrichten (Android 13+ fragt einmal nach der Erlaubnis), z. B. "Neue Einteilung" -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Standort nur, wenn der Nutzer "Standort mitspeichern" einschaltet (Stempeluhr) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

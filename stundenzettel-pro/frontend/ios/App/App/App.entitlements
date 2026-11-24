@@ -5,6 +5,9 @@
 	<!-- Universal Links: QR-Codes und Einladungslinks des eigenen Servers öffnen die App.
 	     In Xcode unter Signing & Capabilities → "Associated Domains" hinzufügen; Domain anpassen.
 	     Der Server liefert /.well-known/apple-app-site-association (APPLE_TEAM_ID setzen). -->
+	<!-- Push-Nachrichten (APNs). Xcode setzt beim Verteilen (TestFlight/App Store) automatisch "production". -->
+	<key>aps-environment</key>
+	<string>development</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:pro.deine-domain.de</string>

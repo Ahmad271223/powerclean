@@ -1,6 +1,7 @@
 /** Angemeldeter Nutzer, Firma und Lizenzstand für die ganze Oberfläche – mit Offline-Gedächtnis fürs Stempeln ohne Netz. */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, hasToken, onUnauthorized, setToken } from './api';
+import { pushAbmelden, pushStarten } from './push';
 
 const AuthContext = createContext(null);
 const SESSION_KEY = 'szpro-session';
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    pushAbmelden();   // vor dem Löschen des Tokens: Gerät beim Server abmelden
     setToken(null);
     sessionMerken(null);
     setState({ ready: true, user: null, firma: null, plan: null, offline: false });
@@ -44,6 +46,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => onUnauthorized(logout), [logout]);
+  // Push (nur in der App): nach der Anmeldung Erlaubnis erfragen und Gerät melden
+  useEffect(() => { if (state.user?.id) pushStarten(); }, [state.user?.id]);
   useEffect(() => {
     const online = () => { if (hasToken()) refresh(); };
     window.addEventListener('online', online);

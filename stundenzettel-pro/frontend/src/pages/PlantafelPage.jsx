@@ -10,6 +10,18 @@ import { useAuth } from '../lib/auth';
 import { addDays, fmtDate, fmtDateShort, fromKey, mondayOf, toKey, WEEKDAYS_DE } from '../lib/dates';
 import { cn } from '../lib/utils';
 
+/** Stand beim Mitarbeiter: bestätigt > gelesen > Push zugestellt > unterwegs/fehlgeschlagen/ohne App (kurz für die Zelle, lang für den Dialog). */
+export function standBeimMitarbeiter(e, lang = false) {
+  if (!e || e.status !== 'geplant') return '';
+  const q = e.quittung || {};
+  if (q.bestaetigt) return lang ? 'vom Mitarbeiter bestätigt' : '✓ bestätigt';
+  if (q.gelesen) return lang ? 'vom Mitarbeiter gelesen' : 'gelesen';
+  const z = { zugestellt: ['zugestellt', 'Push zugestellt, noch nicht gelesen'], offen: ['wird gesendet', 'Push wird gesendet'],
+              fehlgeschlagen: ['⚠ nicht zugestellt', 'Push nicht zugestellt'], kein_geraet: ['ohne App', 'keine App mit Push angemeldet – bitte Bescheid geben'] }[e.zustellung];
+  if (z) return lang ? z[1] : z[0];
+  return lang ? 'noch nicht gelesen' : '';
+}
+
 const ANSICHTEN = [{ value: 'tag', label: 'Tag' }, { value: 'woche', label: 'Woche' }, { value: '2wochen', label: '2 Wochen' }, { value: 'monat', label: 'Monat' }];
 const TAGE_JE_ANSICHT = { tag: 1, woche: 7, '2wochen': 14, monat: 28 };
 const ABGLEICH_CLS = { freigegeben: 'bg-[#1B7F3B] text-white', passt: 'bg-[#E8F8EC] text-[#1B7F3B]', abweichung: 'bg-[#FFF4E5] text-[#B25E00]', fehlt: 'bg-[#FDE8E8] text-[#C41E3A]', offen: 'bg-black/[0.06] text-[#6E6E73]' };
@@ -173,7 +185,7 @@ export default function PlantafelPage() {
                                     className={cn('text-left rounded-lg px-1.5 py-1 leading-tight text-white shadow-sm', e.status === 'abgesagt' && 'opacity-40 line-through', e.status === 'geplant' && !e.freigabe && 'cursor-grab')} style={{ background: e.projekt.color || '#C41E3A' }}
                                     aria-label={`${e.projekt.name} ${e.start_time} bis ${e.end_time}`} title={`${e.projekt.name} · ${e.start_time}–${e.end_time}${e.note ? ` · ${e.note}` : ''}`}>
                                     <span className="block font-semibold truncate">{e.projekt.name}</span>
-                                    <span className="block text-[10px] opacity-90">{e.start_time}–{e.end_time}{e.date >= d.heute && e.status === 'geplant' ? (e.quittung?.bestaetigt ? ' · ✓ bestätigt' : e.quittung?.gelesen ? ' · gelesen' : '') : ''}{e.date < d.heute && e.abgleich ? ` · ${e.abgleich.status === 'freigegeben' ? '✓ frei' : e.abgleich.status === 'fehlt' ? '✗ Stempel' : e.abgleich.status === 'abweichung' ? '⚠ Abw.' : '✓'}` : ''}</span>
+                                    <span className="block text-[10px] opacity-90">{e.start_time}–{e.end_time}{e.date >= d.heute && standBeimMitarbeiter(e) ? ` · ${standBeimMitarbeiter(e)}` : ''}{e.date < d.heute && e.abgleich ? ` · ${e.abgleich.status === 'freigegeben' ? '✓ frei' : e.abgleich.status === 'fehlt' ? '✗ Stempel' : e.abgleich.status === 'abweichung' ? '⚠ Abw.' : '✓'}` : ''}</span>
                                   </button>
                                 ))}
                                 <button type="button" onClick={() => setDialog({ neu: { user_id: m.id, date: t, project_id: filter.projekt || '' } })} className="h-5 rounded-md text-[11px] text-[#A1A1A6] hover:text-[#C41E3A] hover:bg-black/[0.04]" aria-label={`Einsatz für ${m.name} am ${fmtDate(fromKey(t))} anlegen`}>+</button>
@@ -248,7 +260,7 @@ function EinsatzDialog({ offen, onClose, daten, onChanged }) {
   const vergangen = e && e.date < daten.heute;
   const gesperrt = !!e?.freigabe;
   return (
-    <Sheet open={!!offen} onOpenChange={(o) => { if (!o) onClose(); }} title={e ? `Einsatz ${fmtDate(fromKey(e.date))}` : 'Einsatz anlegen'} subtitle={e ? `${e.mitarbeiter} · ${e.projekt.name}${e.status === 'abgesagt' ? ' · abgesagt' : e.quittung?.bestaetigt ? ' · vom Mitarbeiter bestätigt' : e.quittung?.gelesen ? ' · vom Mitarbeiter gelesen' : ' · noch nicht gelesen'}` : 'Eine oder mehrere Personen, ein Tag oder ein Zeitraum mit Wochentagen.'} width="sm:max-w-2xl">
+    <Sheet open={!!offen} onOpenChange={(o) => { if (!o) onClose(); }} title={e ? `Einsatz ${fmtDate(fromKey(e.date))}` : 'Einsatz anlegen'} subtitle={e ? `${e.mitarbeiter} · ${e.projekt.name}${e.status === 'abgesagt' ? ' · abgesagt' : ` · ${standBeimMitarbeiter(e, true)}`}` : 'Eine oder mehrere Personen, ein Tag oder ein Zeitraum mit Wochentagen.'} width="sm:max-w-2xl">
       <form onSubmit={speichern} className="space-y-4">
         {gesperrt && <div className="rounded-2xl bg-[#E8F8EC] text-[#1B7F3B] px-4 py-3 text-[13px]">Freigegeben von {e.freigabe.von_name}: {e.freigabe.start_time}–{e.freigabe.end_time}, {stunden(e.freigabe.net_minutes)} h{e.freigabe.grund ? ` – „${e.freigabe.grund}“` : ''}. Zum Ändern zuerst die Freigabe zurücknehmen.</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
