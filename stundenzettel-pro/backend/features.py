@@ -16,6 +16,7 @@ STANDARD = {
     "projektakte_async": config.DB_MODE != "memory",   # Projektakte im Hintergrund erzeugen (Tests: synchron)
     "ki": False,                  # KI-Entwürfe (Stufe H) – aus, bis ein Schlüssel hinterlegt und die Freigabe geregelt ist
     "lager": False,               # Lagerverwaltung (nicht gebaut)
+    "sprachplanung": False,       # iPhone-App: Einteilung per Sprache (Vorschlag, Freigabe durch den Planer) – aus, bis freigegeben
 }
 BESCHREIBUNG = {
     "chat": "Nachrichten in Projekten, mit Bietern und zwischen Firmen",
@@ -23,6 +24,7 @@ BESCHREIBUNG = {
     "projektakte_async": "Projektakten im Hintergrund erzeugen (mit Fortschritt)",
     "ki": "KI-Entwürfe für Angebote und Belege (nur mit Freigabe durch Menschen)",
     "lager": "Lagerbestände, Ein-/Ausgang, Inventur",
+    "sprachplanung": "Einteilung per Sprache in der iPhone-App (nur mit Bestätigung durch den Planer)",
 }
 
 

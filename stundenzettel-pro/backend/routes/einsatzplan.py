@@ -156,6 +156,14 @@ def _abgleich(e: dict, eintraege: list[dict], heute: str) -> dict:
             "start_time": start, "end_time": ende, "net_minutes": netto, "spaet_minuten": max(0, spaet), "frueher_minuten": max(0, frueh)}
 
 
+def _quittung(e: dict) -> dict:
+    """Lesebestätigung des Mitarbeiters – gilt nur für die aktuelle Version (nach einer Planänderung muss neu bestätigt werden)."""
+    q = e.get("quittung") or {}
+    aktuell = q.get("version") == e.get("version", 1)
+    return {"gelesen": aktuell and bool(q.get("gelesen_at")), "bestaetigt": aktuell and bool(q.get("bestaetigt_at")),
+            "gelesen_at": q.get("gelesen_at") if aktuell else None, "bestaetigt_at": q.get("bestaetigt_at") if aktuell else None}
+
+
 async def _ansicht(e: dict, user: dict, planer: bool, projekte: dict, namen: dict, kolonnen: dict, heute: str) -> dict:
     p = projekte.get(e["project_id"]) or {}
     aus = {k: e.get(k) for k in ("id", "project_id", "date", "start_time", "end_time", "pause_minutes", "planned_minutes", "address", "note", "taetigkeit", "kolonne_id", "status", "version", "freigabe", "serie_id", "updated_at")}
@@ -166,6 +174,7 @@ async def _ansicht(e: dict, user: dict, planer: bool, projekte: dict, namen: dic
     else:
         aus["abgleich"] = {"status": "offen", "hinweise": []}
     aus["abgleich"]["status_name"] = ABGLEICH_NAMEN.get(aus["abgleich"]["status"], aus["abgleich"]["status"])
+    aus["quittung"] = _quittung(e)
     if planer:
         aus["user_id"] = e["user_id"]
         aus["mitarbeiter"] = namen.get(e["user_id"], "")
@@ -627,3 +636,66 @@ async def stundenzettel_pdf(project_id: str, von: str, bis: str, user: dict = De
     pdf = pdfs.freigegebene_zeiten_pdf(firma, p, von, bis, frei, len(alle) - len(frei), namen)
     await protokollieren(user, "einsatz.stundenzettel_pdf", p.get("name", ""), details={"von": von, "bis": bis, "freigegeben": len(frei), "offen": len(alle) - len(frei)})
     return Response(content=pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="Projekt-Stundenzettel_{von}_{bis}.pdf"'})
+
+
+# ---------------------------------------------------------------- Einzelner Einsatz und Lesebestätigung (iPhone-App, Schritt 1)
+# Bewusst am Dateiende: GET /{einsatz_id} muss nach /meine, /kolonnen, /abgleich und /stundenzettel.pdf registriert sein.
+
+async def _eigene_oder_planer(user: dict, einsatz_id: str) -> tuple[dict, bool]:
+    """Planer sehen jeden Einsatz der Firma, Mitarbeiter nur eigene (fremde → 404, damit IDs nicht erraten werden können)."""
+    e = await _einsatz(user, einsatz_id)
+    planer = hat_recht(user, "plantafel")
+    if not planer and e["user_id"] != user["id"]:
+        raise HTTPException(404, "Einsatz nicht gefunden.")
+    return e, planer
+
+
+async def _detail(e: dict, user: dict, planer: bool) -> dict:
+    projekte, namen, kolonnen = await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"])
+    v = await _ansicht(e, user, planer, projekte, namen, kolonnen, lokal_jetzt().date().isoformat())
+    adresse = v["projekt"]["address"]
+    v["navigation"] = f"https://www.google.com/maps/search/?api=1&query={adresse.replace(' ', '+')}" if adresse else ""
+    k = kolonnen.get(e.get("kolonne_id"))
+    v["kollegen"] = [namen.get(i, "") for i in (k.get("user_ids") or []) if i != e["user_id"]] if k else []
+    return v
+
+
+@router.get("/{einsatz_id}")
+async def einsatz_lesen(einsatz_id: str, user: dict = Depends(aktueller_nutzer)):
+    """Ein Einsatz mit Projekt, Adresse, Navigation, Kollegen und Lesebestätigung (Ziel des Antippens einer Push-Nachricht)."""
+    e, planer = await _eigene_oder_planer(user, einsatz_id)
+    return {"einsatz": await _detail(e, user, planer)}
+
+
+async def _quittieren(einsatz_id: str, user: dict, bestaetigen: bool) -> dict:
+    e = await _einsatz(user, einsatz_id)
+    if e["user_id"] != user["id"]:
+        # Nur die eingeplante Person selbst quittiert – auch Planer nicht stellvertretend
+        if hat_recht(user, "plantafel"):
+            raise HTTPException(403, "Nur die eingeplante Person kann den Einsatz bestätigen.")
+        raise HTTPException(404, "Einsatz nicht gefunden.")
+    if bestaetigen and e.get("status") != "geplant":
+        raise HTTPException(409, "Dieser Einsatz ist abgesagt und lässt sich nicht bestätigen.")
+    version = e.get("version", 1)
+    q = e.get("quittung") or {}
+    if q.get("version") != version:
+        q = {"version": version}
+    jetzt = jetzt_iso()
+    q.setdefault("gelesen_at", jetzt)
+    if bestaetigen:
+        q.setdefault("bestaetigt_at", jetzt)
+    await db().einsaetze.update_one({"id": e["id"]}, {"$set": {"quittung": q}})
+    await protokollieren(user, "einsatz.bestaetigt" if bestaetigen else "einsatz.gelesen", e["project_id"], details={"einsatz_id": e["id"], "version": version})
+    return {"einsatz": await _detail({**e, "quittung": q}, user, hat_recht(user, "plantafel"))}
+
+
+@router.post("/{einsatz_id}/gelesen")
+async def einsatz_gelesen(einsatz_id: str, user: dict = Depends(aktueller_nutzer)):
+    """Mitarbeiter hat die Einteilung geöffnet (gilt für die aktuelle Version)."""
+    return await _quittieren(einsatz_id, user, False)
+
+
+@router.post("/{einsatz_id}/bestaetigen")
+async def einsatz_bestaetigen(einsatz_id: str, user: dict = Depends(aktueller_nutzer)):
+    """Mitarbeiter bestätigt die Einteilung ausdrücklich (setzt auch „gelesen“). Nach einer Planänderung ist sie wieder offen."""
+    return await _quittieren(einsatz_id, user, True)
