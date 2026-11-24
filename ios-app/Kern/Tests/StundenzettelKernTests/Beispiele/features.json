@@ -1,0 +1,18 @@
+{
+ "features": {
+  "chat": true,
+  "berichtsvorlagen": true,
+  "projektakte_async": false,
+  "ki": false,
+  "lager": false,
+  "sprachplanung": true
+ },
+ "beschreibung": {
+  "chat": "Nachrichten in Projekten, mit Bietern und zwischen Firmen",
+  "berichtsvorlagen": "Berichtsvorlagen und Regieberichte",
+  "projektakte_async": "Projektakten im Hintergrund erzeugen (mit Fortschritt)",
+  "ki": "KI-Entwürfe für Angebote und Belege (nur mit Freigabe durch Menschen)",
+  "lager": "Lagerbestände, Ein-/Ausgang, Inventur",
+  "sprachplanung": "Einteilung per Sprache in der iPhone-App (nur mit Bestätigung durch den Planer)"
+ }
+}

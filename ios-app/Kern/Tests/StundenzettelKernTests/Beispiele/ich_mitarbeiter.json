@@ -1,0 +1,72 @@
+{
+ "user": {
+  "id": "26a8232a-ef78-4590-bd2f-23649891e5ac",
+  "firma_id": "d122b600-cdf7-451d-a1d1-4cfbe5e3d530",
+  "email": "nils@beispiel.de",
+  "name": "Nils Becker",
+  "role": "mitarbeiter",
+  "personalnummer": "2",
+  "phone": "",
+  "notes": "",
+  "active": true,
+  "weekly_hours": 0,
+  "vacation_days": 0,
+  "created_at": "2026-11-24T16:36:47.895534+00:00",
+  "invited_by": "0750d07e-c5e7-4604-bc04-d746479960d5",
+  "accepted_at": "2026-11-24T16:36:47.910097+00:00",
+  "eingeladen": false,
+  "rolle_name": "Mitarbeiter",
+  "rechte": {
+   "projekte": false,
+   "personal": false,
+   "lohn": false,
+   "rechnungen": false,
+   "angebote": false,
+   "plantafel": false,
+   "kalkulation": false,
+   "kostensaetze": false
+  }
+ },
+ "firma": {
+  "name": "Müller Bau GmbH",
+  "owner": "Karl Chef",
+  "street": "",
+  "zip_code": "",
+  "city": "",
+  "phone": "",
+  "email": "chef@beispiel.de",
+  "website": "",
+  "logo": null,
+  "logo_w": 0,
+  "logo_h": 0,
+  "stamp": null,
+  "stamp_w": 0,
+  "stamp_h": 0,
+  "stamp_on_sheet": true,
+  "stamp_scale": 100,
+  "bundesland": "",
+  "auto_pause": false,
+  "arbzg_pruefung": true,
+  "sperre_tage_mitarbeiter": 365,
+  "workdays": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ],
+  "art": "betrieb",
+  "id": "d122b600-cdf7-451d-a1d1-4cfbe5e3d530",
+  "created_at": "2026-11-24T16:36:47.865331+00:00"
+ },
+ "plan": {
+  "status": "test",
+  "stufe": "firma",
+  "test_bis": "2026-12-08T16:36:47.865338+00:00",
+  "nutzer_max": 0,
+  "gueltig_bis": null,
+  "tage_rest": 13,
+  "schreiben": true,
+  "hinweis": "Testphase: noch 13 Tage."
+ }
+}

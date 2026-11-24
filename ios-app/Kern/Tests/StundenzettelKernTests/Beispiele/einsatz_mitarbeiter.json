@@ -1,0 +1,44 @@
+{
+ "einsatz": {
+  "id": "ce3b1180-7145-494a-bc47-018267e5daf2",
+  "project_id": "91fde58d-0c6f-4b86-9e56-da64c462acde",
+  "date": "2026-11-24",
+  "start_time": "07:00",
+  "end_time": "16:00",
+  "pause_minutes": 30,
+  "planned_minutes": 510,
+  "address": "Hauptstraße 5, 30159 Hannover",
+  "note": "Schlüssel beim Hausmeister",
+  "taetigkeit": "Fliesen Bad OG",
+  "kolonne_id": "987271e7-8d41-48df-88af-bb1797bedffa",
+  "status": "geplant",
+  "version": 1,
+  "freigabe": null,
+  "serie_id": "03e52a7e-6d40-41f8-94c5-1359dccc1197",
+  "updated_at": "2026-11-24T16:36:47.999782+00:00",
+  "projekt": {
+   "id": "91fde58d-0c6f-4b86-9e56-da64c462acde",
+   "name": "Badsanierung Müller",
+   "color": "#C41E3A",
+   "address": "Hauptstraße 5, 30159 Hannover"
+  },
+  "kolonne": "Trupp Bad",
+  "abgleich": {
+   "status": "fehlt",
+   "hinweise": [
+    "Keine Stempelung an diesem Tag – Arbeitszeit prüfen."
+   ],
+   "status_name": "Keine Stempelung"
+  },
+  "quittung": {
+   "gelesen": true,
+   "bestaetigt": true,
+   "gelesen_at": "2026-11-24T16:36:48.002487+00:00",
+   "bestaetigt_at": "2026-11-24T16:36:48.002487+00:00"
+  },
+  "navigation": "https://www.google.com/maps/search/?api=1&query=Hauptstraße+5,+30159+Hannover",
+  "kollegen": [
+   "Tom Wagner"
+  ]
+ }
+}
