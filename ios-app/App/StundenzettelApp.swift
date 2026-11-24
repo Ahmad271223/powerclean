@@ -49,6 +49,19 @@ struct Hauptansicht: View {
             NavigationStack { EinstellungenAnsicht() }
                 .tabItem { Label("Einstellungen", systemImage: "gearshape") }
         }
+        .kleineTabLeiste()
+    }
+}
+
+private extension View {
+    /// iOS 26: Tab-Leiste schrumpft beim Scrollen nach unten und kommt beim Zurückscrollen wieder. Ältere iOS: unverändert.
+    @ViewBuilder
+    func kleineTabLeiste() -> some View {
+        if #available(iOS 26.0, *) {
+            self.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            self
+        }
     }
 }
 

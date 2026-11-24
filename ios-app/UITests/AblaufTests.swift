@@ -40,13 +40,16 @@ final class AblaufTests: XCTestCase {
         let bis = Date().addingTimeInterval(10)
         while offen.count != vorher - 1 && Date() < bis { RunLoop.current.run(until: Date().addingTimeInterval(0.3)) }
         XCTAssertEqual(offen.count, vorher - 1)
+        // wie in der bisherigen App: vergangene Einsätze unter „Letzte Tage“ (Demo: Montag dieser Woche)
+        XCTAssertTrue(app.staticTexts["Letzte Tage"].exists || app.swipeUntil(app.staticTexts["Letzte Tage"], versuche: 6))
+        bild("1b-letzte-tage")
         abmelden()
     }
 
     func test_02_chef_sieht_plantafel_und_mikrofon() throws {
         anmelden("karl@demo-bau.de", "demo-chef-2026")
         XCTAssertTrue(app.navigationBars["Plantafel"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'KW '")).firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'KW '")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Nils Becker'")).firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Tom Wagner: Urlaub"].exists || app.swipeUntil(app.staticTexts["Tom Wagner: Urlaub"]))
         bild("4-plantafel-woche")
@@ -59,7 +62,7 @@ final class AblaufTests: XCTestCase {
         app.buttons["Nächste Woche"].tap()
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Dachsanierung Schmidt'")).firstMatch.waitForExistence(timeout: 10))
         bild("6-plantafel-naechste-woche")
-        app.tabBars.buttons["Einstellungen"].tap()
+        tab("Einstellungen")
         app.buttons["Über / Lizenzen"].tap()
         XCTAssertTrue(app.staticTexts["Diese Version enthält keine fremden Bausteine."].waitForExistence(timeout: 5))
         bild("7-lizenzen")
@@ -86,13 +89,20 @@ final class AblaufTests: XCTestCase {
         app.buttons["Anmelden"].tap()
     }
 
+    /// Tab wählen – unter iOS 26 ist die Tab-Leiste nach dem Scrollen verkleinert: erst antippen, dann aufklappen.
+    private func tab(_ name: String) {
+        let knopf = app.tabBars.buttons[name]
+        if !knopf.waitForExistence(timeout: 2) { app.tabBars.buttons.firstMatch.tap() }
+        XCTAssertTrue(knopf.waitForExistence(timeout: 3), "Tab \(name) nicht gefunden")
+        knopf.tap()
+    }
+
     private func abmeldenFallsNoetig() {
-        let tab = app.tabBars.buttons["Einstellungen"]
-        if tab.waitForExistence(timeout: 4) { abmelden() }
+        if app.tabBars.firstMatch.waitForExistence(timeout: 4) { abmelden() }
     }
 
     private func abmelden() {
-        app.tabBars.buttons["Einstellungen"].tap()
+        tab("Einstellungen")
         app.buttons["Abmelden"].firstMatch.tap()
         let rueckfrage = app.alerts["Wirklich abmelden?"]
         XCTAssertTrue(rueckfrage.waitForExistence(timeout: 5))

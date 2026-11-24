@@ -108,6 +108,8 @@ public struct MeineEinsaetze: Codable, Sendable {
     public let woche: [Einsatz]
     public let naechsteWoche: [Einsatz]
     public let spaeter: [Einsatz]
+    /// Die letzten sieben Tage (wie „Letzte Tage“ in der bisherigen App).
+    public let vergangen: [Einsatz]
     public let stand: String?
 
     /// Rest der laufenden Woche nach heute, ohne morgen (der steht schon oben). Vergangene Tage der Woche fallen weg.

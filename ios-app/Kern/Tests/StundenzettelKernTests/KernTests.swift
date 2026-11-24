@@ -43,6 +43,7 @@ struct ModellTests {
         #expect(heute.stand.bestaetigt && heute.stand.stand == "bestätigt")
         #expect(heute.mitarbeiter == nil && heute.userId == nil)   // Mitarbeiter sehen keine fremden Namen
         #expect(m.morgen.count == 1 && m.morgen[0].stand == .offen)
+        #expect(m.vergangen.allSatisfy { $0.date < heute.date })
         #expect(!m.restDerWoche(heute: heute.date).contains { $0.id == heute.id || $0.id == m.morgen[0].id })
     }
 

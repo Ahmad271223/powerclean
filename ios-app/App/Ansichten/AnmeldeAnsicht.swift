@@ -16,10 +16,10 @@ struct AnmeldeAnsicht: View {
     var body: some View {
         @Bindable var sitzung = sitzung
         ScrollView {
-            VStack(spacing: 20) {
-                Image(systemName: "calendar.badge.clock").font(.system(size: 64)).foregroundStyle(Color.marke).padding(.top, 40)
-                Text("Stundenzettel Pro").font(.largeTitle.bold())
-                Text("Mit deinem Firmenkonto anmelden").font(.title3).foregroundStyle(.secondary)
+            VStack(spacing: 16) {
+                Image(systemName: "calendar.badge.clock").font(.system(size: 44)).foregroundStyle(Color.marke).padding(.top, 32)
+                Text("Stundenzettel Pro").font(.title.bold())
+                Text("Mit deinem Firmenkonto anmelden").font(.body).foregroundStyle(.secondary)
 
                 VStack(spacing: 12) {
                     TextField("E-Mail", text: $email)
@@ -64,7 +64,7 @@ struct AnmeldeAnsicht: View {
                 Text("Noch kein Passwort? Den Einladungslink aus der E-Mail deines Betriebs öffnen und dort ein Passwort festlegen.")
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            .padding(24)
+            .padding(20)
         }
         .scrollDismissesKeyboard(.interactively)
         .onAppear { serverZeigen = sitzung.serverAdresse.isEmpty }
@@ -88,11 +88,11 @@ struct AnmeldeAnsicht: View {
 }
 
 extension View {
-    /// Großes Eingabefeld (56 pt).
+    /// Eingabefeld (50 pt hoch).
     func eingabefeld() -> some View {
-        self.font(.title3)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 56)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        self.font(.body)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 50)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

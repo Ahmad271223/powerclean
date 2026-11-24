@@ -13,55 +13,55 @@ struct PlantafelWochenAnsicht: View {
     private var tage: [String] { Kalender.woche(ab: montag) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            wochenwahl
-            List {
+        List {
                 if let fehler {
                     Label(fehler, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
                 }
                 if let t = tafel {
                     ForEach(tage, id: \.self) { tag in tagesAbschnitt(tag, t) }
                 }
-            }
-            .listStyle(.insetGrouped)
-            .overlay { if tafel == nil && fehler == nil { ProgressView().controlSize(.large) } }
-            .refreshable { await laden() }
-            .safeAreaInset(edge: .bottom) {
-                if sitzung.sprachplanungAktiv {
-                    MikrofonKnopf().padding(.bottom, 8)
-                }
+        }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
+        .overlay { if tafel == nil && fehler == nil { ProgressView().controlSize(.large) } }
+        .refreshable { await laden() }
+        .safeAreaInset(edge: .bottom) {
+            if sitzung.sprachplanungAktiv {
+                MikrofonKnopf().padding(.bottom, 4)
             }
         }
         .navigationTitle("Plantafel")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { wochenwahl }
         .navigationDestination(for: Einsatz.self) { e in EinsatzDetailAnsicht(einsatzId: e.id) }
         .task(id: montag) { await laden() }
         .onAppear { if tafel != nil { Task { await laden() } } }
     }
 
-    private var wochenwahl: some View {
-        HStack(spacing: 12) {
-            Button { montag = Kalender.plus(-7, montag) } label: {
-                Image(systemName: "chevron.left").font(.title2.bold()).frame(width: 64, height: 56)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel("Vorige Woche")
-            VStack(spacing: 2) {
-                let titel = Kalender.wochenTitel(montag).components(separatedBy: " · ")
-                Text(titel[0]).font(.title3.bold())
-                Text(titel.last ?? "").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-                if Kalender.iso(montag) != Kalender.iso(Kalender.montag(von: Date())) {
-                    Button("Diese Woche") { montag = Kalender.montag(von: Date()) }.font(.subheadline)
+    /// Woche blättern direkt in der Navigationsleiste (kein eigener Kopfbereich). Antippen des Titels springt zur laufenden Woche.
+    @ToolbarContentBuilder
+    private var wochenwahl: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button { montag = Kalender.plus(-7, montag) } label: { Image(systemName: "chevron.left").font(.headline) }
+                .accessibilityLabel("Vorige Woche")
+        }
+        ToolbarItem(placement: .principal) {
+            let titel = Kalender.wochenTitel(montag).components(separatedBy: " · ")
+            let andereWoche = Kalender.iso(montag) != Kalender.iso(Kalender.montag(von: Date()))
+            Button { montag = Kalender.montag(von: Date()) } label: {
+                VStack(spacing: 0) {
+                    Text(titel[0]).font(.headline)
+                    Text(andereWoche ? "\(titel.last ?? "") · zurück zu heute" : (titel.last ?? "")).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
-            .frame(maxWidth: .infinity)
-            Button { montag = Kalender.plus(7, montag) } label: {
-                Image(systemName: "chevron.right").font(.title2.bold()).frame(width: 64, height: 56)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel("Nächste Woche")
+            .buttonStyle(.plain)
+            .disabled(!andereWoche)
+            .accessibilityLabel(andereWoche ? "Zur laufenden Woche" : titel.joined(separator: ", "))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { montag = Kalender.plus(7, montag) } label: { Image(systemName: "chevron.right").font(.headline) }
+                .accessibilityLabel("Nächste Woche")
+        }
     }
 
     @ViewBuilder
@@ -84,10 +84,10 @@ struct PlantafelWochenAnsicht: View {
             }
         } header: {
             HStack {
-                Text(Kalender.kurz(tag)).font(.title3.bold()).foregroundStyle(tag == t.heute ? Color.marke : .primary)
-                if tag == t.heute { Text("heute").font(.subheadline.bold()).foregroundStyle(Color.marke) }
+                Text(Kalender.kurz(tag)).font(.headline).foregroundStyle(tag == t.heute ? Color.marke : .primary)
+                if tag == t.heute { Text("heute").font(.caption.bold()).foregroundStyle(Color.marke) }
                 Spacer()
-                if !einsaetze.isEmpty { Text("\(einsaetze.filter { !$0.abgesagt }.count) eingeteilt").font(.subheadline) }
+                if !einsaetze.isEmpty { Text("\(einsaetze.filter { !$0.abgesagt }.count) eingeteilt").font(.caption) }
             }
             .textCase(nil)
         }

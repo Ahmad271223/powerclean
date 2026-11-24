@@ -20,13 +20,16 @@ struct MeineEinteilungenAnsicht: View {
                 abschnitt("Diese Woche", d.restDerWoche(heute: heute))
                 abschnitt("Nächste Woche", d.naechsteWoche)
                 abschnitt("Später", d.spaeter)
+                abschnitt("Letzte Tage", d.vergangen.reversed())
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
         .overlay {
             if daten == nil && fehler == nil { ProgressView().controlSize(.large) }
         }
         .navigationTitle("Meine Einsätze")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Einsatz.self) { e in EinsatzDetailAnsicht(einsatzId: e.id) }
         .refreshable { await laden() }
         .task { await laden() }
@@ -44,7 +47,7 @@ struct MeineEinteilungenAnsicht: View {
                     NavigationLink(value: e) { EinsatzZeile(einsatz: e, mitDatum: mitDatum) }
                 }
             } header: {
-                Text(titel).font(.title3.bold()).foregroundStyle(.primary).textCase(nil)
+                Text(titel).font(.headline).foregroundStyle(.primary).textCase(nil)
             }
         }
     }

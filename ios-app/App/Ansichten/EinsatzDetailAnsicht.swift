@@ -20,11 +20,11 @@ struct EinsatzDetailAnsicht: View {
     var body: some View {
         ScrollView {
             if let e = einsatz {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 14) {
                     kopf(e)
                     if e.abgesagt {
                         Label("Dieser Einsatz wurde abgesagt.", systemImage: "xmark.octagon.fill")
-                            .font(.title3.bold()).foregroundStyle(.red)
+                            .font(.headline).foregroundStyle(.red)
                     }
                     angaben(e)
                     if !e.ort.isEmpty {
@@ -33,7 +33,7 @@ struct EinsatzDetailAnsicht: View {
                     }
                     bestaetigung(e)
                 }
-                .padding(20)
+                .padding(16)
             } else if fehler == nil {
                 ProgressView().controlSize(.large).padding(.top, 80)
             }
@@ -48,16 +48,16 @@ struct EinsatzDetailAnsicht: View {
     }
 
     private func kopf(_ e: Einsatz) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let name = e.mitarbeiter { Text(name).font(.title3).foregroundStyle(.secondary) }
-            Text(e.projekt.name).font(.largeTitle.bold())
-            Text(Kalender.lang(e.date)).font(.title3)
-            Text(e.zeitraum).font(.title2.weight(.semibold).monospacedDigit())
+        VStack(alignment: .leading, spacing: 3) {
+            if let name = e.mitarbeiter { Text(name).font(.subheadline).foregroundStyle(.secondary) }
+            Text(e.projekt.name).font(.title2.bold())
+            Text(Kalender.lang(e.date)).font(.body)
+            Text(e.zeitraum).font(.title3.weight(.semibold).monospacedDigit())
         }
     }
 
     private func angaben(_ e: Einsatz) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             if !e.ort.isEmpty { zeile("Adresse", e.ort, "mappin.and.ellipse") }
             if let p = e.pauseMinutes, p > 0 { zeile("Pause", "\(p) Minuten", "cup.and.saucer") }
             if let t = e.taetigkeit, !t.isEmpty { zeile("Tätigkeit", t, "hammer") }
@@ -66,18 +66,18 @@ struct EinsatzDetailAnsicht: View {
             if let kollegen = e.kollegen, !kollegen.isEmpty { zeile("Mit dabei", kollegen.joined(separator: ", "), "person.2") }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func zeile(_ titel: String, _ text: String, _ symbol: String) -> some View {
         Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(titel).font(.subheadline).foregroundStyle(.secondary)
-                Text(text).font(.title3)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(titel).font(.caption).foregroundStyle(.secondary)
+                Text(text).font(.body)
             }
         } icon: {
-            Image(systemName: symbol).font(.title3).foregroundStyle(Color.marke)
+            Image(systemName: symbol).font(.body).foregroundStyle(Color.marke)
         }
     }
 
@@ -86,9 +86,9 @@ struct EinsatzDetailAnsicht: View {
         let q = e.stand
         if q.bestaetigt {
             Label("Bestätigt\(Kalender.zeitpunkt(q.bestaetigtAt).map { " am \($0)" } ?? "")", systemImage: "checkmark.circle.fill")
-                .font(.title3.bold()).foregroundStyle(.green)
-                .frame(maxWidth: .infinity, minHeight: 64)
-                .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                .font(.headline).foregroundStyle(.green)
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
         } else if eigene && !e.abgesagt {
             Button { Task { await bestaetigen() } } label: {
                 if sendet { ProgressView().tint(.white) } else { Label("Gelesen & bestätigt", systemImage: "checkmark") }
@@ -96,7 +96,7 @@ struct EinsatzDetailAnsicht: View {
             .buttonStyle(GrosserKnopf(art: .erfolg))
             .disabled(sendet)
         } else if !eigene {
-            HStack { Text("Stand beim Mitarbeiter:").font(.title3); QuittungsAbzeichen(quittung: q).font(.title3) }
+            HStack { Text("Stand beim Mitarbeiter:").font(.body); QuittungsAbzeichen(quittung: q) }
         }
     }
 

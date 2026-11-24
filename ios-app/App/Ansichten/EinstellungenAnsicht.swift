@@ -20,11 +20,12 @@ struct EinstellungenAnsicht: View {
             }
             Section {
                 Button("Abmelden", role: .destructive) { abmeldenFragen = true }
-                    .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
         .navigationTitle("Einstellungen")
+        .navigationBarTitleDisplayMode(.inline)
         .alert("Wirklich abmelden?", isPresented: $abmeldenFragen) {
             Button("Abbrechen", role: .cancel) {}
             Button("Abmelden", role: .destructive) { sitzung.abmelden() }
@@ -63,5 +64,6 @@ struct LizenzenAnsicht: View {
             }
         }
         .navigationTitle("Über / Lizenzen")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

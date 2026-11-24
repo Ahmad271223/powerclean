@@ -58,6 +58,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"          # XCUITest-API ist an den Main Actor gebunden; Swift-6-Strenge bringt hier nur Warnungen
         PRODUCT_BUNDLE_IDENTIFIER: de.stundenzettelpro.ios.uitests
         TEST_TARGET_NAME: StundenzettelPro
 schemes:

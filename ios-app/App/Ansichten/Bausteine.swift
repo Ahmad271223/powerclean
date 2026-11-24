@@ -6,7 +6,7 @@ extension Color {
     static let marke = Color(red: 0xC4 / 255, green: 0x1E / 255, blue: 0x3A / 255)
 }
 
-/// Großer Knopf für die Baustelle: mindestens 64 pt hoch, volle Breite, fette Schrift – mit Arbeitshandschuhen gut zu treffen.
+/// Großer Knopf für die Baustelle: mindestens 54 pt hoch (Apple-Minimum 44), volle Breite, fette Schrift – mit Arbeitshandschuhen gut zu treffen.
 struct GrosserKnopf: ButtonStyle {
     enum Art { case haupt, zweitrangig, erfolg }
     var art: Art = .haupt
@@ -14,12 +14,12 @@ struct GrosserKnopf: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.title3.weight(.bold))
+            .font(.headline)
             .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity, minHeight: 64)
+            .frame(maxWidth: .infinity, minHeight: 54)
             .padding(.horizontal, 16)
             .foregroundStyle(art == .zweitrangig ? Color.primary : Color.white)
-            .background(hintergrund.opacity(aktiv ? 1 : 0.4), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(hintergrund.opacity(aktiv ? 1 : 0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
             .contentShape(RoundedRectangle(cornerRadius: 16))
@@ -40,7 +40,7 @@ struct QuittungsAbzeichen: View {
 
     var body: some View {
         Label(quittung.stand.capitalized, systemImage: symbol)
-            .font(.subheadline.weight(.semibold))
+            .font(.footnote.weight(.semibold))
             .foregroundStyle(farbe)
             .accessibilityLabel("Stand: \(quittung.stand)")
     }
@@ -56,28 +56,28 @@ struct EinsatzZeile: View {
     var mitMitarbeiter = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 3) {
             if mitMitarbeiter, let name = einsatz.mitarbeiter {
                 Text(name).font(.headline)
             }
-            Text(einsatz.projekt.name).font(mitMitarbeiter ? .body.weight(.medium) : .title3.weight(.bold))
+            Text(einsatz.projekt.name).font(mitMitarbeiter ? .subheadline.weight(.medium) : .headline)
             HStack(spacing: 8) {
                 if mitDatum { Text(Kalender.kurz(einsatz.date)) }
                 Text(einsatz.zeitraum)
             }
-            .font(.body.monospacedDigit())
+            .font(.subheadline.monospacedDigit())
             if !einsatz.ort.isEmpty {
-                Label(einsatz.ort, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                Label(einsatz.ort, systemImage: "mappin.and.ellipse").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
             HStack {
                 if einsatz.abgesagt {
-                    Label("Abgesagt", systemImage: "xmark.octagon.fill").font(.subheadline.weight(.semibold)).foregroundStyle(.red)
+                    Label("Abgesagt", systemImage: "xmark.octagon.fill").font(.footnote.weight(.semibold)).foregroundStyle(.red)
                 } else {
                     QuittungsAbzeichen(quittung: einsatz.stand)
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 2)
         .strikethrough(einsatz.abgesagt)
         .accessibilityElement(children: .combine)
     }

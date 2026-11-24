@@ -8,9 +8,9 @@ struct MikrofonKnopf: View {
     var body: some View {
         Button { hinweis = true } label: {
             Image(systemName: "mic.fill")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 96, height: 96)
+                .frame(width: 76, height: 76)
                 .background(Color.marke, in: Circle())
                 .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
         }
