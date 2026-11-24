@@ -1,0 +1,59 @@
+# Xcode-Projekt der iPhone-App. Erzeugen nach Änderungen an dieser Datei:  cd ios-app && xcodegen
+# (XcodeGen, MIT-Lizenz, nur Entwicklungswerkzeug – nicht Teil der App). Das erzeugte StundenzettelPro.xcodeproj liegt mit im Repo.
+name: StundenzettelPro
+options:
+  bundleIdPrefix: de.stundenzettelpro
+  developmentLanguage: de
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  StundenzettelKern:
+    path: Kern
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+targets:
+  StundenzettelPro:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: StundenzettelKern
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.stundenzettelpro.ios
+        PRODUCT_NAME: StundenzettelPro
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Stundenzettel Pro
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: de
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        # Nur für die Entwicklung: http zu localhost/LAN-Servern; im Betrieb spricht die App ausschließlich https
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+schemes:
+  StundenzettelPro:
+    build:
+      targets:
+        StundenzettelPro: all
+    run:
+      config: Debug
+    archive:
+      config: Release
