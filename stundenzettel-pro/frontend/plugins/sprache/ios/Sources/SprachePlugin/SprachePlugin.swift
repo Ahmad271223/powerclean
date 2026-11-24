@@ -19,6 +19,7 @@ public class SprachePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "aufnahmeStarten", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "aufnahmeBeenden", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "aufnahmeAbbrechen", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "zerlegen", returnType: CAPPluginReturnPromise),
     ]
 
     private let kern = SprachKern()
@@ -60,6 +61,23 @@ public class SprachePlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve(["text": text, "engine": engine])
             } catch {
                 call.reject(SprachKern.klartext(error))
+            }
+        }
+    }
+
+    /// Satz → Felder mit Apples Modell auf dem Gerät (iOS 26). Nicht verfügbar → Fehler „NICHT_VERFUEGBAR“, dann zerlegt der Server.
+    @objc func zerlegen(_ call: CAPPluginCall) {
+        let text = (call.getString("text") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { call.reject("Kein Text."); return }
+        Task {
+            do {
+                if let felder = try await AppleKI.zerlegen(text) {
+                    call.resolve(["felder": felder, "quelle": "apple"])
+                } else {
+                    call.reject("Apple-KI ist auf diesem iPhone nicht verfügbar.", "NICHT_VERFUEGBAR")
+                }
+            } catch {
+                call.reject("Apple-KI konnte den Satz nicht zerlegen.", "NICHT_VERFUEGBAR")
             }
         }
     }
@@ -134,7 +152,7 @@ actor SprachKern {
         let apple = SFSpeechRecognizer(locale: Locale(identifier: "de-DE"))
         return ["plattform": "ios", "engine": "whisperkit", "modell": Self.passendesModell, "modellGroesseMB": Self.modellGroesseMB,
                 "modellGeladen": modellOrdner(Self.passendesModell) != nil, "mikrofon": mikrofon,
-                "rueckfallAufGeraet": apple?.supportsOnDeviceRecognition == true]
+                "rueckfallAufGeraet": apple?.supportsOnDeviceRecognition == true, "appleKI": AppleKI.verfuegbar]
     }
 
     /// Lädt das passende Modell (einmalig, mit Fortschritt 0…1) und hält es bereit.

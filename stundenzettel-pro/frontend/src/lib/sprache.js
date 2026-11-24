@@ -25,5 +25,11 @@ export const aufnahmeStarten = () => Sprache.aufnahmeStarten();
 export const aufnahmeBeenden = () => Sprache.aufnahmeBeenden();   // → { text, engine }
 export const aufnahmeAbbrechen = () => Sprache.aufnahmeAbbrechen().catch(() => {});
 
+/** Satz auf dem Gerät zerlegen (iPhone mit Apple-KI). Gibt { felder, quelle } oder null – dann zerlegt der Server. */
+export async function geraetZerlegen(text) {
+  if (!istNativ()) return null;
+  try { return await Sprache.zerlegen({ text }); } catch { return null; }
+}
+
 /** Fehlermeldung des Bausteins als Klartext (Capacitor liefert sie in err.message). */
 export const sprachFehler = (err) => (err && err.message) || 'Spracheingabe nicht möglich.';

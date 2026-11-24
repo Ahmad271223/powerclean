@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, Mic, RotateCcw, X } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Clock, HelpCircle, Loader2, MapPin, Mic, RotateCcw, Sparkles, Users, X } from 'lucide-react';
 import { Btn, Card, TextArea } from './ui';
-import { aufnahmeAbbrechen, aufnahmeBeenden, aufnahmeStarten, modellLaden, sprachFehler, spracheMoeglich, sprachStatus } from '../lib/sprache';
+import { api } from '../lib/api';
+import { aufnahmeAbbrechen, aufnahmeBeenden, aufnahmeStarten, geraetZerlegen, modellLaden, sprachFehler, spracheMoeglich, sprachStatus } from '../lib/sprache';
 
 const BEISPIEL = '„Teile Nils an die Hauptstraße ein, Projekt Badsanierung Müller, von 7 bis 16 Uhr die ganze Woche.“';
 
@@ -18,6 +19,8 @@ export default function SprachEinteilung({ onSchliessen }) {
   const [text, setText] = useState('');
   const [fehler, setFehler] = useState('');
   const [fragen, setFragen] = useState(false);          // Rückfrage vor dem ersten Download
+  const [vorschlag, setVorschlag] = useState(null);     // Einteilungsvorschlag vom Server (nichts gespeichert)
+  const [denkt, setDenkt] = useState(false);
   const start = useRef(0);
   const gedrueckt = useRef(false);
 
@@ -60,6 +63,17 @@ export default function SprachEinteilung({ onSchliessen }) {
       setText((alt) => (alt.trim() ? `${alt.trim()} ${r.text}` : r.text));
     } catch (err) { setFehler(sprachFehler(err)); }
     setPhase('bereit');
+  };
+
+  // Satz → Vorschlag: erst Apple-KI auf dem iPhone (Felder), sonst zerlegt der Server (Mistral mit Flag „ki“ oder feste Regeln)
+  const vorschlagHolen = async () => {
+    setDenkt(true); setFehler('');
+    try {
+      const geraet = await geraetZerlegen(text.trim());
+      const body = geraet ? { felder: geraet.felder, quelle: 'apple' } : { text: text.trim() };
+      setVorschlag((await api.post('/api/sprachplanung/vorschlag', body)).vorschlag);
+    } catch (err) { setFehler(err.message); }
+    setDenkt(false);
   };
 
   const groesse = stand?.modellGroesseMB ? `${stand.modellGroesseMB} MB` : '';
@@ -105,12 +119,53 @@ export default function SprachEinteilung({ onSchliessen }) {
 
       {fehler && <p className="text-[14px] text-[#C41E3A] my-2" role="alert">{fehler}</p>}
 
-      <TextArea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={nativ ? 'Hier erscheint, was erkannt wurde – zum Ändern antippen.' : 'Einteilung eintippen, z. B. Nils morgen von 7 bis 16 Uhr bei Müller'} className="text-[16px]" />
+      <TextArea rows={3} value={text} onChange={(e) => { setText(e.target.value); setVorschlag(null); }} placeholder={nativ ? 'Hier erscheint, was erkannt wurde – zum Ändern antippen.' : 'Einteilung eintippen, z. B. Nils morgen von 7 bis 16 Uhr bei Müller'} className="text-[16px]" />
       <div className="flex items-center justify-between gap-2 mt-2">
         <span className="text-[12px] text-[#86868B]">Die Aufnahme bleibt auf dem Gerät und wird nicht gespeichert. Gespeichert wird erst eine bestätigte Einteilung.</span>
         {text && <Btn size="sm" variant="ghost" onClick={() => setText('')}><RotateCcw size={14} /> Leeren</Btn>}
       </div>
-      {text.trim() && <p className="text-[13px] text-[#6E6E73] mt-2">Als Nächstes macht die App daraus einen Einteilungsvorschlag zum Prüfen und Bestätigen (in Arbeit).</p>}
+      {text.trim() && !vorschlag && (
+        <Btn className="w-full mt-3 h-12 text-[16px]" onClick={vorschlagHolen} loading={denkt} disabled={denkt}><Sparkles size={17} /> Vorschlag erstellen</Btn>
+      )}
+      {vorschlag && <VorschlagAnzeige v={vorschlag} />}
     </Card>
+  );
+}
+
+const QUELLEN = { apple: 'Apple-KI auf diesem iPhone', mistral: 'KI auf dem Server (Mistral)', regeln: 'festen Regeln (ohne KI)' };
+
+function Zeile({ icon: Icon, titel, unsicher, children }) {
+  return (
+    <div className="flex gap-3 py-2 border-b border-black/[0.06] last:border-0">
+      <Icon size={18} className="text-[#C41E3A] mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <div className="text-[12px] text-[#6E6E73] flex items-center gap-1.5">{titel}{unsicher && <span className="rounded-full bg-[#FFF4E5] text-[#B25E00] px-1.5 text-[11px] font-semibold">bitte prüfen</span>}</div>
+        <div className="text-[15px] font-medium">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Schritt 4: Vorschlag lesen (Rückfragen, Hinweise, Konflikte). Ändern und „Einteilen & benachrichtigen“ folgen in Schritt 5. */
+function VorschlagAnzeige({ v }) {
+  const u = new Set(v.unsicher || []);
+  const personen = (v.mitarbeiter || []).map((p) => p.name || `„${p.gesagt}“ – ?`).join(', ') || '–';
+  return (
+    <div className="mt-4 rounded-2xl bg-[#F5F5F7] p-3">
+      <div className="text-[12px] text-[#6E6E73] mb-1">Vorschlag · zerlegt mit {QUELLEN[v.quelle] || v.quelle}</div>
+      <Zeile icon={Users} titel="Mitarbeiter" unsicher={u.has('mitarbeiter')}>{personen}</Zeile>
+      <Zeile icon={Sparkles} titel="Projekt" unsicher={u.has('projekt')}>{v.projekt?.name || '–'}</Zeile>
+      <Zeile icon={MapPin} titel="Adresse" unsicher={u.has('standort')}>{v.adresse || '–'}</Zeile>
+      <Zeile icon={CalendarDays} titel="Tage" unsicher={u.has('zeitraum')}>{v.tage_text || '–'}</Zeile>
+      <Zeile icon={Clock} titel="Uhrzeit" unsicher={u.has('startzeit') || u.has('endzeit')}>{v.start_time}–{v.end_time} Uhr · {v.pause_minutes} Min. Pause</Zeile>
+      {(v.rueckfragen || []).map((r, i) => (
+        <div key={`r${i}`} className="mt-2 flex gap-2 text-[14px] text-[#1D1D1F]"><HelpCircle size={16} className="text-[#C41E3A] mt-0.5 shrink-0" /><span className="font-medium">{r.frage}</span></div>
+      ))}
+      {(v.konflikte || []).map((k, i) => (
+        <div key={`k${i}`} className="mt-2 flex gap-2 text-[14px] text-[#B25E00]"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{k.text}</div>
+      ))}
+      {(v.hinweise || []).map((h, i) => <p key={`h${i}`} className="mt-2 text-[13px] text-[#6E6E73]">{h}</p>)}
+      <p className="mt-3 text-[12px] text-[#86868B]">{v.hinweis} Prüfen, ändern und bestätigen kommt im nächsten Schritt.</p>
+    </div>
   );
 }

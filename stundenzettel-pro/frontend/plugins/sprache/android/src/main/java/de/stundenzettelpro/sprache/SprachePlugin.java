@@ -127,6 +127,12 @@ public class SprachePlugin extends Plugin {
         });
     }
 
+    /** KI auf dem Gerät gibt es hier (noch) nicht – den Satz zerlegt der Server. (Später: Gemini Nano.) */
+    @PluginMethod
+    public void zerlegen(PluginCall call) {
+        call.reject("KI auf dem Gerät ist auf Android nicht verfügbar.", "NICHT_VERFUEGBAR");
+    }
+
     @PluginMethod
     public void aufnahmeAbbrechen(PluginCall call) {
         getActivity().runOnUiThread(() -> {
