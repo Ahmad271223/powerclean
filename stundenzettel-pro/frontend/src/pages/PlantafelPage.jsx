@@ -113,7 +113,7 @@ export default function PlantafelPage() {
   return (
     <Layout wide title="Plantafel" subtitle="Projekte auf Mitarbeiter ziehen, Einsätze verschieben oder kopieren (Alt gedrückt halten oder Kopiermodus), vergangene Tage mit der Stempelung abgleichen und freigeben."
       action={<div className="flex gap-2">{sprachplanung && <Btn variant={sprechen ? 'primary' : 'soft'} size="sm" onClick={() => setSprechen((x) => !x)}><Mic size={15} /> Per Sprache</Btn>}<Btn variant="soft" size="sm" onClick={() => setKolonnenDialog(true)}><Users size={15} /> Kolonnen</Btn><Btn size="sm" onClick={() => setDialog({ neu: { date: tage[0] } })}><Plus size={16} /> Einsatz</Btn></div>}>
-      {sprachplanung && sprechen && <SprachEinteilung onSchliessen={() => setSprechen(false)} />}
+      {sprachplanung && sprechen && <SprachEinteilung onSchliessen={() => setSprechen(false)} mitarbeiter={d.mitarbeiter} projekte={d.projekte} onEingeteilt={() => laden()} />}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="flex items-center gap-1.5"><IconBtn variant="soft" onClick={() => schritt(-1)} title="Zurück"><ChevronLeft size={18} /></IconBtn><Btn variant="ghost" size="sm" onClick={heute}>Heute</Btn><IconBtn variant="soft" onClick={() => schritt(1)} title="Weiter"><ChevronRight size={18} /></IconBtn></div>
         <div className="text-[14px] font-semibold">{fmtDate(fromKey(tage[0]))}{tage.length > 1 ? ` – ${fmtDate(fromKey(bis))}` : ''}</div>

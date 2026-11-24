@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CalendarDays, Clock, HelpCircle, Loader2, MapPin, Mic, RotateCcw, Sparkles, Users, X } from 'lucide-react';
+import { Loader2, Mic, RotateCcw, Sparkles, X } from 'lucide-react';
 import { Btn, Card, TextArea } from './ui';
+import EinteilungBestaetigen from './EinteilungBestaetigen';
 import { api } from '../lib/api';
 import { aufnahmeAbbrechen, aufnahmeBeenden, aufnahmeStarten, geraetZerlegen, modellLaden, sprachFehler, spracheMoeglich, sprachStatus } from '../lib/sprache';
 
@@ -11,7 +12,7 @@ const BEISPIEL = '„Teile Nils an die Hauptstraße ein, Projekt Badsanierung M�
  * Der erkannte Text erscheint im Feld und lässt sich ändern. Im Browser (ohne App) wird nur getippt.
  * Schritt 3: nur Text. Den Einteilungsvorschlag (Schritt 4/5) übergibt `onText` später an den Vorschlag – gespeichert wird hier nichts.
  */
-export default function SprachEinteilung({ onSchliessen }) {
+export default function SprachEinteilung({ onSchliessen, mitarbeiter = [], projekte = [], onEingeteilt }) {
   const nativ = spracheMoeglich();
   const [stand, setStand] = useState(null);            // Status des Bausteins
   const [phase, setPhase] = useState('bereit');         // bereit | laden | aufnahme | erkennen
@@ -127,45 +128,9 @@ export default function SprachEinteilung({ onSchliessen }) {
       {text.trim() && !vorschlag && (
         <Btn className="w-full mt-3 h-12 text-[16px]" onClick={vorschlagHolen} loading={denkt} disabled={denkt}><Sparkles size={17} /> Vorschlag erstellen</Btn>
       )}
-      {vorschlag && <VorschlagAnzeige v={vorschlag} />}
+      {vorschlag && <EinteilungBestaetigen vorschlag={vorschlag} mitarbeiter={mitarbeiter} projekte={projekte} onVerwerfen={() => setVorschlag(null)}
+        onEingeteilt={(r) => { setVorschlag(null); setText(''); onEingeteilt?.(r); }} />}
     </Card>
   );
 }
 
-const QUELLEN = { apple: 'Apple-KI auf diesem iPhone', mistral: 'KI auf dem Server (Mistral)', regeln: 'festen Regeln (ohne KI)' };
-
-function Zeile({ icon: Icon, titel, unsicher, children }) {
-  return (
-    <div className="flex gap-3 py-2 border-b border-black/[0.06] last:border-0">
-      <Icon size={18} className="text-[#C41E3A] mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <div className="text-[12px] text-[#6E6E73] flex items-center gap-1.5">{titel}{unsicher && <span className="rounded-full bg-[#FFF4E5] text-[#B25E00] px-1.5 text-[11px] font-semibold">bitte prüfen</span>}</div>
-        <div className="text-[15px] font-medium">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-/** Schritt 4: Vorschlag lesen (Rückfragen, Hinweise, Konflikte). Ändern und „Einteilen & benachrichtigen“ folgen in Schritt 5. */
-function VorschlagAnzeige({ v }) {
-  const u = new Set(v.unsicher || []);
-  const personen = (v.mitarbeiter || []).map((p) => p.name || `„${p.gesagt}“ – ?`).join(', ') || '–';
-  return (
-    <div className="mt-4 rounded-2xl bg-[#F5F5F7] p-3">
-      <div className="text-[12px] text-[#6E6E73] mb-1">Vorschlag · zerlegt mit {QUELLEN[v.quelle] || v.quelle}</div>
-      <Zeile icon={Users} titel="Mitarbeiter" unsicher={u.has('mitarbeiter')}>{personen}</Zeile>
-      <Zeile icon={Sparkles} titel="Projekt" unsicher={u.has('projekt')}>{v.projekt?.name || '–'}</Zeile>
-      <Zeile icon={MapPin} titel="Adresse" unsicher={u.has('standort')}>{v.adresse || '–'}</Zeile>
-      <Zeile icon={CalendarDays} titel="Tage" unsicher={u.has('zeitraum')}>{v.tage_text || '–'}</Zeile>
-      <Zeile icon={Clock} titel="Uhrzeit" unsicher={u.has('startzeit') || u.has('endzeit')}>{v.start_time}–{v.end_time} Uhr · {v.pause_minutes} Min. Pause</Zeile>
-      {(v.rueckfragen || []).map((r, i) => (
-        <div key={`r${i}`} className="mt-2 flex gap-2 text-[14px] text-[#1D1D1F]"><HelpCircle size={16} className="text-[#C41E3A] mt-0.5 shrink-0" /><span className="font-medium">{r.frage}</span></div>
-      ))}
-      {(v.konflikte || []).map((k, i) => (
-        <div key={`k${i}`} className="mt-2 flex gap-2 text-[14px] text-[#B25E00]"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{k.text}</div>
-      ))}
-      {(v.hinweise || []).map((h, i) => <p key={`h${i}`} className="mt-2 text-[13px] text-[#6E6E73]">{h}</p>)}
-      <p className="mt-3 text-[12px] text-[#86868B]">{v.hinweis} Prüfen, ändern und bestätigen kommt im nächsten Schritt.</p>
-    </div>
-  );
-}
