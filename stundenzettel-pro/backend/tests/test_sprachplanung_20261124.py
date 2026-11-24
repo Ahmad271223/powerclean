@@ -257,3 +257,48 @@ def test_11_mistral_anfrage_und_rueckfall(client, monkeypatch):
     monkeypatch.setattr(sp, "mistral_zerlegen", kaputt)
     v = _vorschlag(client, s["chef"], text="Tom morgen bei Müller")
     assert v["quelle"] == "regeln" and "nicht erreichbar" in v["hinweise"][0] and v["entwurf"] is not None
+
+
+# ---------------------------------------------------------------- Schritt 5: Bestätigungsfenster (Prüfen nach Änderungen, Einteilen, Push)
+
+def test_12_pruefen_nach_aenderung(client, monkeypatch):
+    s = _aufbau(client, monkeypatch)
+    heute = lokal_jetzt().date()
+    montag = heute + timedelta(days=7 - heute.weekday())
+    tage = [(montag + timedelta(days=i)).isoformat() for i in range(3)]
+    assert client.post("/api/einsatzplan", json={"project_id": s["s"]["id"], "user_ids": [s["nw"]], "dates": [tage[1]], "start_time": "08:00", "end_time": "12:00"}, headers=s["chef"]).status_code == 200
+    assert client.post("/api/abwesenheiten", json={"user_id": s["tw"], "type": "krank", "from_date": tage[2], "to_date": tage[2]}, headers=s["chef"]).status_code == 200
+    r = client.post("/api/sprachplanung/pruefen", json={"user_ids": [s["nb"], s["nw"], s["tw"]], "dates": tage, "start_time": "07:00", "end_time": "16:00"}, headers=s["chef"]).json()
+    assert r["blockiert"] is True and r["trotzdem_noetig"] is True
+    assert sorted((k["art"], k["user_id"], k["datum"]) for k in r["konflikte"]) == sorted([("ueberschneidung", s["nw"], tage[1]), ("abwesenheit", s["tw"], tage[2])])
+    assert "krank" in next(k for k in r["konflikte"] if k["art"] == "abwesenheit")["text"]
+    # Nils Wagner herausnehmen → keine Blockade mehr; Wochenende als Hinweis
+    samstag = (montag + timedelta(days=5)).isoformat()
+    r = client.post("/api/sprachplanung/pruefen", json={"user_ids": [s["nb"]], "dates": [tage[0], samstag], "start_time": "7", "end_time": "16"}, headers=s["chef"]).json()
+    assert r["blockiert"] is False and [k["art"] for k in r["konflikte"]] == ["wochenende"]
+    assert client.post("/api/sprachplanung/pruefen", json={"user_ids": ["fremd"], "dates": tage, "start_time": "07:00", "end_time": "16:00"}, headers=s["chef"]).status_code == 400
+    assert client.post("/api/sprachplanung/pruefen", json={"user_ids": [s["nb"]], "dates": tage, "start_time": "bald", "end_time": "16:00"}, headers=s["chef"]).status_code == 422
+    assert client.post("/api/sprachplanung/pruefen", json={"user_ids": [s["nb"]], "dates": tage, "start_time": "07:00", "end_time": "16:00"}, headers=s["tom"]).status_code == 403
+
+
+def test_13_ganzer_ablauf_satz_rueckfrage_einteilen_push(client, monkeypatch):
+    """Chef spricht → Rückfrage „welcher Nils?“ → Auswahl → Einteilen → Nils bekommt eine Push-Nachricht."""
+    import push
+    monkeypatch.setenv("PUSH_MODUS", "test")
+    monkeypatch.setattr(push, "SOFORT_ZUSTELLEN", False)
+    push.TEST_GESENDET.clear()
+    s = _aufbau(client, monkeypatch)
+    nils = client.post("/api/auth/login", json={"email": "nb@sprache-test.de", "password": "mitarbeit123"}).json()["token"]
+    assert client.post("/api/geraete", json={"plattform": "ios", "token": "c" * 64}, headers={"Authorization": f"Bearer {nils}"}).status_code == 200
+    v = _vorschlag(client, s["chef"], text="Teile Nils an die Hauptstraße ein, Projekt Müller, 7 bis 16 Uhr die ganze Woche")
+    frage = next(r for r in v["rueckfragen"] if r["feld"] == "mitarbeiter")
+    gewaehlt = next(o for o in frage["optionen"] if o["name"] == "Nils Becker")
+    entwurf = {"project_id": v["projekt"]["id"], "user_ids": [gewaehlt["id"]], "dates": v["tage"], "start_time": v["start_time"], "end_time": v["end_time"],
+               "pause_minutes": v["pause_minutes"], "address": ""}
+    assert client.post("/api/sprachplanung/pruefen", json=entwurf, headers=s["chef"]).json()["blockiert"] is False
+    r = client.post("/api/einsatzplan", json=entwurf, headers=s["chef"])
+    assert r.status_code == 200 and len(r.json()["einsaetze"]) == len(v["tage"])
+    asyncio.run(push.ausgang_abarbeiten())
+    assert len(push.TEST_GESENDET) == 1 and push.TEST_GESENDET[0]["titel"] == "📅 Neue Einteilung" and push.TEST_GESENDET[0]["text"].startswith("Badsanierung Müller, Hauptstraße 5,")
+    assert push.TEST_GESENDET[0]["text"].endswith("7–16 Uhr")
+    push.TEST_GESENDET.clear()

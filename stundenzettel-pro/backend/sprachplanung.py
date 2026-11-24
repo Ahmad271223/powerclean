@@ -428,8 +428,6 @@ def _tage_text(tage: list[str]) -> str:
 async def vorschlag(firma: dict, felder: dict, heute: date, quelle: str) -> dict:
     """Felder → Einteilungsvorschlag mit Rückfragen, Hinweisen und Konflikten. Speichert nichts."""
     from db import db
-    from feiertage import feiertage_set
-    from routes.einsatzplan import _konflikte
 
     firma_id = firma["id"]
     nutzer = [u async for u in db().users.find({"firma_id": firma_id, "active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1, "role": 1})]
@@ -509,27 +507,7 @@ async def vorschlag(firma: dict, felder: dict, heute: date, quelle: str) -> dict
         start, ende = start or STANDARD_START, ende or STANDARD_ENDE
 
     # Konflikte (wie die Plantafel) und Feiertage/Wochenende
-    konflikte: list[dict] = []
-    feiertage = feiertage_set(sorted({int(t[:4]) for t in tage}) or [heute.year], firma.get("bundesland") or "") if tage else {}
-    for t in tage:
-        d = date.fromisoformat(t)
-        if t in feiertage:
-            konflikte.append({"user_id": None, "name": "", "datum": t, "art": "feiertag", "text": f"{_tage_text([t])}: Feiertag ({feiertage[t]})"})
-        elif d.weekday() >= 5:
-            konflikte.append({"user_id": None, "name": "", "datum": t, "art": "wochenende", "text": f"{_tage_text([t])}: Wochenende"})
-    namen = {u["id"]: u.get("name") or "" for u in nutzer}
-    for p in personen:
-        if not p.get("id"):
-            continue
-        for t in tage:
-            ueberlappungen, abwesend = await _konflikte(firma_id, p["id"], t, start, ende)
-            for x in ueberlappungen:
-                konflikte.append({"user_id": p["id"], "name": namen.get(p["id"], ""), "datum": t, "art": "ueberschneidung",
-                                  "text": f"{namen.get(p['id'], '')} ist {_tage_text([t])} schon {x['start_time']}–{x['end_time']} eingeteilt."})
-            for a in abwesend:
-                art = {"urlaub": "Urlaub", "krank": "krank", "unbezahlt": "unbezahlt frei", "feiertag": "frei"}.get(a.get("type"), "abwesend")
-                konflikte.append({"user_id": p["id"], "name": namen.get(p["id"], ""), "datum": t, "art": "abwesenheit",
-                                  "text": f"{namen.get(p['id'], '')} ist {_tage_text([t])} {art}{' (beantragt)' if a.get('status') == 'beantragt' else ''}."})
+    konflikte = await konflikte_pruefen(firma, [p["id"] for p in personen if p.get("id")], tage, start, ende, nutzer)
 
     user_ids = [p["id"] for p in personen if p.get("id")]
     vollstaendig = bool(projekt and user_ids and tage and not [r for r in rueckfragen if r["feld"] in ("mitarbeiter", "projekt", "tage")])
@@ -539,3 +517,34 @@ async def vorschlag(firma: dict, felder: dict, heute: date, quelle: str) -> dict
             "start_time": start, "end_time": ende, "pause_minutes": STANDARD_PAUSE, "unsicher": sorted(unsicher), "rueckfragen": rueckfragen,
             "hinweise": hinweise, "konflikte": konflikte, "entwurf": entwurf,
             "hinweis": "Nur ein Vorschlag – gespeichert wird erst, wenn du ihn bestätigst."}
+
+
+async def konflikte_pruefen(firma: dict, user_ids: list[str], tage: list[str], start: str, ende: str, nutzer: Optional[list[dict]] = None) -> list[dict]:
+    """Konflikte einer geplanten Einteilung: Überschneidung (blockiert das Speichern), Abwesenheit (nur mit „trotzdem“),
+    Feiertag und Wochenende (Hinweis). Speichert nichts – auch nach jeder Änderung im Bestätigungsfenster aufgerufen."""
+    from db import db
+    from feiertage import feiertage_set
+    from routes.einsatzplan import _konflikte
+
+    if nutzer is None:
+        nutzer = [u async for u in db().users.find({"firma_id": firma["id"], "id": {"$in": user_ids}}, {"_id": 0, "id": 1, "name": 1})]
+    namen = {u["id"]: u.get("name") or "" for u in nutzer}
+    konflikte: list[dict] = []
+    feiertage = feiertage_set(sorted({int(t[:4]) for t in tage}), firma.get("bundesland") or "") if tage else {}
+    for t in tage:
+        d = date.fromisoformat(t)
+        if t in feiertage:
+            konflikte.append({"user_id": None, "name": "", "datum": t, "art": "feiertag", "text": f"{_tage_text([t])}: Feiertag ({feiertage[t]})"})
+        elif d.weekday() >= 5:
+            konflikte.append({"user_id": None, "name": "", "datum": t, "art": "wochenende", "text": f"{_tage_text([t])}: Wochenende"})
+    for uid in user_ids:
+        for t in tage:
+            ueberlappungen, abwesend = await _konflikte(firma["id"], uid, t, start, ende)
+            for x in ueberlappungen:
+                konflikte.append({"user_id": uid, "name": namen.get(uid, ""), "datum": t, "art": "ueberschneidung",
+                                  "text": f"{namen.get(uid, '')} ist {_tage_text([t])} schon {x['start_time']}–{x['end_time']} eingeteilt."})
+            for a in abwesend:
+                art = {"urlaub": "Urlaub", "krank": "krank", "unbezahlt": "unbezahlt frei", "feiertag": "frei"}.get(a.get("type"), "abwesend")
+                konflikte.append({"user_id": uid, "name": namen.get(uid, ""), "datum": t, "art": "abwesenheit",
+                                  "text": f"{namen.get(uid, '')} ist {_tage_text([t])} {art}{' (beantragt)' if a.get('status') == 'beantragt' else ''}."})
+    return konflikte

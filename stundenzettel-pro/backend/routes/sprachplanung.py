@@ -34,6 +34,34 @@ class VorschlagIn(BaseModel):
     quelle: Optional[str] = Field(default=None, pattern="^(apple|mistral|regeln)$")
 
 
+class PruefenIn(BaseModel):
+    user_ids: list[str] = Field(default_factory=list, max_length=50)
+    dates: list[str] = Field(default_factory=list, max_length=60)
+    start_time: str = Field(max_length=5)
+    end_time: str = Field(max_length=5)
+
+
+@router.post("/pruefen")
+async def pruefen(body: PruefenIn, user: dict = Depends(recht_noetig("plantafel"))):
+    """Konflikte des geänderten Vorschlags neu prüfen (Bestätigungsfenster). Speichert nichts."""
+    from zeiten import datum_pruefen
+    start, ende = sp.uhrzeit(body.start_time), sp.uhrzeit(body.end_time)
+    if not start or not ende:
+        raise HTTPException(422, "Bitte Beginn und Ende als Uhrzeit angeben (z. B. 07:00).")
+    for d in body.dates:
+        try:
+            datum_pruefen(d)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    erlaubt = {u["id"] async for u in db().users.find({"firma_id": user["firma_id"], "id": {"$in": body.user_ids}}, {"_id": 0, "id": 1})}
+    if set(body.user_ids) - erlaubt:
+        raise HTTPException(400, "Mindestens ein Mitarbeiter gehört nicht zur Firma.")
+    firma = await firma_laden(user["firma_id"])
+    konflikte = await sp.konflikte_pruefen(firma, list(dict.fromkeys(body.user_ids)), sorted(set(body.dates)), start, ende)
+    return {"konflikte": konflikte, "blockiert": any(k["art"] == "ueberschneidung" for k in konflikte),
+            "trotzdem_noetig": any(k["art"] == "abwesenheit" for k in konflikte)}
+
+
 @router.get("/status")
 async def status(user: dict = Depends(recht_noetig("plantafel"))):
     """Welche Zerlegung der Server anbietet (ohne Geheimnisse)."""
