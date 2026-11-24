@@ -1,0 +1,9 @@
+{
+  "name": "stundenzettel-sprache",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spracheingabe auf dem Gerät für Stundenzettel Pro (iPhone: WhisperKit, Android: Spracherkennung auf dem Gerät)",
+  "license": "UNLICENSED",
+  "files": ["Package.swift", "ios/Sources", "android/src/main/", "android/build.gradle"],
+  "capacitor": { "ios": { "src": "ios" }, "android": { "src": "android" } }
+}

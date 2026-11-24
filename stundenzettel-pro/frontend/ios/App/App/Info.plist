@@ -35,13 +35,13 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Nur wenn du „Standort mitspeichern“ einschaltest, wird beim Ein- und Ausstempeln dein Standort als Nachweis für den Auftraggeber gespeichert.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Für die freiwillige Spracheingabe von Tätigkeitstexten.</string>
+	<string>Für die freiwillige Spracheingabe (Einteilungen, Tätigkeiten). Die Aufnahme wird nur auf diesem iPhone erkannt und nicht gespeichert.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Zum Speichern von Stundenzetteln, Rechnungen und QR-Codes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Zum Auswählen von Fotos für Projekt- und Personalakten.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Für die freiwillige Spracheingabe von Tätigkeitstexten.</string>
+	<string>Für die freiwillige Spracheingabe (Einteilungen, Tätigkeiten). Die Aufnahme wird nur auf diesem iPhone erkannt und nicht gespeichert.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

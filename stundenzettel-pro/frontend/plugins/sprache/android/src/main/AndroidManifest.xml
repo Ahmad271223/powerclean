@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Mikrofon für die Spracheingabe (Einteilung per Sprache); die Aufnahme bleibt auf dem Gerät -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Android 11+: die eingebaute Spracherkennung muss sichtbar sein -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+</manifest>

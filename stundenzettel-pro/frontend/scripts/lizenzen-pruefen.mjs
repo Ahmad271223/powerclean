@@ -11,7 +11,8 @@ const pkg = JSON.parse(fs.readFileSync(path.join(wurzel, 'package.json'), 'utf8'
 const fehler = [];
 const liste = new Map(BAUSTEINE.filter((b) => b.paket).map((b) => [b.paket, b]));
 
-for (const name of Object.keys(pkg.dependencies || {})) {
+for (const [name, quelle] of Object.entries(pkg.dependencies || {})) {
+  if (String(quelle).startsWith('file:')) continue;   // eigener Code im Repo (z. B. plugins/sprache)
   const b = liste.get(name);
   const datei = path.join(wurzel, 'node_modules', name, 'package.json');
   const lizenz = fs.existsSync(datei) ? JSON.parse(fs.readFileSync(datei, 'utf8')).license : '(nicht installiert)';

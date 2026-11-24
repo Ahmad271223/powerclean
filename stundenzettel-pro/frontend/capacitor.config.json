@@ -13,7 +13,8 @@
   "ios": {
     "contentInset": "automatic",
     "backgroundColor": "#F5F5F7",
-    "preferredContentMode": "mobile"
+    "preferredContentMode": "mobile",
+    "minVersion": "16.0"
   },
   "plugins": {
     "SplashScreen": {

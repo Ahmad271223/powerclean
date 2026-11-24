@@ -24,4 +24,8 @@ export const BAUSTEINE = [
   { name: 'clsx', paket: 'clsx', lizenz: 'MIT', urheber: 'Luke Edwards', adresse: 'https://github.com/lukeed/clsx' },
   { name: 'tailwind-merge', paket: 'tailwind-merge', lizenz: 'MIT', urheber: 'Dany Castillo', adresse: 'https://github.com/dcastil/tailwind-merge' },
   { name: 'Tailwind CSS (Gestaltung, beim Bauen)', paket: null, lizenz: 'MIT', urheber: 'Tailwind Labs, Inc.', adresse: 'https://github.com/tailwindlabs/tailwindcss' },
+  // Nur iPhone-App (nativer Baustein plugins/sprache): Spracherkennung auf dem Gerät
+  { name: 'WhisperKit (Argmax OSS)', paket: null, lizenz: 'MIT', urheber: 'Argmax, Inc.', adresse: 'https://github.com/argmaxinc/argmax-oss-swift', hinweis: 'nur iPhone-App' },
+  { name: 'swift-transformers (Teile in WhisperKit)', paket: null, lizenz: 'Apache-2.0', urheber: 'Hugging Face SAS', adresse: 'https://github.com/huggingface/swift-transformers', hinweis: 'nur iPhone-App' },
+  { name: 'Whisper-Sprachmodelle (CoreML)', paket: null, lizenz: 'MIT', urheber: 'OpenAI (Modell), Argmax, Inc. (Umwandlung)', adresse: 'https://huggingface.co/argmaxinc/whisperkit-coreml', hinweis: 'wird beim ersten Nutzen geladen' },
 ];

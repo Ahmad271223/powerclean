@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CalendarRange, ChevronLeft, ChevronRight, Copy, FileText, GripVertical, ListChecks, Plus, Search, Undo2, Users } from 'lucide-react';
+import { CalendarRange, ChevronLeft, ChevronRight, Copy, FileText, GripVertical, ListChecks, Mic, Plus, Search, Undo2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout, { Ladeanzeige } from '../components/Layout';
+import SprachEinteilung from '../components/SprachEinteilung';
 import { useDialoge } from '../components/Dialoge';
 import { Btn, Card, Chip, Field, IconBtn, Segmented, Select, Sheet, TextArea, TextInput, Toggle } from '../components/ui';
 import { api, download } from '../lib/api';
@@ -36,8 +37,10 @@ const merkenZeiten = (z) => { try { localStorage.setItem(ZEITEN_KEY, JSON.string
  *  Tastatur: jede Zelle ist ein Knopf (Enter = Einsatz anlegen), jeder Einsatz ein Knopf (Enter = öffnen). Am Handy: tippen statt ziehen. */
 export default function PlantafelPage() {
   const navigate = useNavigate();
-  const { kann } = useAuth();
+  const { kann, feature } = useAuth();
   const [params] = useSearchParams();
+  const sprachplanung = feature('sprachplanung') && kann('plantafel');
+  const [sprechen, setSprechen] = useState(false);
   const [ansicht, setAnsicht] = useState(() => (window.innerWidth < 640 ? 'tag' : 'woche'));
   const [von, setVon] = useState(() => (window.innerWidth < 640 ? new Date() : mondayOf(new Date())));
   const [d, setD] = useState(null);
@@ -109,7 +112,8 @@ export default function PlantafelPage() {
 
   return (
     <Layout wide title="Plantafel" subtitle="Projekte auf Mitarbeiter ziehen, Einsätze verschieben oder kopieren (Alt gedrückt halten oder Kopiermodus), vergangene Tage mit der Stempelung abgleichen und freigeben."
-      action={<div className="flex gap-2"><Btn variant="soft" size="sm" onClick={() => setKolonnenDialog(true)}><Users size={15} /> Kolonnen</Btn><Btn size="sm" onClick={() => setDialog({ neu: { date: tage[0] } })}><Plus size={16} /> Einsatz</Btn></div>}>
+      action={<div className="flex gap-2">{sprachplanung && <Btn variant={sprechen ? 'primary' : 'soft'} size="sm" onClick={() => setSprechen((x) => !x)}><Mic size={15} /> Per Sprache</Btn>}<Btn variant="soft" size="sm" onClick={() => setKolonnenDialog(true)}><Users size={15} /> Kolonnen</Btn><Btn size="sm" onClick={() => setDialog({ neu: { date: tage[0] } })}><Plus size={16} /> Einsatz</Btn></div>}>
+      {sprachplanung && sprechen && <SprachEinteilung onSchliessen={() => setSprechen(false)} />}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="flex items-center gap-1.5"><IconBtn variant="soft" onClick={() => schritt(-1)} title="Zurück"><ChevronLeft size={18} /></IconBtn><Btn variant="ghost" size="sm" onClick={heute}>Heute</Btn><IconBtn variant="soft" onClick={() => schritt(1)} title="Weiter"><ChevronRight size={18} /></IconBtn></div>
         <div className="text-[14px] font-semibold">{fmtDate(fromKey(tage[0]))}{tage.length > 1 ? ` – ${fmtDate(fromKey(bis))}` : ''}</div>
