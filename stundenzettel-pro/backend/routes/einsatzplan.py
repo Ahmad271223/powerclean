@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 import mail
+import push
 from auth import aktueller_nutzer, firma_laden, hat_recht, jetzt_iso, recht_fehlt, schreibender_nutzer
 from db import db
 from feiertage import feiertage_set
@@ -164,7 +165,7 @@ def _quittung(e: dict) -> dict:
             "gelesen_at": q.get("gelesen_at") if aktuell else None, "bestaetigt_at": q.get("bestaetigt_at") if aktuell else None}
 
 
-async def _ansicht(e: dict, user: dict, planer: bool, projekte: dict, namen: dict, kolonnen: dict, heute: str) -> dict:
+async def _ansicht(e: dict, user: dict, planer: bool, projekte: dict, namen: dict, kolonnen: dict, heute: str, zustellung: Optional[dict] = None) -> dict:
     p = projekte.get(e["project_id"]) or {}
     aus = {k: e.get(k) for k in ("id", "project_id", "date", "start_time", "end_time", "pause_minutes", "planned_minutes", "address", "note", "taetigkeit", "kolonne_id", "status", "version", "freigabe", "serie_id", "updated_at")}
     aus["projekt"] = {"id": e["project_id"], "name": p.get("name") or "Projekt", "color": p.get("color"), "address": e.get("address") or p.get("address") or ""}
@@ -176,6 +177,8 @@ async def _ansicht(e: dict, user: dict, planer: bool, projekte: dict, namen: dic
     aus["abgleich"]["status_name"] = ABGLEICH_NAMEN.get(aus["abgleich"]["status"], aus["abgleich"]["status"])
     aus["quittung"] = _quittung(e)
     if planer:
+        # Push-Zustellung der aktuellen Version (zugestellt | offen | fehlgeschlagen | kein_geraet | nicht_konfiguriert | None)
+        aus["zustellung"] = (zustellung if zustellung is not None else await push.zustellstand([e])).get(e["id"])
         aus["user_id"] = e["user_id"]
         aus["mitarbeiter"] = namen.get(e["user_id"], "")
         aus["verlauf"] = e.get("verlauf") or []
@@ -231,8 +234,9 @@ async def uebersicht(von: str, bis: str, project_id: Optional[str] = None, user_
     namen = await nutzernamen(user["firma_id"])
     kolonnen = await _kolonnen(user["firma_id"])
     heute = lokal_jetzt().date().isoformat()
-    einsaetze = [await _ansicht(e, user, planer, projekte, namen, kolonnen, heute)
-                 async for e in db().einsaetze.find(filt, {"_id": 0}).sort([("date", 1), ("start_time", 1)]).limit(5000)]
+    roh = [e async for e in db().einsaetze.find(filt, {"_id": 0}).sort([("date", 1), ("start_time", 1)]).limit(5000)]
+    zustellung = await push.zustellstand(roh) if planer else {}
+    einsaetze = [await _ansicht(e, user, planer, projekte, namen, kolonnen, heute, zustellung) for e in roh]
     abwesenheiten = await _abwesenheiten(user["firma_id"], von, bis, None if planer else [user["id"]])
     if planer:
         for x in abwesenheiten:
@@ -355,6 +359,7 @@ async def anlegen(body: EinsatzIn, user: dict = Depends(planer_schreibend)):
     await db().projects.update_one({"id": p["id"], "firma_id": user["firma_id"], "employee_ids": {"$ne": []}}, {"$addToSet": {"employee_ids": {"$each": ids}}})
     for e in neu:
         await _planaenderung_melden(e, "neuer Einsatz", firma)
+    await push.einsaetze_melden(neu, "neu")
     await protokollieren(user, "einsatz.geplant", p["name"], details={"anzahl": len(neu), "personen": len(ids), "tage": len(tage), "von": tage[0], "bis": tage[-1]})
     heute = lokal_jetzt().date().isoformat()
     projekte, namen, kolonnen = await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"])
@@ -402,6 +407,10 @@ async def aendern(einsatz_id: str, body: EinsatzUpdateIn, user: dict = Depends(p
     await _planaenderung_melden(neu, "Einsatz geändert", user["_firma"])
     if "user_id" in aenderung and aenderung["user_id"] != e["user_id"]:
         await _planaenderung_melden({**e, "status": "abgesagt"}, "Einsatz an eine andere Person übergeben", user["_firma"])
+        await push.einsaetze_melden([e], "abgesagt")
+        await push.einsaetze_melden([neu], "neu")
+    else:
+        await push.einsaetze_melden([neu], "geaendert")
     await protokollieren(user, "einsatz.geaendert", e["project_id"], details={"einsatz_id": einsatz_id, "felder": sorted(aenderung)})
     heute = lokal_jetzt().date().isoformat()
     return {"einsatz": await _ansicht(neu, user, True, await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"]), heute)}
@@ -434,6 +443,7 @@ async def kopieren(einsatz_id: str, body: EinsatzKopierenIn, user: dict = Depend
                 uebersprungen.append({"user_id": uid, "date": datum, "grund": exc.detail})
     for x in neu:
         await _planaenderung_melden(x, "neuer Einsatz (Kopie)", user["_firma"])
+    await push.einsaetze_melden(neu, "neu")
     await protokollieren(user, "einsatz.kopiert", e["project_id"], details={"anzahl": len(neu), "uebersprungen": len(uebersprungen)})
     heute = lokal_jetzt().date().isoformat()
     projekte, namen, kolonnen = await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"])
@@ -451,6 +461,7 @@ async def absagen(einsatz_id: str, grund: str = Query("", max_length=300), user:
     await db().einsaetze.update_one({"id": einsatz_id}, {"$set": {"status": "abgesagt", "version": int(e.get("version") or 1) + 1, "updated_at": jetzt_iso()},
                                                           "$push": {"verlauf": _schritt(user, "abgesagt", _snapshot(e), grund)}})
     await _planaenderung_melden({**e, "status": "abgesagt", "version": int(e.get("version") or 1) + 1}, grund or "Einsatz abgesagt", user["_firma"])
+    await push.einsaetze_melden([{**e, "status": "abgesagt", "version": int(e.get("version") or 1) + 1}], "abgesagt")
     await protokollieren(user, "einsatz.abgesagt", e["project_id"], details={"einsatz_id": einsatz_id, "grund": grund})
     return {"ok": True}
 
@@ -462,6 +473,7 @@ async def wiederherstellen(einsatz_id: str, user: dict = Depends(planer_schreibe
         raise HTTPException(400, "Dieser Einsatz ist nicht abgesagt.")
     neu = await _aendern(user, e, {"status": "geplant"}, "wiederhergestellt", False)
     await _planaenderung_melden(neu, "Einsatz wiederhergestellt", user["_firma"])
+    await push.einsaetze_melden([neu], "neu")
     heute = lokal_jetzt().date().isoformat()
     return {"einsatz": await _ansicht(neu, user, True, await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"]), heute)}
 
@@ -478,6 +490,7 @@ async def rueckgaengig(einsatz_id: str, user: dict = Depends(planer_schreibend))
     vorher = {k: v for k, v in letzte["vorher"].items() if k in FELDER}
     neu = await _aendern(user, e, vorher, "rueckgaengig", True, text=f"Stand vor „{letzte.get('aktion')}“ wiederhergestellt")
     await _planaenderung_melden(neu, "Änderung zurückgenommen", user["_firma"])
+    await push.einsaetze_melden([neu], "geaendert")
     heute = lokal_jetzt().date().isoformat()
     return {"einsatz": await _ansicht(neu, user, True, await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"]), heute)}
 

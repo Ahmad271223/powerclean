@@ -12,6 +12,8 @@ tzdata>=2024.1
 mongomock-motor>=0.0.30
 pytest>=8.0.0
 httpx>=0.27.0
+# Push an iPhone (APNs braucht HTTP/2; MIT-Lizenz)
+h2>=4.1.0
 # E-Rechnung (XRechnung/ZUGFeRD) und serverseitige PDFs
 lxml>=5.0.0
 reportlab>=4.0.0

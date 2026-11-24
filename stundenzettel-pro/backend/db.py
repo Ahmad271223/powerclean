@@ -67,6 +67,11 @@ async def indizes_anlegen(d) -> None:
         ("freigaben", [("project_id", 1), ("week_monday", -1)], {"name": "projekt_woche"}),
         ("freigaben", [("beteiligung_id", 1), ("week_monday", 1)], {"name": "beteiligung_woche"}),
         ("benachrichtigungen", [("firma_id", 1), ("created_at", -1)], {"name": "firma_zeit"}),
+        # Push-Nachrichten (iPhone/Android)
+        ("geraete", [("token", 1)], {"unique": True, "name": "token"}),
+        ("geraete", [("user_id", 1), ("aktiv", 1)], {"name": "nutzer_aktiv"}),
+        ("push_ausgang", [("einsatz_ids", 1)], {"name": "einsaetze"}),
+        ("push_ausgang", [("status", 1), ("naechster_versuch_at", 1)], {"name": "faellig"}),
         ("lieferungen", [("project_id", 1), ("geplant_am", 1)], {"name": "projekt_datum"}),
         ("maengel", [("project_id", 1), ("status", 1)], {"name": "projekt_status"}),
         ("tagesberichte", [("project_id", 1), ("datum", -1)], {"name": "projekt_datum"}),
