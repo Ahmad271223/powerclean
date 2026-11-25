@@ -25,13 +25,13 @@ FELDER = ("mitarbeiter", "projekt", "standort", "startzeit", "endzeit", "zeitrau
 WOCHENTAGE = {"montag": 0, "dienstag": 1, "mittwoch": 2, "donnerstag": 3, "freitag": 4, "samstag": 5, "sonntag": 6}
 KURZ = {"mo": 0, "di": 1, "mi": 2, "do": 3, "fr": 4, "sa": 5, "so": 6}
 TAG_NAMEN = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
-ZAHLWOERTER = {"null": 0, "ein": 1, "eins": 1, "eine": 1, "einen": 1, "einem": 1, "zwei": 2, "drei": 3, "vier": 4, "fuenf": 5, "sechs": 6,
+ZAHLWOERTER = {"null": 0, "ein": 1, "eins": 1, "eine": 1, "einen": 1, "einem": 1, "einer": 1, "zwei": 2, "drei": 3, "vier": 4, "fuenf": 5, "sechs": 6,
                "sieben": 7, "acht": 8, "neun": 9, "zehn": 10, "elf": 11, "zwoelf": 12, "dreizehn": 13, "vierzehn": 14, "fuenfzehn": 15,
                "sechzehn": 16, "siebzehn": 17, "achtzehn": 18, "neunzehn": 19, "zwanzig": 20, "einundzwanzig": 21, "zweiundzwanzig": 22,
                "dreiundzwanzig": 23}
 MONATE = {"januar": 1, "jaenner": 1, "februar": 2, "maerz": 3, "april": 4, "mai": 5, "juni": 6, "juli": 7, "august": 8, "september": 9,
           "oktober": 10, "november": 11, "dezember": 12}
-STRASSE = r"[A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß.-]*(?:straße|strasse|str\.|weg|platz|allee|ring|gasse|damm|ufer|chaussee)(?:\s+\d+\s?[a-z]?)?"
+STRASSE = r"[A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß.-]*(?:straße|strasse|str\.|weg|platz|allee|ring|gasse|damm|ufer|chaussee)(?:\s+\d+(?:\s?[a-zA-Z](?![\wäöüÄÖÜß]))?)?"   # „Hauptstraße 5a“, aber nicht das „m“ von „5 morgen“
 FUELLWOERTER = {"teile", "teil", "einteilen", "ein", "an", "die", "den", "der", "das", "dem", "projekt", "standort", "baustelle", "bei", "von", "bis",
                 "uhr", "und", "ab", "am", "im", "in", "zur", "zum", "fuer", "ganze", "ganzen", "woche", "tage", "tag", "naechste", "naechsten",
                 "kommende", "kommenden", "diese", "dieser", "morgen", "heute", "uebermorgen", "bitte", "mal", "plane", "planen", "einplanen",
@@ -79,10 +79,11 @@ def uhrzeit(roh: Any) -> Optional[str]:
 
 
 def zeiten_ordnen(start: Optional[str], ende: Optional[str]) -> tuple[Optional[str], Optional[str]]:
-    """„sieben bis vier“ meint 7–16 Uhr: liegt das Ende vor dem Beginn und ist ≤ 12, gilt es als Nachmittag."""
+    """„sieben bis vier“ meint 7–16 Uhr: beginnt es vormittags und liegt das Ende davor (≤ 12), gilt das Ende als Nachmittag.
+    „16 bis 7“ bleibt, wie es ist (Ende vor Beginn = Nachtschicht) – das Bestätigungsfenster fragt dann ausdrücklich nach."""
     if start and ende:
         hs, he = int(start[:2]), int(ende[:2])
-        if he <= hs and he <= 12 and he + 12 > hs:
+        if hs < 12 and he <= hs and he + 12 > hs:
             ende = f"{he + 12:02d}:{ende[3:]}"
     return start, ende
 
@@ -122,11 +123,32 @@ def tage_berechnen(zeitraum: Any, heute: date) -> tuple[list[str], list[str]]:
     s = re.sub(r"\b(mo|di|mi|do|fr|sa|so)\b(?=\s*(?:-|bis)\s*(?:mo|di|mi|do|fr|sa|so)\b)", lambda m: [k for k, v in WOCHENTAGE.items() if v == KURZ[m.group(1)]][0], s)
     s = re.sub(r"(?<=bis )\b(mo|di|mi|do|fr|sa|so)\b|(?<=- )\b(mo|di|mi|do|fr|sa|so)\b|(?<=-)\b(mo|di|mi|do|fr|sa|so)\b",
                lambda m: [k for k, v in WOCHENTAGE.items() if v == KURZ[m.group(0)]][0], s)
-    woche = 0
+    woche = 0                      # Wochen ab dieser Woche („nächste Woche“ = 1)
+    kw_montag: Optional[date] = None
+    m_in = re.search(r"\bin (\w+) wochen?\b", s)
+    m_kw = re.search(r"\b(?:kw|kalenderwoche) ?(\d{1,2})\b", s)
     if re.search(r"\buebernaechste[nr]? woche\b", s):
         woche = 2
     elif re.search(r"\b(naechste[nr]?|kommende[nr]?) woche\b", s):
         woche = 1
+    elif m_in and _zahl(m_in.group(1)) and _zahl(m_in.group(1)) <= 52:
+        woche = _zahl(m_in.group(1))       # „in zwei Wochen“ = die Woche in zwei Wochen
+    elif m_kw:
+        kw = int(m_kw.group(1))
+        try:
+            kw_montag = date.fromisocalendar(heute.year, kw, 1)
+            if kw_montag + timedelta(days=6) < heute:          # KW schon vorbei → nächstes Jahr
+                kw_montag = date.fromisocalendar(heute.year + 1, kw, 1)
+        except ValueError:
+            return [], [f"Kalenderwoche {kw} gibt es nicht."]
+        woche = (kw_montag - _montag(heute)).days // 7
+
+    # Wochenende („am Wochenende“, „nächstes Wochenende“): Samstag und Sonntag – der Hinweis kommt aus der Konfliktprüfung
+    if re.search(r"\bwochenende\b", s) and not re.search(r"\b(" + "|".join(WOCHENTAGE) + r")\b", s):
+        samstag = _montag(heute) + timedelta(weeks=woche, days=5)
+        if samstag + timedelta(days=1) < heute:
+            samstag += timedelta(weeks=1)
+        return [d.isoformat() for d in (samstag, samstag + timedelta(days=1)) if d >= heute], hinweise
 
     # ausdrückliches Datum: „3.12.“, „03.12.2026“, „3. dezember“
     daten = []
@@ -150,7 +172,7 @@ def tage_berechnen(zeitraum: Any, heute: date) -> tuple[list[str], list[str]]:
             aus = [aus[0] + timedelta(days=i) for i in range((aus[1] - aus[0]).days + 1) if (aus[0] + timedelta(days=i)).weekday() < 5]
         return sorted({d.isoformat() for d in aus}), hinweise
 
-    basis = _montag(heute) + timedelta(weeks=woche) if woche else None
+    basis = kw_montag or (_montag(heute) + timedelta(weeks=woche) if woche else None)
 
     # Bereich „montag bis mittwoch“
     m = re.search(r"\b(" + "|".join(WOCHENTAGE) + r")\s*(?:-|bis)\s*(" + "|".join(WOCHENTAGE) + r")\b", s)
@@ -209,9 +231,9 @@ def tage_berechnen(zeitraum: Any, heute: date) -> tuple[list[str], list[str]]:
         return [heute.isoformat()], hinweise
 
     # ganze Woche / diese Woche / nächste Woche / jeden Tag
-    if woche or re.search(r"\b(ganze[n]? woche|diese woche|die woche|jeden tag|taeglich|mo bis fr|montag bis freitag)\b", s):
-        if woche:
-            start = basis
+    if basis or re.search(r"\b(ganze[n]? woche|diese woche|die woche|jeden tag|taeglich|mo bis fr|montag bis freitag)\b", s):
+        if basis:
+            start = max(basis, heute)
         elif heute.weekday() >= 4:   # Freitag bis Sonntag: gemeint ist die nächste Woche
             start = _montag(heute) + timedelta(weeks=1)
             hinweise.append("„Die ganze Woche“ als nächste Woche verstanden (heute ist Wochenende bzw. Freitag).")
@@ -242,13 +264,19 @@ def regeln_zerlegen(text: str, namen: list[str], projekte: list[dict]) -> dict:
         s_ohne_zeit = s[:m.start()] + " " + s[m.end():]
     else:
         s_ohne_zeit = s
+        # „7-16“, „7:30 - 16 Uhr“ (nicht Datum „1.12.-3.12.“: kein Punkt direkt davor oder danach)
+        m_strich = re.search(r"(?<![\d.])(\d{1,2}(?::\d{2})?)\s*-\s*(\d{1,2}(?::\d{2})?)(?![\d.])(?: uhr)?", s)
         m1 = re.search(r"\bab (" + zahl + r") uhr\b", s)
-        if m1:
+        if m_strich and uhrzeit(m_strich.group(1)) and uhrzeit(m_strich.group(2)):
+            felder["startzeit"], felder["endzeit"] = zeiten_ordnen(uhrzeit(m_strich.group(1)), uhrzeit(m_strich.group(2)))
+            s_ohne_zeit = s[:m_strich.start()] + " " + s[m_strich.end():]
+        elif m1:
             felder["startzeit"] = uhrzeit(m1.group(1))
 
     # Zeitraum: alles, was nach Tagen klingt
     teile = re.findall(r"\b(?:ab |von |am |bis )?(?:(?:uebernaechste|naechste|kommende)[nr]? woche|diese woche|(?:die )?ganzen? woche|heute|morgen|uebermorgen|jeden tag|taeglich|"
-                       r"\w+ (?:arbeits)?tage?n?|\d{1,2}\.\d{1,2}\.(?:\d{2,4})?|\d{1,2}\.? (?:" + "|".join(MONATE) + r")|"
+                       r"in \w+ wochen?|(?:kw|kalenderwoche) ?\d{1,2}|(?:(?:naechste|kommende|diese)[sn]? )?wochenende|"
+                       r"\w+ (?:arbeits)?tage?n?|\d{1,2}\.\d{1,2}\.(?:\d{2,4})?(?:\s*-\s*\d{1,2}\.\d{1,2}\.(?:\d{2,4})?)?|\d{1,2}\.? (?:" + "|".join(MONATE) + r")|"
                        r"(?:" + "|".join(list(WOCHENTAGE) + list(KURZ)) + r")(?:\s*(?:-|bis)\s*(?:" + "|".join(list(WOCHENTAGE) + list(KURZ)) + r"))?)(?!\w)", s_ohne_zeit)
     teile = [t for t in teile if not re.fullmatch(r"(?:ab |von |am |bis )?\w+ (?:arbeits)?tage?n?", t) or t.endswith("jeden tag") or _zahl(t.split()[-2]) is not None]
     teile = [t for t in teile if not re.fullmatch(r"(?:ab |von |am |bis )?(?:mo|di|mi|do|fr|sa|so)", t)]
@@ -269,7 +297,14 @@ def regeln_zerlegen(text: str, namen: list[str], projekte: list[dict]) -> dict:
         felder["projekt"] = m2.group(1)
     else:
         projektwoerter = {w for p in projekte for w in woerter(p.get("name")) if len(w) >= 4}
-        treffer = [w for w in re.findall(r"[A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß-]+", roh) if normal(w) in projektwoerter and normal(w) not in FUELLWOERTER]
+        namenswoerter_alle = {w for n in namen for w in woerter(n)}
+
+        def projektwort(w: str) -> bool:   # ganzes Wort oder Wortanfang („Dach“ → „Dachsanierung“), aber kein Mitarbeitername
+            n = normal(w)
+            if n in FUELLWOERTER:
+                return False
+            return n in projektwoerter or (len(n) >= 4 and n not in namenswoerter_alle and any(x.startswith(n) for x in projektwoerter))
+        treffer = [w for w in re.findall(r"[A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß-]+", roh) if projektwort(w)]
         if treffer:
             felder["projekt"] = " ".join(dict.fromkeys(treffer))
     projekt_woerter = set(woerter(felder["projekt"])) if felder["projekt"] else set()
@@ -350,8 +385,10 @@ def _aehnlich(a: str, b: str) -> float:
 
 
 def _passt(w: str, x: str) -> bool:
-    """Wort passt zu Wort: fast gleich (verhört/vertippt) oder Teil eines zusammengesetzten Worts („sanierung“ in „badsanierung“)."""
-    return _aehnlich(w, x) >= 0.85 or (len(w) >= 5 and len(x) >= 5 and (w in x or x in w))
+    """Wort passt zu Wort: fast gleich (verhört/vertippt), Teil eines zusammengesetzten Worts („sanierung“ in „badsanierung“)
+    oder dessen Anfang („dach“ für „dachsanierung“)."""
+    return (_aehnlich(w, x) >= 0.85 or (len(w) >= 5 and len(x) >= 5 and (w in x or x in w))
+            or (len(w) >= 4 and len(x) > len(w) and x.startswith(w)))
 
 
 def mitarbeiter_finden(gesagt: str, nutzer: list[dict]) -> list[dict]:
@@ -505,6 +542,9 @@ async def vorschlag(firma: dict, felder: dict, heute: date, quelle: str) -> dict
         if not ende:
             unsicher.add("endzeit")
         start, ende = start or STANDARD_START, ende or STANDARD_ENDE
+    if ende < start:
+        unsicher.update({"startzeit", "endzeit"})
+        hinweise.append(f"Ende {ende} liegt vor Beginn {start} – das wäre eine Nachtschicht bis zum nächsten Morgen. Bitte prüfen.")
 
     # Konflikte (wie die Plantafel) und Feiertage/Wochenende
     konflikte = await konflikte_pruefen(firma, [p["id"] for p in personen if p.get("id")], tage, start, ende, nutzer)
