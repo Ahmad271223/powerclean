@@ -31,7 +31,8 @@ ZAHLWOERTER = {"null": 0, "ein": 1, "eins": 1, "eine": 1, "einen": 1, "einem": 1
                "dreiundzwanzig": 23}
 MONATE = {"januar": 1, "jaenner": 1, "februar": 2, "maerz": 3, "april": 4, "mai": 5, "juni": 6, "juli": 7, "august": 8, "september": 9,
           "oktober": 10, "november": 11, "dezember": 12}
-STRASSE = r"[A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß.-]*(?:straße|strasse|str\.|weg|platz|allee|ring|gasse|damm|ufer|chaussee)(?:\s+\d+(?:\s?[a-zA-Z](?![\wäöüÄÖÜß]))?)?"   # „Hauptstraße 5a“, aber nicht das „m“ von „5 morgen“
+WORT = r"[^\W\d_][\w-]*"   # ein Wort mit beliebigen Buchstaben (auch Ş, Ç, É) und Bindestrich
+STRASSE = r"[^\W\d_][\w.-]*?(?:straße|strasse|str\.|weg|platz|allee|ring|gasse|damm|ufer|chaussee)(?!\w)(?:\s+\d+(?:\s?[a-zA-Z](?![\wäöüÄÖÜß]))?)?"   # „Hauptstraße 5a“, aber nicht das „m“ von „5 morgen“
 FUELLWOERTER = {"teile", "teil", "einteilen", "ein", "an", "die", "den", "der", "das", "dem", "projekt", "standort", "baustelle", "bei", "von", "bis",
                 "uhr", "und", "ab", "am", "im", "in", "zur", "zum", "fuer", "ganze", "ganzen", "woche", "tage", "tag", "naechste", "naechsten",
                 "kommende", "kommenden", "diese", "dieser", "morgen", "heute", "uebermorgen", "bitte", "mal", "plane", "planen", "einplanen",
@@ -161,13 +162,15 @@ def tage_berechnen(zeitraum: Any, heute: date) -> tuple[list[str], list[str]]:
     if daten:
         aus = []
         for tag, monat, jahr, fest in daten:
-            try:
-                d = date(jahr, monat, tag)
-            except ValueError:
-                continue
-            if not fest and d < heute:
-                d = date(jahr + 1, monat, tag)
-            aus.append(d)
+            # ohne Jahr: das nächste gültige Datum ab heute (auch 29.2. → nächstes Schaltjahr)
+            for j in ([jahr] if fest else range(jahr, jahr + 5)):
+                try:
+                    d = date(j, monat, tag)
+                except ValueError:
+                    continue
+                if fest or d >= heute:
+                    aus.append(d)
+                    break
         if len(aus) == 2 and re.search(r"\bbis\b|-", s) and aus[1] > aus[0]:
             aus = [aus[0] + timedelta(days=i) for i in range((aus[1] - aus[0]).days + 1) if (aus[0] + timedelta(days=i)).weekday() < 5]
         return sorted({d.isoformat() for d in aus}), hinweise
@@ -185,8 +188,12 @@ def tage_berechnen(zeitraum: Any, heute: date) -> tuple[list[str], list[str]]:
     # Anfang „ab montag“, „ab morgen“, „ab heute“ – optional mit Anzahl („drei tage“)
     anzahl = None
     m_anz = re.search(r"\b(\w+) (?:arbeits)?tage?n?\b", s)
+    m_wochen = re.search(r"(?<!in )\b(\w+) wochen?\b", s)
     if m_anz and _zahl(m_anz.group(1)):
         anzahl = _zahl(m_anz.group(1))
+    elif m_wochen and _zahl(m_wochen.group(1)) and not m_in:
+        anzahl = _zahl(m_wochen.group(1)) * 5          # „zwei Wochen“ = 10 Arbeitstage
+        hinweise.append(f"„{m_wochen.group(0)}“ als {anzahl} Arbeitstage verstanden (ohne Wochenende).")
     m_ab = re.search(r"\bab (heute|morgen|uebermorgen|" + "|".join(WOCHENTAGE) + r")\b", s)
     if m_ab or anzahl:
         wort = m_ab.group(1) if m_ab else ""
@@ -209,6 +216,16 @@ def tage_berechnen(zeitraum: Any, heute: date) -> tuple[list[str], list[str]]:
             return [start.isoformat()], hinweise
         return [(start + timedelta(days=i)).isoformat() for i in range((freitag - start).days + 1)], hinweise
 
+    # „bis freitag“ ohne Anfang: ab heute bis zu diesem Tag (Arbeitstage)
+    m_bis = re.search(r"\bbis (" + "|".join(WOCHENTAGE) + r")\b", s)
+    if m_bis and not re.search(r"\b(ab|von)\b", s):
+        wt = _wochentag(m_bis.group(1))
+        ziel = basis + timedelta(days=wt) if basis else _naechster(heute, wt, auch_heute=True)
+        start = max(heute, basis) if basis else heute
+        tage = [start + timedelta(days=i) for i in range((ziel - start).days + 1)]
+        hinweise.append(f"„bis {TAG_NAMEN[wt]}“: ab {TAG_NAMEN[start.weekday()]} {start.strftime('%d.%m.')} angenommen.")
+        return [d.isoformat() for d in tage if d.weekday() < 5 or d == ziel], hinweise
+
     # einzelner Wochentag („mittwoch“, „nächste woche mittwoch“)
     genannt = [WOCHENTAGE[w] for w in re.findall(r"\b(" + "|".join(WOCHENTAGE) + r")\b", s)]
     if genannt:
@@ -223,17 +240,18 @@ def tage_berechnen(zeitraum: Any, heute: date) -> tuple[list[str], list[str]]:
                 aus.append(d)
         return sorted(d.isoformat() for d in aus), hinweise
 
-    if re.search(r"\buebermorgen\b", s):
-        return [(heute + timedelta(days=2)).isoformat()], hinweise
-    if re.search(r"\bmorgen\b", s):
-        return [(heute + timedelta(days=1)).isoformat()], hinweise
-    if re.search(r"\bheute\b", s):
-        return [heute.isoformat()], hinweise
+    # heute / morgen / übermorgen – auch zusammen („heute und morgen“)
+    relativ = [heute + timedelta(days=n) for wort, n in (("heute", 0), ("morgen", 1), ("uebermorgen", 2)) if re.search(rf"\b{wort}\b", s)]
+    if relativ:
+        return [d.isoformat() for d in relativ], hinweise
 
     # ganze Woche / diese Woche / nächste Woche / jeden Tag
     if basis or re.search(r"\b(ganze[n]? woche|diese woche|die woche|jeden tag|taeglich|mo bis fr|montag bis freitag)\b", s):
+        diese = re.search(r"\bdiese woche\b", s) and not re.search(r"\bganze[n]? woche\b", s)
         if basis:
             start = max(basis, heute)
+        elif diese and heute.weekday() == 4:     # „diese Woche“ am Freitag: nur noch heute
+            start = heute
         elif heute.weekday() >= 4:   # Freitag bis Sonntag: gemeint ist die nächste Woche
             start = _montag(heute) + timedelta(weeks=1)
             hinweise.append("„Die ganze Woche“ als nächste Woche verstanden (heute ist Wochenende bzw. Freitag).")
@@ -266,56 +284,89 @@ def regeln_zerlegen(text: str, namen: list[str], projekte: list[dict]) -> dict:
         s_ohne_zeit = s
         # „7-16“, „7:30 - 16 Uhr“ (nicht Datum „1.12.-3.12.“: kein Punkt direkt davor oder danach)
         m_strich = re.search(r"(?<![\d.])(\d{1,2}(?::\d{2})?)\s*-\s*(\d{1,2}(?::\d{2})?)(?![\d.])(?: uhr)?", s)
-        m1 = re.search(r"\bab (" + zahl + r") uhr\b", s)
         if m_strich and uhrzeit(m_strich.group(1)) and uhrzeit(m_strich.group(2)):
             felder["startzeit"], felder["endzeit"] = zeiten_ordnen(uhrzeit(m_strich.group(1)), uhrzeit(m_strich.group(2)))
             s_ohne_zeit = s[:m_strich.start()] + " " + s[m_strich.end():]
-        elif m1:
-            felder["startzeit"] = uhrzeit(m1.group(1))
+        else:
+            # nur Beginn („um 8 Uhr“, „ab 7:30“) oder nur Ende („bis 14 Uhr“) – mit „Uhr“ oder Doppelpunkt, sonst wäre es ein Tag
+            einzeln = r"(" + zahl + r") uhr(?: (\d{2}))?\b|(\d{1,2}:\d{2})\b"
+            for feld, wort in (("startzeit", r"(?:um|ab)"), ("endzeit", r"bis")):
+                m1 = re.search(r"\b" + wort + r" (?:" + einzeln + r")", s_ohne_zeit)
+                if m1:
+                    roh_zeit = m1.group(3) or (m1.group(1) + (f":{m1.group(2)}" if m1.group(2) else ""))
+                    felder[feld] = uhrzeit(roh_zeit)
+                    s_ohne_zeit = s_ohne_zeit[:m1.start()] + " " + s_ohne_zeit[m1.end():]
 
     # Zeitraum: alles, was nach Tagen klingt
     teile = re.findall(r"\b(?:ab |von |am |bis )?(?:(?:uebernaechste|naechste|kommende)[nr]? woche|diese woche|(?:die )?ganzen? woche|heute|morgen|uebermorgen|jeden tag|taeglich|"
                        r"in \w+ wochen?|(?:kw|kalenderwoche) ?\d{1,2}|(?:(?:naechste|kommende|diese)[sn]? )?wochenende|"
-                       r"\w+ (?:arbeits)?tage?n?|\d{1,2}\.\d{1,2}\.(?:\d{2,4})?(?:\s*-\s*\d{1,2}\.\d{1,2}\.(?:\d{2,4})?)?|\d{1,2}\.? (?:" + "|".join(MONATE) + r")|"
+                       r"\w+ (?:(?:arbeits)?tage?n?|wochen?)|\d{1,2}\.\d{1,2}\.(?:\d{2,4})?(?:\s*-\s*\d{1,2}\.\d{1,2}\.(?:\d{2,4})?)?|\d{1,2}\.? (?:" + "|".join(MONATE) + r")|"
                        r"(?:" + "|".join(list(WOCHENTAGE) + list(KURZ)) + r")(?:\s*(?:-|bis)\s*(?:" + "|".join(list(WOCHENTAGE) + list(KURZ)) + r"))?)(?!\w)", s_ohne_zeit)
-    teile = [t for t in teile if not re.fullmatch(r"(?:ab |von |am |bis )?\w+ (?:arbeits)?tage?n?", t) or t.endswith("jeden tag") or _zahl(t.split()[-2]) is not None]
+    wochenwort = re.compile(r"(?:ueber)?naechste[nr]?|kommende[nr]?|diese[nr]?|ganzen?|die")
+    teile = [t for t in teile if not re.fullmatch(r"(?:ab |von |am |bis )?\w+ (?:(?:arbeits)?tage?n?|wochen?)", t) or t.endswith("jeden tag")
+             or wochenwort.fullmatch(t.split()[-2]) or _zahl(t.split()[-2]) is not None]   # „zwei wochen“ ja, „viele wochen“ nein
     teile = [t for t in teile if not re.fullmatch(r"(?:ab |von |am |bis )?(?:mo|di|mi|do|fr|sa|so)", t)]
     if teile:
         felder["zeitraum"] = " ".join(teile)
 
-    # Standort (Straße) aus dem Originaltext
-    m = re.search(STRASSE, roh)
-    if m:
-        felder["standort"] = m.group(0).strip(" ,.")
+    # Namen: genau (auch „Hans-Peter“, „Şahin“) oder leicht verhört/vertippt („Jurgen“ für Jürgen)
+    namenswoerter = {w for n in namen for w in woerter(n) if len(w) >= 2}
+    voll = [set(woerter(n)) for n in namen]
+    projektwoerter = {w for p in projekte for w in woerter(p.get("name")) if len(w) >= 4}
+
+    def ist_name(w: str) -> bool:
+        teile_w = [x for x in w.split("-") if x]
+        if not teile_w:
+            return False
+        return all(x in namenswoerter or (len(x) >= 4 and x not in FUELLWOERTER and x not in projektwoerter
+                                          and any(len(y) >= 4 and _aehnlich(x, y) >= 0.9 for y in namenswoerter)) for x in teile_w)
+
+    tokens = re.findall(WORT, roh)
+    # Vor- und Nachname direkt hintereinander („Karl Schmidt“) bleiben ein Name, auch wenn „Schmidt“ in einem Projektnamen vorkommt
+    geschuetzt = {i for i in range(len(tokens) - 1) for v in voll
+                  if normal(tokens[i]) in v and normal(tokens[i + 1]) in v and normal(tokens[i]) != normal(tokens[i + 1])}
+    geschuetzt |= {i + 1 for i in geschuetzt}
+    geschuetzte_woerter = {normal(tokens[i]) for i in geschuetzt}
+
+    # Standort (Straße) aus dem Originaltext – kein Nachname wie „Döring“
+    for m in re.finditer(STRASSE, roh):
+        kandidat = m.group(0).strip(" ,.")
+        if not all(w in namenswoerter for w in woerter(kandidat) if not w.isdigit()):
+            felder["standort"] = kandidat
+            break
 
     # Projekt: „Projekt X“, „Baustelle X“, „bei X“ – sonst Wörter aus Projektnamen
-    m = re.search(r"\b(?i:projekt|baustelle|objekt)\s+([A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß-]*(?:\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]*)*)", roh)
-    m2 = re.search(r"\b(?i:bei) (?i:der |dem |den |familie |firma )?([A-ZÄÖÜ][\wäöüÄÖÜß-]*(?:\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]*)?)", roh)
-    if m:
-        felder["projekt"] = m.group(1)
-    elif m2:
-        felder["projekt"] = m2.group(1)
-    else:
-        projektwoerter = {w for p in projekte for w in woerter(p.get("name")) if len(w) >= 4}
-        namenswoerter_alle = {w for n in namen for w in woerter(n)}
-
-        def projektwort(w: str) -> bool:   # ganzes Wort oder Wortanfang („Dach“ → „Dachsanierung“), aber kein Mitarbeitername
+    def kuerzen(gesagt: str) -> str:   # „Projekt Müller Tom Wagner“ → „Müller“: beim ersten Mitarbeiternamen aufhören
+        aus = []
+        for i, w in enumerate(gesagt.split()):
             n = normal(w)
-            if n in FUELLWOERTER:
+            if i and (ist_name(n) and n not in projektwoerter or n in geschuetzte_woerter):
+                break
+            aus.append(w)
+        return " ".join(aus)
+    m = re.search(r"\b(?i:projekt|baustelle|objekt)\s+(" + WORT + r"(?:\s+(?=[A-ZÄÖÜ])" + WORT + r")*)", roh)
+    m2 = re.search(r"\b(?i:bei) (?i:der |dem |den |familie |firma )?((?=[A-ZÄÖÜ])" + WORT + r"(?:\s+(?=[A-ZÄÖÜ])" + WORT + r")?)", roh)
+    if m:
+        felder["projekt"] = kuerzen(m.group(1))
+    elif m2:
+        felder["projekt"] = kuerzen(m2.group(1))
+    else:
+        def projektwort(i: int, w: str) -> bool:   # ganzes Wort oder Wortanfang („Dach“ → „Dachsanierung“), aber kein Mitarbeitername
+            n = normal(w)
+            if n in FUELLWOERTER or i in geschuetzt:
                 return False
-            return n in projektwoerter or (len(n) >= 4 and n not in namenswoerter_alle and any(x.startswith(n) for x in projektwoerter))
-        treffer = [w for w in re.findall(r"[A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß-]+", roh) if projektwort(w)]
+            return n in projektwoerter or (len(n) >= 4 and n not in namenswoerter and any(x.startswith(n) for x in projektwoerter))
+        treffer = [w for i, w in enumerate(tokens) if projektwort(i, w)]
         if treffer:
             felder["projekt"] = " ".join(dict.fromkeys(treffer))
     projekt_woerter = set(woerter(felder["projekt"])) if felder["projekt"] else set()
     strasse_woerter = set(woerter(felder["standort"])) if felder["standort"] else set()
 
     # Mitarbeiter: Wörter, die Vor- oder Nachnamen echter Mitarbeiter sind (aufeinanderfolgende = ein Name)
-    namenswoerter = {w for n in namen for w in woerter(n) if len(w) >= 2}
     aktuell: list[str] = []
-    for wort in re.findall(r"[A-ZÄÖÜa-zäöüß][\wäöüÄÖÜß-]*|[,;]", roh):
+    for wort in re.findall(WORT + r"|[,;]", roh):
         w = normal(wort)
-        passt = w in namenswoerter and w not in projekt_woerter and w not in strasse_woerter and w not in FUELLWOERTER
+        passt = ist_name(w) and w not in projekt_woerter and w not in strasse_woerter and w not in FUELLWOERTER
         if passt:
             aktuell.append(wort)
         elif aktuell:
@@ -479,6 +530,8 @@ async def vorschlag(firma: dict, felder: dict, heute: date, quelle: str) -> dict
     for gesagt in felder.get("mitarbeiter") or []:
         treffer = mitarbeiter_finden(gesagt, nutzer)
         if len(treffer) == 1:
+            if any(p.get("id") == treffer[0]["id"] for p in personen):
+                continue   # dieselbe Person zweimal genannt („Tom und Tom Wagner“)
             personen.append({"gesagt": gesagt, **_kurz_name(treffer[0])})
         elif treffer:
             namen = [t.get("name") for t in treffer]
@@ -511,7 +564,9 @@ async def vorschlag(firma: dict, felder: dict, heute: date, quelle: str) -> dict
     adresse = (projekt or {}).get("address") or ""
     standort = felder.get("standort")
     if standort:
-        if projekt and all(any(x.startswith(w) or _aehnlich(w, x) >= 0.85 for x in woerter(adresse)) for w in woerter(standort) if not w.isdigit()):
+        nummern = [w for w in woerter(standort) if w[:1].isdigit()]
+        if (projekt and all(any(x.startswith(w) or _aehnlich(w, x) >= 0.85 for x in woerter(adresse)) for w in woerter(standort) if not w[:1].isdigit())
+                and all(n in woerter(adresse) for n in nummern)):   # andere Hausnummer = andere Adresse
             pass   # Standort passt zur Projektadresse
         else:
             adresse = standort
