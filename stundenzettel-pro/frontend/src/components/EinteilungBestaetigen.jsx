@@ -8,13 +8,25 @@ const QUELLEN = { apple: 'Apple-KI auf diesem iPhone', mistral: 'KI auf dem Serv
 const TAGE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 const tagKurz = (iso) => { const d = new Date(`${iso}T12:00:00`); return `${TAGE[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`; };
 const vorname = (name) => (name || '').split(' ')[0] || name;
-const heuteIso = () => new Date().toISOString().slice(0, 10);
+// lokales Datum (toISOString wäre UTC – kurz nach Mitternacht sonst „gestern“)
+const heuteIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const minuten = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+
+/** Nettodauer in Minuten; Ende vor Beginn = über Mitternacht (wie die Plantafel). */
+export function dauerMinuten(start, ende, pause) {
+  if (!/^\d{2}:\d{2}$/.test(start || '') || !/^\d{2}:\d{2}$/.test(ende || '')) return null;
+  let d = minuten(ende) - minuten(start);
+  if (d <= 0) d += 24 * 60;
+  return Math.max(0, d - (Number(pause) || 0));
+}
+const dauerText = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')} Std.`;
 
 /** Eine Zeile der Karte: groß, per Tipp aufklappbar zum Ändern. */
 function Feld({ icon: Icon, titel, wert, pruefen, offen, onTipp, children }) {
   return (
     <div className="border-b border-black/[0.06] last:border-0">
-      <button type="button" onClick={onTipp} className="w-full flex items-center gap-3 py-3 text-left min-h-[56px]" aria-expanded={offen}>
+      <button type="button" onClick={onTipp} className="w-full flex items-center gap-3 py-3 text-left min-h-[56px]" aria-expanded={offen}
+        aria-label={`${titel}: ${wert || 'fehlt'}${pruefen ? ' (bitte prüfen)' : ''} – ändern`}>
         <Icon size={20} className="text-[#C41E3A] shrink-0" />
         <span className="min-w-0 flex-1">
           <span className="text-[12px] text-[#6E6E73] flex items-center gap-1.5">{titel}{pruefen && <span className="rounded-full bg-[#FFF4E5] text-[#B25E00] px-1.5 text-[11px] font-semibold">bitte prüfen</span>}</span>
@@ -49,6 +61,8 @@ export default function EinteilungBestaetigen({ vorschlag: v, mitarbeiter = [], 
   const [offen, setOffen] = useState(null);
   const [pruefung, setPruefung] = useState({ konflikte: v.konflikte || [], blockiert: (v.konflikte || []).some((k) => k.art === 'ueberschneidung'), trotzdem_noetig: (v.konflikte || []).some((k) => k.art === 'abwesenheit') });
   const [trotzdem, setTrotzdem] = useState(false);
+  const [nachtOk, setNachtOk] = useState(false);       // Ende vor Beginn nur mit bewusster Bestätigung (sonst meist ein Versprecher)
+  const [zeitGeaendert, setZeitGeaendert] = useState(false);
   const [neuerTag, setNeuerTag] = useState('');
   const [sendet, setSendet] = useState(false);
   const [fehler, setFehler] = useState('');
@@ -91,11 +105,13 @@ export default function EinteilungBestaetigen({ vorschlag: v, mitarbeiter = [], 
 
   const offeneFragen = fragen.length > 0;
   const zeitOk = /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(ende) && start !== ende;
-  const bereit = projekt && personen.length && tage.length && zeitOk && !offeneFragen && !pruefung.laeuft && !pruefung.blockiert && (!pruefung.trotzdem_noetig || trotzdem);
+  const nacht = zeitOk && ende < start;
+  const netto = dauerMinuten(start, ende, pause);
+  const bereit = projekt && personen.length && tage.length && zeitOk && (!nacht || nachtOk) && !offeneFragen && !pruefung.laeuft && !pruefung.blockiert && (!pruefung.trotzdem_noetig || trotzdem);
   const knopf = personen.length === 1 ? `Einteilen & ${vorname(personen[0].name)} benachrichtigen` : `Einteilen & ${personen.length || ''} Mitarbeiter benachrichtigen`.replace('  ', ' ');
   const tageText = useMemo(() => (tage.length ? (tage.length > 3 ? `${tagKurz(tage[0])} – ${tagKurz(tage[tage.length - 1])} (${tage.length} Tage)` : tage.map(tagKurz).join(', ')) : ''), [tage]);
   const grund = !projekt ? 'Projekt fehlt.' : !personen.length ? 'Mitarbeiter fehlt.' : !tage.length ? 'Tage fehlen.' : !zeitOk ? 'Uhrzeit prüfen.'
-    : offeneFragen ? 'Bitte zuerst die Rückfrage beantworten.' : pruefung.fehler ? `Konflikte konnten nicht geprüft werden: ${pruefung.fehler}` : pruefung.laeuft ? 'Konflikte werden geprüft …' : pruefung.blockiert ? 'Überschneidung: Person oder Tag ändern.' : (pruefung.trotzdem_noetig && !trotzdem) ? 'Abwesenheit: bewusst „trotzdem einteilen“ wählen.' : '';
+    : (nacht && !nachtOk) ? 'Ende liegt vor Beginn: Uhrzeit ändern oder Nachtschicht bestätigen.' : offeneFragen ? 'Bitte zuerst die Rückfrage beantworten.' : pruefung.fehler ? `Konflikte konnten nicht geprüft werden: ${pruefung.fehler}` : pruefung.laeuft ? 'Konflikte werden geprüft …' : pruefung.blockiert ? 'Überschneidung: Person oder Tag ändern.' : (pruefung.trotzdem_noetig && !trotzdem) ? 'Abwesenheit: bewusst „trotzdem einteilen“ wählen.' : '';
 
   const einteilen = async () => {
     setSendet(true); setFehler('');
@@ -156,11 +172,11 @@ export default function EinteilungBestaetigen({ vorschlag: v, mitarbeiter = [], 
             <Btn variant="soft" className="h-12" onClick={tagHinzu} disabled={!neuerTag}><Plus size={16} /> Tag</Btn>
           </div>
         </Feld>
-        <Feld icon={Clock} titel="Uhrzeit" wert={`${start}–${ende} Uhr · ${pause} Min. Pause`} pruefen={pruefen.has('startzeit') || pruefen.has('endzeit')} offen={offen === 'zeit'} onTipp={() => umschalten('zeit')}>
+        <Feld icon={Clock} titel="Uhrzeit" wert={`${start}–${ende} Uhr · ${pause} Min. Pause${netto != null ? ` · ${dauerText(netto)}` : ''}`} pruefen={pruefen.has('startzeit') || pruefen.has('endzeit') || nacht} offen={offen === 'zeit'} onTipp={() => umschalten('zeit')}>
           <div className="grid grid-cols-3 gap-2">
-            <label className="text-[12px] text-[#6E6E73]">Beginn<input type="time" value={start} onChange={(e) => { setStart(e.target.value); geaendert('zeit'); }} className="w-full h-12 rounded-xl border border-black/[0.12] px-2 text-[16px] bg-white mt-1" /></label>
-            <label className="text-[12px] text-[#6E6E73]">Ende<input type="time" value={ende} onChange={(e) => { setEnde(e.target.value); geaendert('zeit'); }} className="w-full h-12 rounded-xl border border-black/[0.12] px-2 text-[16px] bg-white mt-1" /></label>
-            <label className="text-[12px] text-[#6E6E73]">Pause<select value={pause} onChange={(e) => setPause(Number(e.target.value))} className="w-full h-12 rounded-xl border border-black/[0.12] px-2 text-[16px] bg-white mt-1">{[0, 15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} Min.</option>)}</select></label>
+            <label className="text-[12px] text-[#6E6E73]">Beginn<input type="time" aria-label="Beginn" value={start} onChange={(e) => { setStart(e.target.value); setNachtOk(false); setZeitGeaendert(true); geaendert('zeit'); }} className="w-full h-12 rounded-xl border border-black/[0.12] px-2 text-[16px] bg-white mt-1" /></label>
+            <label className="text-[12px] text-[#6E6E73]">Ende<input type="time" aria-label="Ende" value={ende} onChange={(e) => { setEnde(e.target.value); setNachtOk(false); setZeitGeaendert(true); geaendert('zeit'); }} className="w-full h-12 rounded-xl border border-black/[0.12] px-2 text-[16px] bg-white mt-1" /></label>
+            <label className="text-[12px] text-[#6E6E73]">Pause<select aria-label="Pause" value={pause} onChange={(e) => setPause(Number(e.target.value))} className="w-full h-12 rounded-xl border border-black/[0.12] px-2 text-[16px] bg-white mt-1">{[0, 15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} Min.</option>)}</select></label>
           </div>
         </Feld>
       </div>
@@ -171,7 +187,16 @@ export default function EinteilungBestaetigen({ vorschlag: v, mitarbeiter = [], 
         </div>
       ))}
       {pruefung.trotzdem_noetig && <div className="mt-2 rounded-xl bg-white p-2"><Toggle checked={trotzdem} onChange={setTrotzdem} label="Trotzdem einteilen" hint="Abwesenheit bewusst überstimmen" /></div>}
-      {(v.hinweise || []).map((h, i) => <p key={`h${i}`} className="mt-2 text-[13px] text-[#6E6E73]">{h}</p>)}
+      {nacht && (
+        <div className="mt-2 rounded-xl bg-[#FFF4E5] text-[#7A4100] p-2.5 text-[14px]">
+          <div className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0" />Ende {ende} liegt vor Beginn {start} – das wäre eine Nachtschicht bis {ende} Uhr am nächsten Morgen ({dauerText(netto)}).</div>
+          <div className="mt-1 rounded-lg bg-white px-2"><Toggle checked={nachtOk} onChange={setNachtOk} label="Ja, Nachtschicht über Mitternacht" /></div>
+        </div>
+      )}
+      {netto != null && netto > 600 && (
+        <div className="mt-2 flex gap-2 text-[14px] rounded-xl p-2.5 bg-[#FFF4E5] text-[#7A4100]"><AlertTriangle size={16} className="mt-0.5 shrink-0" />Mehr als 10 Stunden Arbeitszeit am Tag – nach dem Arbeitszeitgesetz nur ausnahmsweise erlaubt.</div>
+      )}
+      {(v.hinweise || []).filter((h) => !(zeitGeaendert && h.startsWith('Keine Uhrzeit'))).map((h, i) => <p key={`h${i}`} className="mt-2 text-[13px] text-[#6E6E73]">{h}</p>)}
       {fehler && <p className="mt-2 text-[14px] text-[#C41E3A]" role="alert">{fehler}</p>}
 
       <Btn className="w-full mt-3 h-14 text-[17px]" onClick={einteilen} disabled={!bereit || sendet} loading={sendet}><Check size={19} /> {knopf}</Btn>
