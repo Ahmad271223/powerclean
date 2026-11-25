@@ -382,6 +382,9 @@ async def _aendern(user: dict, e: dict, aenderung: dict, aktion: str, erzwingen:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
     neu["planned_minutes"] = _dauer(neu["start_time"], neu["end_time"], neu["pause_minutes"])
+    if {k: neu.get(k) for k in FELDER} == _snapshot(e):
+        # nichts geändert (z. B. Speichern ohne Änderung): keine neue Version, Bestätigung bleibt gültig, keine Push
+        return {**e, "_unveraendert": True}
     ueberlappungen, abwesend = await _konflikte(user["firma_id"], neu["user_id"], neu["date"], neu["start_time"], neu["end_time"], ausser_id=e["id"])
     if ueberlappungen:
         raise HTTPException(409, f"Überschneidung am {neu['date']}: {ueberlappungen[0]['start_time']}–{ueberlappungen[0]['end_time']} ist schon verplant.")
@@ -394,6 +397,22 @@ async def _aendern(user: dict, e: dict, aenderung: dict, aktion: str, erzwingen:
     return {**e, **felder, "verlauf": (e.get("verlauf") or []) + [schritt]}
 
 
+async def _wechsel_melden(alt: dict, neu: dict, user: dict) -> None:
+    """Push passend zum Übergang alt → neu: andere Person = Absage an die alte, „neu“ an die neue; abgesagt/wieder geplant; sonst „geändert“."""
+    if neu.get("user_id") != alt.get("user_id"):
+        if alt.get("status") == "geplant":
+            await _planaenderung_melden({**alt, "status": "abgesagt"}, "Einsatz an eine andere Person übergeben", user["_firma"])
+            await push.einsaetze_melden([alt], "abgesagt")
+        if neu.get("status") == "geplant":
+            await push.einsaetze_melden([neu], "neu")
+    elif alt.get("status") == "geplant" and neu.get("status") == "abgesagt":
+        await push.einsaetze_melden([neu], "abgesagt")
+    elif alt.get("status") == "abgesagt" and neu.get("status") == "geplant":
+        await push.einsaetze_melden([neu], "neu")
+    elif neu.get("status") == "geplant":
+        await push.einsaetze_melden([neu], "geaendert")
+
+
 @router.put("/{einsatz_id}")
 async def aendern(einsatz_id: str, body: EinsatzUpdateIn, user: dict = Depends(planer_schreibend)):
     e = await _einsatz(user, einsatz_id)
@@ -404,13 +423,11 @@ async def aendern(einsatz_id: str, body: EinsatzUpdateIn, user: dict = Depends(p
     if "kolonne_id" in body.model_dump(exclude_unset=True):
         aenderung["kolonne_id"] = body.kolonne_id or None
     neu = await _aendern(user, e, aenderung, "geaendert", body.erzwingen)
+    if neu.pop("_unveraendert", False):
+        heute = lokal_jetzt().date().isoformat()
+        return {"einsatz": await _ansicht(neu, user, True, await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"]), heute)}
     await _planaenderung_melden(neu, "Einsatz geändert", user["_firma"])
-    if "user_id" in aenderung and aenderung["user_id"] != e["user_id"]:
-        await _planaenderung_melden({**e, "status": "abgesagt"}, "Einsatz an eine andere Person übergeben", user["_firma"])
-        await push.einsaetze_melden([e], "abgesagt")
-        await push.einsaetze_melden([neu], "neu")
-    else:
-        await push.einsaetze_melden([neu], "geaendert")
+    await _wechsel_melden(e, neu, user)
     await protokollieren(user, "einsatz.geaendert", e["project_id"], details={"einsatz_id": einsatz_id, "felder": sorted(aenderung)})
     heute = lokal_jetzt().date().isoformat()
     return {"einsatz": await _ansicht(neu, user, True, await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"]), heute)}
@@ -489,8 +506,9 @@ async def rueckgaengig(einsatz_id: str, user: dict = Depends(planer_schreibend))
         raise HTTPException(400, "Es gibt keine Änderung, die sich zurücknehmen lässt.")
     vorher = {k: v for k, v in letzte["vorher"].items() if k in FELDER}
     neu = await _aendern(user, e, vorher, "rueckgaengig", True, text=f"Stand vor „{letzte.get('aktion')}“ wiederhergestellt")
-    await _planaenderung_melden(neu, "Änderung zurückgenommen", user["_firma"])
-    await push.einsaetze_melden([neu], "geaendert")
+    if not neu.pop("_unveraendert", False):
+        await _planaenderung_melden(neu, "Änderung zurückgenommen", user["_firma"])
+        await _wechsel_melden(e, neu, user)
     heute = lokal_jetzt().date().isoformat()
     return {"einsatz": await _ansicht(neu, user, True, await _projekte(user["firma_id"]), await nutzernamen(user["firma_id"]), await _kolonnen(user["firma_id"]), heute)}
 

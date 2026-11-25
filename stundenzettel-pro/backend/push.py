@@ -206,6 +206,10 @@ async def geraet_registrieren(user: dict, plattform: str, token: str, app_versio
     vorhanden = await db().geraete.find_one({"token": token}, {"_id": 0})
     felder = {"firma_id": user["firma_id"], "user_id": user["id"], "plattform": plattform, "aktiv": True, "app_version": app_version[:40], "updated_at": jetzt}
     if vorhanden:
+        if vorhanden.get("user_id") != user["id"]:
+            # Gerät wechselt den Besitzer: offene Nachrichten des alten Besitzers dürfen nie beim neuen ankommen
+            await db().push_ausgang.update_many({"geraet_id": vorhanden["id"], "status": "offen"},
+                                                {"$set": {"status": "fehlgeschlagen", "fehler": "Gerät hat den Besitzer gewechselt"}})
         await db().geraete.update_one({"id": vorhanden["id"]}, {"$set": felder})
         return {**vorhanden, **felder}
     g = {"id": neue_id(), "token": token, "created_at": jetzt, **felder}
@@ -254,6 +258,10 @@ async def zustellen(e: dict) -> bool:
     g = await db().geraete.find_one({"id": e["geraet_id"]}, {"_id": 0})
     if not g or not g.get("aktiv"):
         await db().push_ausgang.update_one({"id": e["id"]}, {"$set": {"status": "fehlgeschlagen", "fehler": "Gerät abgemeldet"}})
+        return False
+    if g.get("user_id") != e.get("user_id") or g.get("firma_id") != e.get("firma_id"):
+        # zweite Sicherung: nie an ein Gerät, das inzwischen jemand anderem gehört
+        await db().push_ausgang.update_one({"id": e["id"]}, {"$set": {"status": "fehlgeschlagen", "fehler": "Gerät hat den Besitzer gewechselt"}})
         return False
     versuche = int(e.get("versuche") or 0) + 1
     try:
